@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BYOK Dictation — Hotkey Probe</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>Hotkey probe</h1>
+      <p>Press and release the shortcut while Notepad or VS Code has focus. Return here to inspect the events.</p>
+      <form id="shortcut-form">
+        <label for="shortcut">Global shortcut</label>
+        <div class="row">
+          <input id="shortcut" value="Ctrl+Alt+F8" spellcheck="false" />
+          <button type="submit">Apply</button>
+        </div>
+      </form>
+      <p id="status" role="status">Registering…</p>
+      <div class="states">
+        <div>Hold state <strong id="hold-state">UP</strong></div>
+      </div>
+      <div class="log-heading">
+        <h2>Events</h2>
+        <button id="clear-log" type="button">Clear</button>
+      </div>
+      <ol id="events" aria-live="polite"></ol>
+      <p class="hint">Closing this window hides it. Use the tray icon to show it or quit.</p>
+    </main>
+  </body>
+</html>

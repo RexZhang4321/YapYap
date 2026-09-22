@@ -1,0 +1,24 @@
+:root {
+  font-family: "Segoe UI", sans-serif;
+  color: #18212b;
+  background: #f7f9fb;
+}
+
+body { margin: 0; }
+main { max-width: 650px; margin: 0 auto; padding: 24px; }
+h1 { margin: 0 0 10px; font-size: 25px; }
+h2 { margin: 0; font-size: 18px; }
+p { line-height: 1.45; }
+label { display: block; font-weight: 600; margin: 22px 0 6px; }
+.row { display: flex; gap: 8px; }
+input { flex: 1; min-width: 0; }
+input, button { font: inherit; padding: 9px 12px; border: 1px solid #aab6c2; border-radius: 6px; }
+button { background: #e8eef5; cursor: pointer; }
+button:hover { background: #dce7f2; }
+#status { min-height: 24px; font-weight: 600; }
+.states { display: flex; gap: 28px; padding: 12px; background: #eaf0f6; border-radius: 6px; }
+.states strong { margin-left: 10px; }
+.log-heading { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; }
+#events { height: 230px; overflow: auto; padding: 10px 10px 10px 34px; background: white; border: 1px solid #cbd5df; border-radius: 6px; font: 12px/1.6 Consolas, monospace; }
+#events li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.hint { color: #596774; font-size: 13px; }

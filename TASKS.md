@@ -24,7 +24,7 @@ Status markers: `[ ]` not started, `[-]` in progress, `[x]` verified complete, `
 - [x] Choose Tauri + TypeScript + Vite as the initial stack; record the rationale in [DECISIONS.md](DECISIONS.md).
 - [x] Confirm available Windows test devices: Elgato Wave:3 microphone, Notepad, VS Code, and Chrome/Edge browser input targets. Capture and insertion behavior remain for their respective probes.
 - [x] Defer macOS checks for hotkeys, capture, secure storage, insertion, overlay, and packaging until macOS work begins.
-- [x] Prefer hold-to-talk; use toggle as the fallback if the probe requires it. Reliability remains to be verified.
+- [x] Prefer hold-to-talk; Task 1 verified press and release events on Windows. Retain toggle only as a fallback if later testing exposes missed releases.
 - [x] Choose memory-only audio buffering with API retries while running and no crash-recovery guarantee.
 - [x] Record the agreed decisions, rationale, and revisit conditions in [DECISIONS.md](DECISIONS.md).
 
@@ -32,11 +32,11 @@ Done when: platform scope, stack, verification access, and recovery guarantees a
 
 ### 1. Global keybinding probe
 
-- [ ] Create the smallest background/tray app that registers one configurable shortcut.
-- [ ] Log key-down, key-up, and toggle events with timestamps.
-- [ ] Test while Notepad and VS Code have focus.
-- [ ] Verify the chosen shortcut is available on the current test platform.
-- [ ] Decide whether hold-to-talk is reliable enough or whether toggle mode is the initial fallback.
+- [x] Create the smallest background/tray app with a configurable shortcut. The user verified Ctrl+Alt+F7 after rebinding and confirmed the previous F8 binding stopped.
+- [x] Log key-down and key-up events with timestamps. The user supplied two complete press/release cycles; the temporary toggle diagnostic was removed.
+- [x] Test while Notepad and VS Code have focus; the user reported that both worked.
+- [x] Verify Ctrl+Alt+F8 is available on the Windows test machine through live key events.
+- [x] Choose hold-to-talk for the initial interaction: press starts and release stops. Keep toggle as a contingency for a future reliability failure.
 
 Done when: the interaction is reliable on Windows, with any limitation and fallback documented.
 
