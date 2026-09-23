@@ -4,10 +4,21 @@ use tauri::{
     Manager, WindowEvent,
 };
 
+mod insertion;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .manage(insertion::ProbeState::default())
+        .invoke_handler(tauri::generate_handler![
+            insertion::capture_target,
+            insertion::insert_test_text,
+            insertion::copy_test_text,
+            insertion::copy_test_text_without_backup,
+            insertion::has_clipboard_backup,
+            insertion::restore_previous_clipboard
+        ])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show probe", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;

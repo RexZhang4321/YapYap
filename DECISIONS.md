@@ -81,3 +81,21 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - User-reported rebind check in Notepad: after applying Ctrl+Alt+F7, F7 produced a key-down/key-up pair and the previous Ctrl+Alt+F8 binding stopped logging.
 - Combined with the two earlier press/release pairs reported after the Notepad and VS Code focus test, this verifies the chosen shortcut, release delivery, and live rebinding on this Windows machine.
 - Task 1 is complete. Hold-to-talk is the initial behavior; recording itself remains for Task 3.
+
+### 2026-09-22 — Task 2 insertion probe implemented; live target checks pending
+
+- Added a Windows native command path to capture the foreground/focused window on key-down, compare it on key-up, and send a fixed string through clipboard plus simulated paste. Pointer and available caret coordinates are compared; changed or uncertain targets retain a Copy fallback.
+- Plain-text clipboard contents are backed up and restored only if the clipboard sequence has not changed. Rich or non-text clipboard formats use Copy instead. A failed restoration retains the previous plain-text clipboard in memory for an explicit Restore action.
+- Added modifier-release and clipboard-busy timeouts, visible failure messages, and manual test instructions in `desktop/README.md`. Paste keystroke acceptance does not establish that the target accepted the text.
+- Verification: TypeScript/Vite and Rust builds passed. The sandboxed app launch failed with Access denied; the unsandboxed app launched. A temporary WinForms input accepted the fixed string through the actual global shortcut and Ctrl+V path. A follow-up check exposed an incorrect clipboard sequence sample taken before `CloseClipboard`; this was corrected. The repeatable Windows smoke script is in `desktop/scripts/insertion-smoke.ps1`. Notepad, VS Code, browser, target-change cases, and nonempty clipboard restoration still require observed Windows tests before Task 2 can be marked complete.
+
+### 2026-09-22 — Task 2 Copy/Restore behavior corrected
+
+- User found that **Copy test text** replaced the clipboard without creating a backup, so **Restore previous clipboard** failed. Copy now backs up a plain-text clipboard first and enables Restore; the button is disabled when no backup exists.
+- Rich and non-text clipboard formats remain untouched by the safe Copy action. A separately labeled **Copy without backup** action allows an explicit replacement when the user chooses it.
+- Verification: `npm run build`, `cargo check --offline`, and `cargo fmt --check` passed. The new Copy/Restore click sequence still needs a live user check.
+
+### 2026-09-22 — Task 2 rich clipboard backup expanded
+
+- User's copied item included additional Windows clipboard formats, so safe Copy still refused it. The snapshot now preserves each supported movable-memory format as bytes, including common registered rich-text formats, and restores the original format IDs and data. Unsupported GDI/owner-rendered or very large formats still require an explicit Copy without backup.
+- Verification: Rust compilation passed. The user subsequently reported that the current hotkey and clipboard flow works. The specific Notepad, VS Code, browser, and target-change matrix was not recorded, so Task 2 remains in progress.

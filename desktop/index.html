@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BYOK Dictation — Hotkey Probe</title>
+    <title>BYOK Dictation — Insertion Probe</title>
     <link rel="stylesheet" href="/src/styles.css" />
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body>
     <main>
-      <h1>Hotkey probe</h1>
-      <p>Press and release the shortcut while Notepad or VS Code has focus. Return here to inspect the events.</p>
+      <h1>Text insertion probe</h1>
+      <p>Place the cursor in Notepad, VS Code, or a browser input. Press and release the shortcut to insert the fixed test string.</p>
       <form id="shortcut-form">
         <label for="shortcut">Global shortcut</label>
         <div class="row">
@@ -22,6 +22,15 @@
       <div class="states">
         <div>Hold state <strong id="hold-state">UP</strong></div>
       </div>
+      <section class="result">
+        <h2>Test result</h2>
+        <p><code id="test-text">BYOK dictation insertion probe</code></p>
+        <p id="insertion-status" role="status">Ready. The target is captured on key-down.</p>
+        <button id="copy-text" type="button">Copy test text</button>
+        <button id="copy-without-backup" type="button">Copy without backup</button>
+        <button id="restore-clipboard" type="button" disabled>Restore previous clipboard</button>
+        <p class="hint">Copy test text saves supported clipboard formats for Restore. If it cannot save the current clipboard, use Copy without backup only when you are ready to replace it.</p>
+      </section>
       <div class="log-heading">
         <h2>Events</h2>
         <button id="clear-log" type="button">Clear</button>
