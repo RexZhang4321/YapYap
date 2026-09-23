@@ -99,3 +99,14 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 
 - User's copied item included additional Windows clipboard formats, so safe Copy still refused it. The snapshot now preserves each supported movable-memory format as bytes, including common registered rich-text formats, and restores the original format IDs and data. Unsupported GDI/owner-rendered or very large formats still require an explicit Copy without backup.
 - Verification: Rust compilation passed. The user subsequently reported that the current hotkey and clipboard flow works. The specific Notepad, VS Code, browser, and target-change matrix was not recorded, so Task 2 remains in progress.
+
+### 2026-09-22 — Task 2 Notepad and VS Code target checks
+
+- A blank Notepad document received exactly `BYOK dictation insertion probe` after Ctrl+Alt+F8. A disposable VS Code Untitled editor received the same string through the shortcut. Both results were visibly checked in their target editors; no source file was edited.
+- The user subsequently reported that browser paste works. The manual browser result completes the Notepad, VS Code, and browser input check.
+- The user confirmed that no text appeared in either target after switching targets while holding the shortcut. The probe displayed the warning, and the Copy fallback worked. The user then confirmed that moving the caret and closing the target before release each produced no paste and a warning. This completes the changed-destination recovery checks. The user also confirmed the modifier timeout works. The newer-copy check remains unverified, so Task 2 is still in progress.
+
+### 2026-09-22 — Task 2 text-insertion probe complete
+
+- Added `desktop/scripts/newer-copy-smoke.ps1` to copy a newer marker while the probe's temporary clipboard text is present. The user ran it and reported `PASS: The newer clipboard copy was preserved`.
+- All Task 2 checks are now complete: fixed-text insertion in Notepad, VS Code, and a browser input; clipboard backup and restore; no paste with a warning after target switching, caret movement, target closure, or modifier timeout; and a working Copy fallback. The scripted newer-copy check confirmed the probe preserved a copy made during insertion.

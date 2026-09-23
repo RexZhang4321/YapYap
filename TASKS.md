@@ -42,13 +42,13 @@ Done when: the interaction is reliable on Windows, with any limitation and fallb
 
 ### 2. Text-insertion probe
 
-- [-] Capture the focused application/input target on hotkey activation; implementation is ready for live target checks.
-- [-] Back up the clipboard and paste a fixed test string; Windows behavior needs manual verification.
-- [-] Restore the clipboard where practical without overwriting a newer user copy; Windows behavior needs manual verification.
-- [-] Add timeout and insertion-failure reporting; failure paths need manual verification.
-- [ ] Test Notepad, VS Code, and a browser input.
-- [ ] Test app switching, cursor movement, and closing the target before insertion.
-- [-] Retain the result and offer Copy when the intended destination cannot be safely identified; fallback needs manual verification.
+- [x] Capture the focused application/input target on hotkey activation; live insertion succeeded in blank Notepad and VS Code editors.
+- [x] Back up the clipboard and paste a fixed test string; live Notepad and VS Code insertion succeeded, and the user reported the clipboard flow works.
+- [x] Restore the clipboard where practical without overwriting a newer user copy; ordinary restore worked, and the newer-copy smoke check passed.
+- [x] Add timeout and insertion-failure reporting; changed-target failures and the modifier timeout visibly warn without pasting.
+- [x] Test Notepad, VS Code, and a browser input; Notepad and VS Code passed in observed checks, and the user reported browser paste works.
+- [x] Test app switching, cursor movement, and closing the target before insertion; the user confirmed no paste and a visible warning in all three cases.
+- [x] Retain the result and offer Copy when the intended destination cannot be safely identified; the user confirmed Copy works after the target-switch warning.
 
 Done when: the fixed string inserts reliably, uncertain targets use Copy, and clipboard contents are not silently lost.
 
