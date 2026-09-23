@@ -5,14 +5,15 @@
 }
 
 body { margin: 0; }
-main { max-width: 650px; margin: 0 auto; padding: 24px; }
+main { max-width: 720px; margin: 0 auto; padding: 24px; }
 h1 { margin: 0 0 10px; font-size: 25px; }
 h2 { margin: 0; font-size: 18px; }
 p { line-height: 1.45; }
 label { display: block; font-weight: 600; margin: 22px 0 6px; }
 .row { display: flex; gap: 8px; }
 input { flex: 1; min-width: 0; }
-input, button { font: inherit; padding: 9px 12px; border: 1px solid #aab6c2; border-radius: 6px; }
+input, select, button { font: inherit; padding: 9px 12px; border: 1px solid #aab6c2; border-radius: 6px; }
+select { width: 100%; background: white; }
 button { background: #e8eef5; cursor: pointer; }
 button:hover { background: #dce7f2; }
 button:disabled { cursor: default; opacity: .5; }
@@ -22,6 +23,17 @@ button:disabled { cursor: default; opacity: .5; }
 .result { margin-top: 18px; padding: 14px; background: #fff; border: 1px solid #cbd5df; border-radius: 6px; }
 .result p { margin: 10px 0; }
 #insertion-status { min-height: 22px; }
+.result label { margin: 12px 0 6px; }
+.device-row { align-items: end; }
+.device-row label { flex: 1; margin: 12px 0 0; }
+.recording-actions { flex-wrap: wrap; margin-top: 10px; }
+.meter-group { display: grid; gap: 5px; margin-top: 12px; }
+.meter-group label { margin: 0; }
+.meter-group meter { width: 100%; height: 18px; }
+.meter-group span { color: #596774; font-size: 13px; }
+.metadata { overflow-wrap: anywhere; font-size: 14px; }
+audio { display: block; width: 100%; margin-top: 10px; }
+audio[hidden] { display: none; }
 .log-heading { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; }
 #events { height: 230px; overflow: auto; padding: 10px 10px 10px 34px; background: white; border: 1px solid #cbd5df; border-radius: 6px; font: 12px/1.6 Consolas, monospace; }
 #events li { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -54,14 +54,16 @@ Done when: the fixed string inserts reliably, uncertain targets use Copy, and cl
 
 ### 3. Microphone recording probe
 
-- [ ] Start and stop recording from the keybinding probe.
-- [ ] Capture microphone audio as an in-memory PCM buffer; encode WAV in memory when needed.
-- [ ] Record duration, sample rate, channel count, and selected device.
-- [ ] Add microphone permission-denied handling.
-- [ ] Test microphone disconnect/reconnect behavior.
-- [ ] Add a small playback or inspection utility for captured audio.
+Implemented and verified on Windows. The first live attempt returned zero PCM frames; microphone preparation, diagnostics, a live input meter, and in-memory playback were added before successful verification.
 
-Done when: a 5–10 second recording can be captured, inspected, and removed on Windows.
+- [x] Start and stop recording from the keybinding probe; successful capture/playback confirmed by the user.
+- [x] Capture microphone audio as an in-memory PCM buffer; encode WAV in memory for playback.
+- [x] Record duration, sample rate, channel count, and selected device.
+- [x] Add microphone permission-denied handling; the user confirmed the denial check works.
+- [x] Test microphone disconnect/reconnect behavior; the user confirmed partial capture and recovery work.
+- [x] Add a small playback or inspection utility for captured audio; the user confirmed playback and clearing work.
+
+Done: the user confirmed successful recording/playback and all three remaining Windows checks: clearing, permission denial, and disconnect/reconnect.
 
 ### 4. API-key storage probe
 
