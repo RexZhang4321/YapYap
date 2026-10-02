@@ -91,14 +91,14 @@ Done: a real recording can be transcribed with the user's key and a failed reque
 
 ### 6. Session lifecycle and transcript insertion
 
-- [ ] Define recording, finalizing, ready, inserted, failed, and discarded states.
-- [ ] On stop, transcribe the complete recording as one segment and insert the canonical result.
-- [ ] Define cancellation and starting another dictation during finalization.
-- [ ] Ignore late responses from cancelled sessions and prevent duplicate insertion.
-- [ ] Retain results for Copy/retry when insertion fails or the destination is uncertain.
-- [ ] Test Unicode, newlines, URLs, filenames, identifiers, and technical terminology.
+- [x] Define recording, finalizing, ready, inserted, failed, and discarded states; idle is the initial state.
+- [x] On stop, transcribe the complete recording as one segment and insert the canonical result. Synthetic microphone capture with real OpenAI transcription and native paste succeeded in Notepad and VS Code.
+- [x] Define cancellation and starting another dictation during finalization. One session at a time; cancel recording/transcription, wait for outstanding native work, and discard retained results before another dictation. Paste dispatch is the noncancellable commit boundary.
+- [x] Ignore late responses from cancelled sessions and prevent duplicate insertion. Deterministic tests cover late results and partial/unknown paste outcomes; repeated native insertion was refused in a Windows check.
+- [x] Retain results for Copy/retry when insertion fails or the destination is uncertain. Real hotkey insertion retry and native Copy/Restore recovery passed.
+- [x] Test Unicode, newlines, URLs, filenames, identifiers, and technical terminology. Exact fixtures passed deterministic checks and were visually verified through native Notepad insertion.
 
-Done when: `record → transcribe → insert` works independently of the live overlay, including cancellation and recovery.
+Done: `record → transcribe → insert` works independently of the live overlay, including cancellation and recovery. [Windows verification note](desktop/scripts/task6-verification.md) distinguishes synthetic microphone/shortcut replay from real physical-device checks. Next: Task 7.
 
 ### 7. Live-transcription probe
 

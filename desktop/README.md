@@ -1,26 +1,47 @@
 # Windows capability probes
 
-Run `npm install` and `npm run tauri dev` from this directory. The app registers `Ctrl+Alt+F8` by default; enter another Tauri accelerator and choose **Apply** to change it. The default hotkey action records microphone audio. Choose **Run text insertion probe** to use the completed fixed-text probe.
+Run `npm install` and `npm run tauri dev` from this directory. The app registers `Ctrl+Alt+F8` by default; enter another Tauri accelerator and choose **Apply** to change it. The default hotkey action records, transcribes, and inserts on release. Choose **Run text insertion probe** to use the completed fixed-text probe.
 
-## File-transcription probe (Task 5)
+## Dictation session (Task 6)
 
-Prepare the microphone, hold the recording shortcut while speaking, then release. Stop playback before choosing **Transcribe recording**. This explicitly sends the complete in-memory PCM16 mono WAV to OpenAI's `/v1/audio/transcriptions` endpoint with `gpt-transcribe` and the saved key. There is no audio upload on recording stop or app startup. WAV data crosses Tauri IPC as binary bytes, and Rust reads the key directly from Credential Manager; no secret is returned to the UI and no audio file is written.
+Prepare the microphone, focus the intended external input, then hold the shortcut while speaking. Release sends the complete in-memory PCM16 mono WAV directly to OpenAI using the saved key, then inserts the exact canonical transcript at the captured destination. This mode uploads automatically on release. Streaming, overlays, cleanup, and segmentation come in later tasks.
 
-The canonical transcript appears in a read-only selectable text field. On success, the app releases the recording PCM, WAV, and playback URL and retains the transcript until explicit discard or app exit. Failed or empty responses keep the recording for playback and **Retry transcription**. **Discard recording and transcript** clears local audio/text and suppresses late responses. If an upload is already in flight, its request buffers remain owned by the native worker until it finishes; discard cannot retract uploaded audio. Recording another session remains disabled while that request finishes, and a retained transcript must be explicitly discarded before another recording starts. **Clear recording** also discards the stopped recording.
+The session has `idle`, `recording`, `finalizing`, `ready`, `inserted`, `failed`, and `discarded` states. Only one session is active. Discard a retained result before recording again; a new hotkey press during finalization visibly explains that the session is busy. Capture failure, empty recordings, and microphone interruption remain recoverable or explicitly discardable. A disconnect retains partial audio for playback and an explicit Retry transcription instead of silently uploading it.
 
-The probe limits WAV uploads to 25,000,000 bytes and successful response bodies to 1 MiB. Native HTTPS uses certificate verification and disables redirects. Resolve/connect timeouts are 10 seconds each, and send/receive timeouts are 60 seconds each for transcription (these are phase timeouts, not one total request deadline). Provider error bodies, credentials, audio, and transcripts are not written to ordinary logs. The endpoint and model follow the [official OpenAI file-transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text). HTTP 401 cannot distinguish an invalid key from an expired or revoked one.
+**Cancel and discard** works during recording and transcription. It stops capture, clears local audio/text, invalidates the destination, and suppresses late responses. A sent native request still owns its upload buffers until it finishes, so another dictation waits for its completion. Once native paste is dispatched, cancellation is disabled until the insertion result arrives; paste cannot be undone by discarding.
+
+Failed transcription keeps PCM/WAV/playback for **Retry transcription**. A usable canonical transcript releases audio and stays selectable until explicit discard or exit. If the focused input, available caret position, or pointer changes, insertion refuses and offers **Copy transcript**. A refusal confirmed before any paste attempt also permits retry by returning to the original input/caret and pointer position and pressing/releasing the shortcut. It retries insertion without another API request. Partial paste, unknown IPC outcomes, and clipboard restoration failures never permit automatic repeat insertion.
+
+Copy transcript backs up supported clipboard formats. **Restore previous clipboard** is available afterward. If the clipboard cannot be backed up, **Copy transcript without backup** explicitly replaces it. Automatic paste restores its temporary clipboard only if no newer copy occurred. A successful paste and failed clipboard restore are reported separately; use Restore rather than inserting again. Sending paste keystrokes does not prove the destination accepted them. Target checks cannot prove that the user switched away and back or moved and restored a cursor between checks.
+
+Audio is never written to disk. WAV bytes cross binary Tauri IPC; Rust reads the key directly from Credential Manager. No credential is returned to the UI. Uploads are limited to 25,000,000 bytes and successful responses to 1 MiB. Native HTTPS verifies certificates and disables redirects. Resolve/connect timeouts are 10 seconds each; send/receive timeouts are 60 seconds each (phase timeouts, not one overall deadline). Ordinary logs contain no credentials, audio, or dictated text. HTTP 401 does not distinguish invalid, expired, and revoked keys. App exit/crash loses pending audio and transcripts.
 
 Manual Windows checks:
 
-1. Save your key locally, prepare the microphone, and record 5–10 seconds of speech. Listen to confirm the capture, stop playback, and choose **Transcribe recording**. Confirm the transcript matches your speech, the playback disappears, and the transcript remains selectable. Account/model access is only verified by a successful transcription.
-2. Choose **Discard recording and transcript**. Confirm no transcript or playback remains and a new recording can start.
-3. Record again, temporarily disconnect the network, and transcribe. Confirm an error and retained playback. Reconnect and choose **Retry transcription** without recording again; confirm success.
-4. Record again and choose Transcribe followed immediately by Discard. Confirm local text/audio clear, no late response restores them, and another recording can start after the outstanding request finishes. Also confirm repeated transcription clicks cannot send duplicate requests.
-5. With no request in progress, temporarily remove the saved key, record, and transcribe. Confirm the missing-key message retains audio. Save the key again locally and retry. For an invalid-key check, use the opt-in fixture probe below instead of replacing your saved key with an invalid value.
+1. Prepare the microphone, focus a blank Notepad/VS Code/browser input, hold for 5–10 seconds, then release. Confirm canonical text is inserted, playback disappears, the transcript remains, and the clipboard is restored. Discard before another dictation.
+2. Switch apps, move the caret/pointer, or close the target during recording or finalization. Confirm no paste and retained text. Verify Copy and, for a confirmed refusal, the original-target hotkey retry.
+3. Temporarily disconnect the network before release. Confirm retained audio and a visible failure. Reconnect and Retry transcription without recording again.
+4. Cancel during recording, microphone startup, and transcription. Confirm local resources clear, no late result inserts/restores text, and another session starts after outstanding work completes. Press the hotkey during finalization and confirm the visible busy explanation.
+5. Test Unicode, newlines, URLs, filenames, identifiers, numbers, and technical vocabulary. Check that repeated release/retry events cannot duplicate text, including a clipboard restoration failure.
 
-Record observed results in `../DECISIONS.md`. Task 5's completion criteria are verified: the user confirmed successful spoken-audio transcription and the failed-request retry flow. Release/discard and late-response behavior have deterministic test coverage; their separate manual checks remain useful for the later lifecycle audit. Automatic insertion is Task 6.
+Automated checks: `npm test` and `npm run build` here; `cargo test --lib --offline` and `cargo fmt --check` in `src-tauri/`. Regular tests use deterministic fakes and make no API calls. If Windows linker temporary-file access is restricted, create `target/task6-temp` and set process-local `TEMP` and `TMP` to its absolute path before Cargo.
 
-Run `npm test` (Node 22.14 or newer with experimental TypeScript transformation) and `npm run build` here; run `cargo test --lib --offline` and `cargo fmt --check` in `src-tauri/`. The opt-in endpoint test is `cargo test --lib transcription::tests::openai_rejects_invalid_transcription_key -- --ignored --exact`; it sends synthetic silence with an invalid fixture key and never reads the saved credential. Regular tests use deterministic fakes and make no network requests.
+### Opt-in synthetic-microphone check
+
+This development check uses local Windows speech synthesis instead of paid TTS. The generated WAV contains only a fixed synthetic phrase and lives under ignored `src-tauri/target/task6/`; it is not a real recording. Start Vite with `npm run dev`, build the native app, then launch a separate app process with these process-local variables (do not persist them in Windows settings):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-task6-speech.ps1
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream --use-file-for-fake-audio-capture=src-tauri/target/task6/speech.wav --remote-debugging-port=9223'
+Start-Process -FilePath 'src-tauri/target/debug/desktop.exe' -WindowStyle Hidden
+node scripts/task6-webview-check.mjs prepare
+```
+
+Focus a disposable blank editor, then from a separate terminal run `node scripts/task6-webview-check.mjs record --live`. The explicit flag authorizes uploading synthetic audio using the saved key. The helper prints state/recognition/resource checks without printing credentials or transcripts. `status` and `discard` are also supported. Avoid source edits/Vite reloads during a recording. Quit the test process afterward and launch normally, with the test flags absent.
+
+The debugger replays Pressed/Released events through the actual registered shortcut handler. Capture, encoding, IPC, OpenAI transcription, target checks, Windows paste, and clipboard restoration are real. This verifies the pipeline with a simulated microphone; physical microphone behavior and the full Windows hold duration are separate checks. A real Windows shortcut was also verified for insertion retry. See [Task 6 verification](scripts/task6-verification.md) for observations.
+
+WebView2 process-local browser flags follow [Microsoft's documentation](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/webview-features-flags); the audio fixture flag is implemented in [Chromium's media switches](https://chromium.googlesource.com/chromium/src/+/b45be0604d27b3e644978e57f581e810a65edca5/media/base/media_switches.cc).
 
 ## API-key storage probe
 
@@ -41,19 +62,13 @@ Manual Windows check:
 
 Record the observed results in `../DECISIONS.md`. Deterministic input/error tests run with `cargo test --lib` from `src-tauri/`. The native storage probe is opt-in: `cargo test --lib credentials::tests::windows_credential_restart_probe -- --ignored --exact`. It creates a unique disposable fixture credential, reads it from a fresh process, replaces it, deletes it, and checks removal; it does not read or replace the app's key. The separate opt-in network check is `cargo test --lib openai::tests::openai_rejects_invalid_fixture_key -- --ignored --exact`; it sends a deliberately invalid fixture key to OpenAI and reads no saved credential.
 
-## Microphone recording probe
+## Microphone capture checks
 
-Choose the input device or leave **System default microphone** selected. Click **Prepare microphone** and wait for the ready message before using the shortcut; this requests permission and resolves device labels before a hold begins. Then hold the shortcut while speaking and release it to stop. The live input meter should move while you speak. The probe captures mono Float32 PCM in memory, reports the captured duration, sample rate, channel count, and input device, and creates an in-memory PCM16 WAV for playback. Use **Play captured audio** or the audio controls to listen, **Stop playback** to restart, and **Clear recording** to release the PCM and playback data. Audio is never written to disk; quitting the app also releases it.
+The original Task 3 recording/playback, permission denial, clearing, and disconnect/reconnect checks are recorded in `../DECISIONS.md`. Task 6 now automatically transcribes on release. A successful transcript releases playback/audio; playback remains available after transcription failure or microphone interruption.
 
-Manual Windows check:
+Choose the input device or leave System default microphone selected, then click Prepare microphone before using the shortcut. The input meter should move while speaking. Capture uses mono Float32 PCM in memory and reports duration, sample rate, device, and AudioWorklet diagnostics for empty recordings. A stopped capture is encoded as in-memory PCM16 WAV.
 
-1. Click **Prepare microphone** and allow access. Select **Mic In (2- Elgato Wave:3)** if it is listed, or use the system default. Wait for the ready message, then hold the shortcut, speak for 5–10 seconds, and release it.
-2. Confirm the input meter moves while speaking, the metadata is plausible, and **Play captured audio** plays the captured speech. If the duration is zero, note the diagnostic values shown in the metadata.
-3. Select **Clear recording** and confirm the player disappears and the metadata says no recording is retained.
-4. Temporarily deny desktop microphone access in Windows Privacy & security settings and click **Prepare microphone**. Confirm a visible permission error appears without crashing; restore access and prepare again afterward.
-5. Start another recording, disconnect the microphone while recording, then reconnect it. Confirm the partial capture is retained for playback, clear it, refresh the device list, and verify a new recording can start.
-
-Record the observed results in `../DECISIONS.md`. The probe reports audio frames received by the browser audio graph; confirm the recording by listening to it.
+For current checks, follow the Task 6 matrix above. Confirm the live meter, successful transcription/insertion, and audio release. On microphone disconnect, confirm partial audio remains for playback and explicit Retry transcription; discard it, reconnect/refresh, and prepare again before another session. Permission errors should remain visible and the empty/failed session must be discardable. Quitting releases pending audio; no microphone recording is saved to disk.
 
 ## Text insertion probe
 

@@ -99,3 +99,145 @@ test("capture WAV has valid PCM16 mono headers and exact sample data", async () 
   assert.equal(view.getUint16(22, true), 1);
   assert.deepEqual([44, 46, 48, 50].map((offset) => view.getInt16(offset, true)), [-32768, 0, 16383, 32767]);
 });
+
+const sentPaste = (extra = {}) => ({ pasteAttempted: true, pasteSent: true,
+  clipboardRestored: true, message: "Paste sent", ...extra });
+const destination = (insert) => ({ capture: async () => {}, insert, discard: async () => {} });
+
+test("session captures destination before recording and inserts exact canonical text once", async () => {
+  const text = "你好 😀\nhttps://example.com/a?q=2\nsrc/main.ts AS5047P user_id 12.50";
+  const events = [], ids = [];
+  const session = new TranscriptionSession(async () => { events.push("transcribe"); return text; },
+    () => {}, () => events.push("release"), {
+      capture: async (id) => { events.push("target"); ids.push(id); },
+      insert: async (id, actual) => { ids.push(id); assert.equal(actual, text); events.push("insert"); return sentPaste(); },
+      discard: async () => {},
+    });
+  session.begin();
+  assert.equal(session.state, "recording");
+  assert.deepEqual(events, ["target"]);
+  session.capture(recording());
+  await session.transcribe();
+  assert.equal(session.state, "inserted");
+  assert.equal(session.transcript, text);
+  assert.equal(ids[0], ids[1]);
+  assert.deepEqual(events, ["target", "transcribe", "release", "insert"]);
+  await session.transcribe(); await session.retryInsertion();
+  assert.equal(events.filter((event) => event === "insert").length, 1);
+  assert.throws(() => session.begin());
+});
+
+test("cancelled transcription never inserts and new dictation waits for native completion", async () => {
+  const response = deferred();
+  let insertions = 0;
+  const session = new TranscriptionSession(() => response.promise, () => {}, () => {},
+    destination(async () => { insertions++; return sentPaste(); }));
+  session.begin(); session.capture(recording());
+  const firstId = session.sessionId;
+  const pending = session.transcribe();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(session.state, "finalizing");
+  assert.throws(() => session.begin());
+  assert.equal(session.discard(), true);
+  assert.equal(session.state, "discarded");
+  assert.throws(() => session.begin());
+  response.resolve("cancelled text");
+  await pending;
+  assert.equal(insertions, 0);
+  assert.equal(session.transcript, "");
+  session.begin();
+  assert.notEqual(session.sessionId, firstId);
+});
+
+test("failed destination capture keeps usable text and frees audio for Copy", async () => {
+  let released = 0;
+  const session = new TranscriptionSession(async () => "recover me", () => {}, () => { released++; }, {
+    ...destination(async () => assert.fail("Unavailable target pasted")),
+    capture: async () => { throw new Error("target unavailable"); },
+  });
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.equal(session.state, "failed");
+  assert.equal(session.transcript, "recover me");
+  assert.equal(session.audio, null);
+  assert.equal(released, 1);
+  assert.equal(session.canRetryInsertion, false);
+});
+
+test("only a confirmed refusal before paste permits insertion retry, without retranscription", async () => {
+  let requests = 0, insertions = 0;
+  const session = new TranscriptionSession(async () => { requests++; return "keep text"; }, () => {}, () => {},
+    destination(async () => ++insertions === 1
+      ? sentPaste({ pasteAttempted: false, pasteSent: false, message: "Target changed" }) : sentPaste()));
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.equal(session.state, "failed");
+  assert.equal(session.canRetryInsertion, true);
+  await session.retryInsertion(); await session.retryInsertion();
+  assert.equal(session.state, "inserted");
+  assert.equal(requests, 1);
+  assert.equal(insertions, 2);
+});
+
+test("partial paste, restore failure, and unknown IPC outcome never permit automatic retry", async () => {
+  for (const result of [sentPaste({ clipboardRestored: false }), sentPaste({ pasteSent: false }), null]) {
+    let insertions = 0;
+    const session = new TranscriptionSession(async () => "text", () => {}, () => {}, destination(async () => {
+      insertions++;
+      if (!result) throw new Error("IPC failed after paste");
+      return result;
+    }));
+    session.begin(); session.capture(recording()); await session.transcribe();
+    assert.equal(session.transcript, "text");
+    assert.equal(session.canRetryInsertion, false);
+    assert.equal(session.state, result?.pasteSent ? "inserted" : "failed");
+    await session.retryInsertion(); await session.transcribe();
+    assert.equal(insertions, 1);
+  }
+});
+
+test("cancel while waiting for target capture cannot dispatch paste", async () => {
+  const target = deferred(), textReady = deferred();
+  const session = new TranscriptionSession(async () => "text", () => {
+    if (session.transcript) textReady.resolve();
+  }, () => {}, { ...destination(async () => assert.fail("Cancelled session pasted")), capture: () => target.promise });
+  session.begin(); session.capture(recording());
+  const pending = session.transcribe();
+  await textReady.promise;
+  session.discard(); target.resolve(); await pending;
+  assert.equal(session.state, "discarded");
+  assert.equal(session.transcript, "");
+});
+
+test("paste dispatch is an explicit noncancellable commit boundary", async () => {
+  const paste = deferred(), dispatched = deferred();
+  const session = new TranscriptionSession(async () => "text", () => {}, () => {}, destination(() => {
+    dispatched.resolve(); return paste.promise;
+  }));
+  session.begin(); session.capture(recording()); const pending = session.transcribe();
+  await dispatched.promise;
+  assert.equal(session.inserting, true);
+  assert.equal(session.discard(), false);
+  assert.equal(session.transcript, "text");
+  paste.resolve(sentPaste()); await pending;
+  assert.equal(session.state, "inserted");
+  assert.equal(session.discard(), true);
+});
+
+test("recording cancellation and empty capture leave an explicit discardable state", () => {
+  const session = new TranscriptionSession(async () => assert.fail("No audio should send"), () => {}, () => {});
+  session.begin(); session.failRecording();
+  assert.equal(session.state, "failed"); assert.equal(session.canStart, false);
+  session.discard(); session.begin(); session.discard(); session.failRecording();
+  assert.equal(session.state, "discarded"); assert.equal(session.canStart, true);
+});
+
+test("synchronous destination IPC failures preserve transcript and local discard", async () => {
+  const session = new TranscriptionSession(async () => "recoverable", () => {}, () => {}, {
+    capture: () => { throw new Error("IPC unavailable"); },
+    insert: async () => assert.fail("Uncaptured target pasted"),
+    discard: () => { throw new Error("IPC unavailable"); },
+  });
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.equal(session.state, "failed"); assert.equal(session.transcript, "recoverable");
+  assert.equal(session.discard(), true);
+  assert.equal(session.state, "discarded"); assert.equal(session.transcript, "");
+});

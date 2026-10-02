@@ -10,7 +10,7 @@
   <body>
     <main>
       <h1>BYOK dictation probes</h1>
-      <p>Hold the global shortcut to record, then release to stop. Choose Transcribe recording to send it directly to OpenAI using your saved key.</p>
+      <p>Prepare the microphone, then hold the global shortcut in your destination to record. Release to send the recording directly to OpenAI and insert the canonical transcript.</p>
       <form id="shortcut-form">
         <label for="shortcut">Global shortcut</label>
         <div class="row">
@@ -21,6 +21,7 @@
       <p id="status" role="status">Registering…</p>
       <div class="states">
         <div>Hold state <strong id="hold-state">UP</strong></div>
+        <div>Session <strong id="session-state">idle</strong></div>
       </div>
       <section class="result" aria-labelledby="api-key-heading">
         <h2 id="api-key-heading">OpenAI API key</h2>
@@ -43,7 +44,7 @@
         <h2>Hotkey action</h2>
         <label for="hotkey-action">When the shortcut is held</label>
         <select id="hotkey-action">
-          <option value="record">Record microphone</option>
+          <option value="record">Dictate and insert on release</option>
           <option value="insert">Run text insertion probe</option>
         </select>
       </section>
@@ -70,18 +71,20 @@
           <button id="stop-playback" type="button" disabled>Stop playback</button>
           <button id="clear-recording" type="button" disabled>Clear recording</button>
         </div>
-        <p class="hint">Prepare once to grant microphone access and reveal device names. A stopped recording is available here for playback and inspection. Clear it when finished; recordings are not saved to disk.</p>
+        <p class="hint">Prepare once to grant microphone access and reveal device names. Failed or interrupted recordings remain available for playback and retry. Recordings are not saved to disk.</p>
       </section>
       <section class="result">
-        <h2>File transcription probe</h2>
+        <h2>Dictation session</h2>
         <div class="row recording-actions">
-          <button id="transcribe-recording" type="button" disabled>Transcribe recording</button>
+          <button id="transcribe-recording" type="button" disabled>Retry transcription</button>
           <button id="discard-transcription" type="button" disabled>Discard recording and transcript</button>
+          <button id="copy-transcript" type="button" disabled>Copy transcript</button>
+          <button id="copy-transcript-without-backup" type="button" disabled>Copy transcript without backup</button>
         </div>
-        <p id="transcription-status" role="status">Record speech first, then choose Transcribe recording.</p>
+        <p id="transcription-status" role="status">Hold the shortcut in your destination. Release transcribes and inserts.</p>
         <label for="transcript">Canonical transcript</label>
         <textarea id="transcript" rows="6" readonly spellcheck="false" placeholder="Your transcript will appear here."></textarea>
-        <p class="hint">Uses gpt-transcribe. Audio stays in memory on failure for Retry; success releases audio and keeps the transcript. Discard clears the local result and ignores late responses, but cannot retract audio already sent. Quitting loses pending audio and text.</p>
+        <p class="hint">Release sends the whole recording to gpt-transcribe. Audio stays in memory on transcription failure; usable text releases audio and remains here until discard. An uncertain destination uses Copy. Cancel and discard ignores late responses but cannot retract uploaded audio. Once paste is dispatched, wait for its result. Discard the previous session before recording again. Quitting loses pending audio and text.</p>
       </section>
       <section class="result">
         <h2>Text insertion probe</h2>

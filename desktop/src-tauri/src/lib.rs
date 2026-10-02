@@ -16,6 +16,10 @@ pub fn run() {
         .manage(insertion::ProbeState::default())
         .invoke_handler(tauri::generate_handler![
             insertion::capture_target,
+            insertion::capture_dictation_target,
+            insertion::discard_dictation_target,
+            insertion::insert_dictation_text,
+            insertion::copy_dictation_text,
             insertion::insert_test_text,
             insertion::copy_test_text,
             insertion::copy_test_text_without_backup,

@@ -2,10 +2,10 @@ import { register, unregister, type ShortcutEvent } from "@tauri-apps/plugin-glo
 import { invoke } from "@tauri-apps/api/core";
 import { encodeWav, microphoneErrorMessage, PcmRecorder, type CapturedPcm } from "./audioCapture";
 import { initializeApiKeySettings } from "./apiKey";
-import { TranscriptionSession } from "./transcriptionSession";
+import { TranscriptionSession, type InsertionResult } from "./transcriptionSession";
 import { transcriptionError } from "./transcription";
 
-type HotkeyAction = "record" | "insert";
+type HotkeyAction = "record" | "insert" | "retry";
 
 const shortcutInput = document.querySelector<HTMLInputElement>("#shortcut")!;
 const status = document.querySelector<HTMLElement>("#status")!;
@@ -29,6 +29,10 @@ const transcribeButton = document.querySelector<HTMLButtonElement>("#transcribe-
 const discardButton = document.querySelector<HTMLButtonElement>("#discard-transcription")!;
 const transcriptionStatus = document.querySelector<HTMLElement>("#transcription-status")!;
 const transcriptView = document.querySelector<HTMLTextAreaElement>("#transcript")!;
+const sessionState = document.querySelector<HTMLElement>("#session-state")!;
+const copyTranscriptButton = document.querySelector<HTMLButtonElement>("#copy-transcript")!;
+const copyTranscriptWithoutBackupButton = document.querySelector<HTMLButtonElement>("#copy-transcript-without-backup")!;
+const applyShortcutButton = document.querySelector<HTMLButtonElement>("#shortcut-form button")!;
 
 let activeShortcut: string | null = null;
 let held = false;
@@ -51,6 +55,8 @@ function log(message: string) {
 function showState() {
   holdState.textContent = held ? "DOWN" : "UP";
   const locked = held || operationBusy || transcription.busy;
+  applyShortcutButton.disabled = locked;
+  shortcutInput.disabled = locked;
   actionSelect.disabled = locked;
   microphoneSelect.disabled = locked;
   refreshDevicesButton.disabled = locked;
@@ -59,35 +65,52 @@ function showState() {
   stopPlaybackButton.disabled = locked || recordingPlayback.paused;
   clearRecordingButton.disabled = locked || !recorder.hasRecording;
   transcribeButton.disabled = locked || !transcription.audio || !recordingPlayback.paused;
-  transcribeButton.textContent = transcription.error ? "Retry transcription" : "Transcribe recording";
-  discardButton.disabled = held || operationBusy || !transcription.hasResult;
+  transcribeButton.textContent = "Retry transcription";
+  discardButton.disabled = transcription.inserting || transcription.state === "idle" || transcription.state === "discarded";
+  if (operationBusy && !recordingStart) discardButton.disabled = true;
+  discardButton.textContent = held || transcription.busy ? "Cancel and discard" : "Discard recording and transcript";
+  copyTranscriptButton.disabled = locked || !transcription.transcript;
+  copyTranscriptWithoutBackupButton.disabled = locked || !transcription.transcript;
+  sessionState.textContent = transcription.state;
+  document.querySelector<HTMLButtonElement>("#copy-text")!.disabled = locked;
+  document.querySelector<HTMLButtonElement>("#copy-without-backup")!.disabled = locked;
   transcriptView.value = transcription.transcript;
   if (transcription.discarded) {
     transcriptionStatus.textContent = transcription.busy
       ? "Discarded locally. Waiting for the sent request to finish; its response will be ignored."
       : "Recording and transcript discarded. Ready for another recording.";
+  } else if (transcription.inserting) {
+    transcriptionStatus.textContent = "Checking the original destination and sending paste. Wait for its result before discarding.";
   } else if (transcription.busy) {
     transcriptionStatus.textContent = "Sending this recording directly to OpenAI and waiting for the canonical transcript…";
+  } else if (transcription.state === "recording") {
+    transcriptionStatus.textContent = "Listening. Release the shortcut to transcribe and insert.";
+  } else if (transcription.insertion) {
+    transcriptionStatus.textContent = transcription.insertion.message
+      + (transcription.canRetryInsertion ? " Return to the original input/caret and pointer position, then press and release the shortcut to retry insertion, or use Copy transcript." : " Transcript is retained until discard.");
+  } else if (transcription.transcript && transcription.error) {
+    transcriptionStatus.textContent = "The destination is unavailable or the paste outcome is uncertain. Check the target and use Copy transcript. Text is retained until discard.";
   } else if (transcription.error) {
     transcriptionStatus.textContent = transcriptionError(transcription.error) + " Audio is retained in memory until you discard it or quit.";
   } else if (transcription.transcript) {
     transcriptionStatus.textContent = "Canonical transcript ready. Audio released from memory. Text stays here until you discard it or quit.";
   } else {
     transcriptionStatus.textContent = transcription.audio
-      ? "Recording ready. Choose Transcribe recording to send it to OpenAI."
-      : "Record speech first, then choose Transcribe recording.";
+      ? "Recording retained. Choose Retry transcription to send it to OpenAI."
+      : "Prepare the microphone, then hold the shortcut in your destination. Release transcribes and inserts.";
   }
 }
 
 async function refreshRestoreButton() {
   try {
-    restoreButton.disabled = !(await invoke<boolean>("has_clipboard_backup"));
+    restoreButton.disabled = !(await invoke<boolean>("has_clipboard_backup")) || held || operationBusy || transcription.busy;
   } catch {
     restoreButton.disabled = true;
   }
 }
 
 function displayRecording(recording: CapturedPcm) {
+  if (transcription.discarded) { releaseRecording(); return; }
   if (playbackUrl) URL.revokeObjectURL(playbackUrl);
   playbackUrl = null;
 
@@ -110,6 +133,7 @@ function displayRecording(recording: CapturedPcm) {
     inputLevelStatus.textContent = "Audio samples received. Playback is ready.";
     recordingStatus.textContent = "Recording stopped. In-memory WAV playback is ready.";
   } else {
+    transcription.failRecording();
     recordingPlayback.pause();
     recordingPlayback.removeAttribute("src");
     recordingPlayback.load();
@@ -122,6 +146,7 @@ function displayRecording(recording: CapturedPcm) {
 
 const recorder = new PcmRecorder(
   (recording, message) => {
+    if (transcription.discarded) { releaseRecording(); return; }
     captureInterruptionMessage = message;
     displayRecording(recording);
     recordingStatus.textContent = message;
@@ -139,11 +164,18 @@ const recorder = new PcmRecorder(
 
 const transcription = new TranscriptionSession(
   (audio) => invoke<string>("transcribe_recording", audio),
-  showState,
+  () => { showState(); void refreshRestoreButton(); },
   releaseRecording,
+  {
+    capture: (sessionId) => invoke<void>("capture_dictation_target", { sessionId }),
+    insert: (sessionId, text) => invoke<InsertionResult>("insert_dictation_text", { sessionId, text }),
+    discard: (sessionId) => invoke<void>("discard_dictation_target", { sessionId }),
+  },
 );
 
 function releaseRecording() {
+  // Recording cancellation stops the graph asynchronously before clearing it.
+  if (recorder.isRecording) return;
   recordingPlayback.pause();
   recordingPlayback.removeAttribute("src");
   recordingPlayback.load();
@@ -239,10 +271,18 @@ async function finishRecording(started: Promise<string> | null) {
   try {
     await started;
     const recording = await recorder.stop();
+    if (transcription.discarded) { releaseRecording(); return; }
     displayRecording(recording);
     if (captureInterruptionMessage) recordingStatus.textContent = captureInterruptionMessage;
     void refreshMicrophones(false).catch(() => undefined);
+    // Disconnected microphones retain partial capture for an explicit retry.
+    if (!captureInterruptionMessage) {
+      operationBusy = false;
+      await transcription.transcribe();
+    }
   } catch (error) {
+    if (transcription.discarded) return;
+    transcription.failRecording();
     if (recordingStatus.textContent.startsWith("Microphone access was denied")
       || recordingStatus.textContent.startsWith("No microphone input is available")
       || recordingStatus.textContent.startsWith("The microphone could not be opened")
@@ -282,9 +322,19 @@ function runInsertion(pendingCapture: Promise<string> | null) {
 
 function onShortcut(event: ShortcutEvent) {
   if (event.state === "Pressed") {
-    if (held || operationBusy || transcription.busy) return;
+    if (held) return;
+    if (operationBusy || transcription.busy) {
+      recordingStatus.textContent = "A session is still finalizing or stopping. Wait, or cancel and discard it before recording again.";
+      return;
+    }
     const requestedAction = actionSelect.value === "insert" ? "insert" : "record";
-    if (requestedAction === "record" && transcription.hasResult) {
+    if (requestedAction === "record" && transcription.canRetryInsertion) {
+      held = true;
+      heldAction = "retry";
+      showState();
+      return;
+    }
+    if (requestedAction === "record" && !transcription.canStart) {
       recordingStatus.textContent = "Discard the previous recording or transcript before starting another.";
       return;
     }
@@ -300,9 +350,12 @@ function onShortcut(event: ShortcutEvent) {
 
     if (heldAction === "insert") {
       insertionCapture = invoke<string>("capture_target");
+      void insertionCapture.catch(() => undefined);
       insertionStatus.textContent = "Capturing the focused target…";
       return;
     }
+
+    transcription.begin();
 
     if (recorder.hasRecording) {
       recordingStatus.textContent = "Clear the previous recording before starting another.";
@@ -311,12 +364,14 @@ function onShortcut(event: ShortcutEvent) {
       recordingStatus.textContent = "Requesting microphone access…";
       recordingStart = recorder.start(microphoneSelect.value)
         .then(async (message) => {
+          if (transcription.discarded) return message;
           recordingStatus.textContent = "Listening… " + message;
           log("microphone recording started");
           void refreshMicrophones(false).catch(() => undefined);
           return message;
         })
         .catch((error: unknown) => {
+          transcription.failRecording();
           recordingError(error);
           throw error;
         });
@@ -337,11 +392,14 @@ function onShortcut(event: ShortcutEvent) {
     } else if (action === "record") {
       recordingStatus.textContent = "Stopping recording…";
       finishRecording(recordingStart);
+    } else if (action === "retry") {
+      void transcription.retryInsertion();
     }
   }
 }
 
 async function applyShortcut(shortcut: string) {
+  if (held || operationBusy || transcription.busy) return;
   const next = shortcut.trim();
   if (!next) {
     status.textContent = "Enter a shortcut first.";
@@ -394,12 +452,17 @@ document.querySelector<HTMLButtonElement>("#copy-without-backup")!.addEventListe
 });
 
 restoreButton.addEventListener("click", async () => {
+  if (held || operationBusy || transcription.busy) return;
+  operationBusy = true;
+  showState();
   try {
     insertionStatus.textContent = await invoke<string>("restore_previous_clipboard");
   } catch (error) {
     insertionStatus.textContent = "Restore failed: " + String(error);
   } finally {
+    operationBusy = false;
     await refreshRestoreButton();
+    showState();
   }
 });
 
@@ -454,9 +517,37 @@ transcribeButton.addEventListener("click", () => {
   void transcription.transcribe();
 });
 discardButton.addEventListener("click", () => {
-  if (held || operationBusy) return;
-  transcription.discard();
+  if (transcription.inserting) return;
+  const stoppingCapture = heldAction === "record" || recorder.isRecording;
+  const started = recordingStart;
+  held = false;
+  heldAction = null;
+  if (!transcription.discard()) return;
+  if (stoppingCapture) {
+    operationBusy = true;
+    showState();
+    void (async () => {
+      try { await started; await recorder.stop(); }
+      catch { /* Nothing usable remains after explicit discard. */ }
+      finally { releaseRecording(); recordingStart = null; operationBusy = false; showState(); }
+    })();
+  }
 });
+
+async function copyTranscript(withoutBackup: boolean) {
+  if (held || operationBusy || transcription.busy || !transcription.transcript) return;
+  operationBusy = true;
+  showState();
+  try {
+    insertionStatus.textContent = await invoke<string>("copy_dictation_text", {
+      text: transcription.transcript, withoutBackup,
+    });
+  } catch {
+    insertionStatus.textContent = "Copy failed. Restore a pending clipboard backup, or use Copy transcript without backup to explicitly replace unsupported clipboard contents.";
+  } finally { operationBusy = false; await refreshRestoreButton(); showState(); }
+}
+copyTranscriptButton.addEventListener("click", () => { void copyTranscript(false); });
+copyTranscriptWithoutBackupButton.addEventListener("click", () => { void copyTranscript(true); });
 
 actionSelect.addEventListener("change", () => {
   if (actionSelect.value === "insert") {

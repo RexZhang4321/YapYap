@@ -1,4 +1,4 @@
-//! Windows-only, deliberately conservative fixed-text insertion probe.
+//! Windows text destination capture, clipboard recovery, and guarded insertion.
 use std::{mem::size_of, ptr, sync::Mutex, thread, time::Duration};
 use tauri::State;
 
@@ -104,7 +104,34 @@ struct Target {
 #[derive(Default)]
 struct ProbeData {
     target: Option<Target>,
+    dictation: Option<DictationTarget>,
     clipboard_recovery: Option<ClipboardSnapshot>,
+}
+
+struct DictationTarget {
+    session_id: String,
+    target: Target,
+    paste_attempted: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsertionResult {
+    paste_attempted: bool,
+    paste_sent: bool,
+    clipboard_restored: bool,
+    message: String,
+}
+
+impl InsertionResult {
+    fn refused(message: impl Into<String>) -> Self {
+        Self {
+            paste_attempted: false,
+            paste_sent: false,
+            clipboard_restored: false,
+            message: message.into(),
+        }
+    }
 }
 
 pub struct ProbeState(Mutex<ProbeData>);
@@ -237,7 +264,7 @@ fn read_clipboard_snapshot() -> Result<ClipboardSnapshot, String> {
     }
 }
 
-fn clipboard_contains_probe_text() -> bool {
+fn clipboard_contains_text(expected: &str) -> bool {
     unsafe {
         let handle = GetClipboardData(CF_UNICODETEXT);
         if handle == 0 {
@@ -258,7 +285,7 @@ fn clipboard_contains_probe_text() -> bool {
             .unwrap_or(units.len());
         let text = String::from_utf16(&units[..end]).ok();
         GlobalUnlock(handle);
-        text.as_deref() == Some(TEST_TEXT)
+        text.as_deref() == Some(expected)
     }
 }
 
@@ -371,9 +398,239 @@ fn paste() -> Result<(), String> {
         )
     } != input.len() as u32
     {
+        // A partial submission may have left Ctrl or V held down.
+        let release = [key(0x56, true), key(0x11, true)];
+        unsafe {
+            SendInput(
+                release.len() as u32,
+                release.as_ptr(),
+                size_of::<Input>() as i32,
+            );
+        }
         return Err("Windows did not accept the paste keystrokes.".into());
     }
     Ok(())
+}
+
+fn validate_text(text: &str) -> Result<(), String> {
+    if text.trim().is_empty() || text.contains('\0') || text.len() > 1024 * 1024 {
+        return Err("Text is empty, contains NUL, or exceeds the insertion limit. Use the transcript view to recover it.".into());
+    }
+    Ok(())
+}
+
+fn same_target(original: Target, current: Target) -> Result<(), String> {
+    if current.window != original.window || current.focus != original.focus {
+        return Err("Focused application or input changed; text was kept for Copy.".into());
+    }
+    if current.mouse != original.mouse {
+        return Err("Pointer moved; text was kept for Copy.".into());
+    }
+    if current.caret != original.caret {
+        return Err("Text cursor moved; text was kept for Copy.".into());
+    }
+    Ok(())
+}
+
+fn claim_paste(data: &mut ProbeData, session_id: &str) -> Result<(), String> {
+    let captured = data
+        .dictation
+        .as_mut()
+        .filter(|item| item.session_id == session_id)
+        .ok_or("This dictation destination is no longer available. Use Copy.")?;
+    if captured.paste_attempted {
+        return Err(
+            "Paste was already attempted for this session. Use Copy to avoid duplicate insertion."
+                .into(),
+        );
+    }
+    captured.paste_attempted = true;
+    Ok(())
+}
+
+fn restore_after_paste(
+    owner: isize,
+    state: &ProbeState,
+    previous: &ClipboardSnapshot,
+    our_sequence: u32,
+    text: &str,
+) -> Result<bool, String> {
+    let mut restored = false;
+    if unsafe { GetClipboardSequenceNumber() } == our_sequence {
+        let _clipboard = OpenClipboardGuard::new(owner)?;
+        if unsafe { GetClipboardSequenceNumber() } == our_sequence && clipboard_contains_text(text)
+        {
+            set_clipboard_snapshot(previous)?;
+            restored = true;
+        }
+    }
+    state
+        .0
+        .lock()
+        .map_err(|_| "Insertion state is unavailable.")?
+        .clipboard_recovery = None;
+    Ok(restored)
+}
+
+fn insert_text(
+    owner: isize,
+    state: &ProbeState,
+    original: Target,
+    text: &str,
+    session_id: Option<&str>,
+) -> Result<InsertionResult, String> {
+    validate_text(text)?;
+    wait_for_modifiers()?;
+    same_target(original, target()?)?;
+    let clipboard = OpenClipboardGuard::new(owner)?;
+    let previous = read_clipboard_snapshot()?;
+    {
+        let mut data = state
+            .0
+            .lock()
+            .map_err(|_| "Insertion state is unavailable.")?;
+        if data.clipboard_recovery.is_some() {
+            return Err("Restore the previous clipboard before inserting again.".into());
+        }
+        data.clipboard_recovery = Some(previous.clone());
+    }
+    if let Err(error) = set_plain_clipboard(Some(text)) {
+        if set_clipboard_snapshot(&previous).is_ok() {
+            state
+                .0
+                .lock()
+                .map_err(|_| "Insertion state is unavailable.")?
+                .clipboard_recovery = None;
+        }
+        return Err(error);
+    }
+    drop(clipboard);
+    let our_sequence = unsafe { GetClipboardSequenceNumber() };
+    // Recheck after acquiring/backing up the clipboard, immediately before paste.
+    let preflight = (|| {
+        same_target(original, target()?)?;
+        if let Some(id) = session_id {
+            let mut data = state
+                .0
+                .lock()
+                .map_err(|_| "Insertion state is unavailable.")?;
+            claim_paste(&mut data, id)?;
+        }
+        Ok::<(), String>(())
+    })();
+    if let Err(error) = preflight {
+        let restored = restore_after_paste(owner, state, &previous, our_sequence, text);
+        return Ok(InsertionResult {
+            clipboard_restored: matches!(restored, Ok(true)),
+            message: if restored.is_err() {
+                format!("{error} Clipboard restore is pending; use Restore previous clipboard.")
+            } else {
+                error
+            },
+            ..InsertionResult::refused("")
+        });
+    }
+    let paste_result = paste();
+    thread::sleep(Duration::from_millis(250));
+    let restore_result = restore_after_paste(owner, state, &previous, our_sequence, text);
+    Ok(insertion_outcome(paste_result, restore_result))
+}
+
+fn insertion_outcome(
+    paste_result: Result<(), String>,
+    restore_result: Result<bool, String>,
+) -> InsertionResult {
+    let paste_sent = paste_result.is_ok();
+    let message = match (paste_result, &restore_result) {
+        (Ok(()), Ok(true)) => "Paste keystrokes sent; previous clipboard restored. Check the target.".into(),
+        (Ok(()), Ok(false)) => "Paste sent; newer clipboard contents were preserved. Check the target.".into(),
+        (Ok(()), Err(_)) => "Paste sent; clipboard restore is pending. Use Restore previous clipboard; do not insert again.".into(),
+        (Err(_), _) => "Paste outcome is uncertain. Check the target before using Copy. Automatic insertion will not repeat.".into(),
+    };
+    // No errors escape after SendInput: restoration failure cannot trigger a second paste.
+    InsertionResult {
+        paste_attempted: true,
+        paste_sent,
+        clipboard_restored: matches!(restore_result, Ok(true)),
+        message,
+    }
+}
+
+#[tauri::command]
+pub fn capture_dictation_target(
+    session_id: String,
+    state: State<'_, ProbeState>,
+) -> Result<(), String> {
+    let mut data = state
+        .0
+        .lock()
+        .map_err(|_| "Insertion state is unavailable.")?;
+    data.dictation = None;
+    if data.clipboard_recovery.is_some() {
+        return Err("Restore the previous clipboard before another dictation.".into());
+    }
+    data.dictation = Some(DictationTarget {
+        session_id,
+        target: target()?,
+        paste_attempted: false,
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn discard_dictation_target(
+    session_id: String,
+    state: State<'_, ProbeState>,
+) -> Result<(), String> {
+    let mut data = state
+        .0
+        .lock()
+        .map_err(|_| "Insertion state is unavailable.")?;
+    if data
+        .dictation
+        .as_ref()
+        .is_some_and(|item| item.session_id == session_id)
+    {
+        data.dictation = None;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn insert_dictation_text(
+    session_id: String,
+    text: String,
+    window: tauri::WebviewWindow,
+    state: State<'_, ProbeState>,
+) -> InsertionResult {
+    let attempt = (|| {
+        let owner = window
+            .hwnd()
+            .map_err(|_| "The app window is unavailable.")?
+            .0 as isize;
+        let data = state
+            .0
+            .lock()
+            .map_err(|_| "Insertion state is unavailable.")?;
+        let captured = data
+            .dictation
+            .as_ref()
+            .filter(|item| item.session_id == session_id)
+            .ok_or("This dictation destination is unavailable. Use Copy.")?;
+        if captured.paste_attempted {
+            return Ok(InsertionResult {
+                paste_attempted: true,
+                paste_sent: false,
+                clipboard_restored: false,
+                message: "Paste was already attempted. Use Copy to avoid duplicate insertion."
+                    .into(),
+            });
+        }
+        let original = captured.target;
+        drop(data);
+        insert_text(owner, &state, original, &text, Some(&session_id))
+    })();
+    attempt.unwrap_or_else(InsertionResult::refused)
 }
 
 #[tauri::command]
@@ -389,73 +646,47 @@ pub fn insert_test_text(
         .target
         .take()
         .ok_or("No captured target; text was kept for Copy.")?;
-    wait_for_modifiers()?;
-    let current = target()?;
-    if current.window != original.window || current.focus != original.focus {
-        return Err("Focused application or input changed; text was kept for Copy.".into());
+    let result = insert_text(owner, &state, original, TEST_TEXT, None)?;
+    if result.paste_sent {
+        Ok(result.message)
+    } else {
+        Err(result.message)
     }
-    if current.mouse != original.mouse {
-        return Err("Pointer moved; text was kept for Copy.".into());
-    }
-    if current.caret != original.caret {
-        return Err("Text cursor moved; text was kept for Copy.".into());
-    }
-    let clipboard = OpenClipboardGuard::new(owner)?;
-    let previous = read_clipboard_snapshot()?;
-    state
+}
+
+#[tauri::command]
+pub fn copy_dictation_text(
+    text: String,
+    without_backup: bool,
+    window: tauri::WebviewWindow,
+    state: State<'_, ProbeState>,
+) -> Result<String, String> {
+    validate_text(&text)?;
+    let owner = window
+        .hwnd()
+        .map_err(|_| "The app window is unavailable.")?
+        .0 as isize;
+    let mut data = state
         .0
         .lock()
-        .map_err(|_| "Probe state is unavailable.")?
-        .clipboard_recovery = Some(previous.clone());
-    if let Err(error) = set_plain_clipboard(Some(TEST_TEXT)) {
+        .map_err(|_| "Insertion state is unavailable.")?;
+    if data.clipboard_recovery.is_some() {
+        return Err("Restore the previous clipboard before copying again.".into());
+    }
+    let _clipboard = OpenClipboardGuard::new(owner)?;
+    if without_backup {
+        set_plain_clipboard(Some(&text))?;
+        return Ok("Transcript copied without a backup; Restore is unavailable.".into());
+    }
+    let previous = read_clipboard_snapshot().map_err(|_| "The clipboard cannot be backed up. Use Copy transcript without backup to replace it explicitly.")?;
+    data.clipboard_recovery = Some(previous.clone());
+    if let Err(error) = set_plain_clipboard(Some(&text)) {
         if set_clipboard_snapshot(&previous).is_ok() {
-            state
-                .0
-                .lock()
-                .map_err(|_| "Probe state is unavailable.")?
-                .clipboard_recovery = None;
+            data.clipboard_recovery = None;
         }
         return Err(error);
     }
-    drop(clipboard);
-    let our_sequence = unsafe { GetClipboardSequenceNumber() };
-    let paste_result = paste();
-    thread::sleep(Duration::from_millis(250));
-    let mut restored = false;
-    if unsafe { GetClipboardSequenceNumber() } == our_sequence {
-        let _clipboard = OpenClipboardGuard::new(owner).map_err(|_| {
-            "Clipboard restore is pending. Use Restore previous clipboard in the probe window."
-        })?;
-        // A copy can occur while waiting to acquire the clipboard.
-        if unsafe { GetClipboardSequenceNumber() } == our_sequence {
-            if !clipboard_contains_probe_text() {
-                state
-                    .0
-                    .lock()
-                    .map_err(|_| "Probe state is unavailable.")?
-                    .clipboard_recovery = None;
-                paste_result?;
-                return Ok(
-                    "Paste sent; clipboard changed, so newer contents were preserved.".into(),
-                );
-            }
-            set_clipboard_snapshot(&previous).map_err(|_| {
-                "Clipboard restore is pending. Use Restore previous clipboard in the probe window."
-            })?;
-            restored = true;
-        }
-    }
-    state
-        .0
-        .lock()
-        .map_err(|_| "Probe state is unavailable.")?
-        .clipboard_recovery = None;
-    paste_result?;
-    if restored {
-        Ok("Paste keystrokes sent; previous clipboard restored. Check the target.".into())
-    } else {
-        Ok("Paste sent; clipboard changed, so newer contents were preserved.".into())
-    }
+    Ok("Transcript copied; previous clipboard saved for Restore.".into())
 }
 
 #[tauri::command]
@@ -528,4 +759,100 @@ pub fn has_clipboard_backup(state: State<'_, ProbeState>) -> Result<bool, String
         .map_err(|_| "Probe state is unavailable.")?
         .clipboard_recovery
         .is_some())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture_target() -> Target {
+        Target {
+            window: 1,
+            focus: 2,
+            mouse: Point { x: 5, y: 6 },
+            caret: Some(Rect {
+                left: 10,
+                top: 20,
+                right: 11,
+                bottom: 30,
+            }),
+        }
+    }
+
+    #[test]
+    fn changed_destinations_refuse_insertion() {
+        let original = fixture_target();
+        assert!(same_target(original, original).is_ok());
+        for changed in [
+            Target {
+                window: 3,
+                ..original
+            },
+            Target {
+                focus: 4,
+                ..original
+            },
+            Target {
+                mouse: Point { x: 7, y: 6 },
+                ..original
+            },
+            Target {
+                caret: None,
+                ..original
+            },
+            Target {
+                caret: Some(Rect {
+                    left: 12,
+                    ..original.caret.unwrap()
+                }),
+                ..original
+            },
+        ] {
+            assert!(same_target(original, changed).is_err());
+        }
+    }
+
+    #[test]
+    fn session_token_and_paste_latch_prevent_duplicate_or_stale_insertion() {
+        let mut data = ProbeData {
+            dictation: Some(DictationTarget {
+                session_id: "current".into(),
+                target: fixture_target(),
+                paste_attempted: false,
+            }),
+            ..Default::default()
+        };
+        assert!(claim_paste(&mut data, "old").is_err());
+        assert!(!data.dictation.as_ref().unwrap().paste_attempted);
+        assert!(claim_paste(&mut data, "current").is_ok());
+        assert!(claim_paste(&mut data, "current").is_err());
+        data.dictation = None;
+        assert!(claim_paste(&mut data, "current").is_err());
+    }
+
+    #[test]
+    fn insertion_payload_preserves_unicode_and_rejects_clipboard_truncation() {
+        assert!(validate_text(
+            "你好 😀\nhttps://example.com?q=2\nsrc/main.ts AS5047P user_id 12.50"
+        )
+        .is_ok());
+        for text in ["", "  ", "hello\0hidden"] {
+            assert!(validate_text(text).is_err());
+        }
+        assert!(validate_text(&"a".repeat(1024 * 1024 + 1)).is_err());
+    }
+
+    #[test]
+    fn restoration_failure_keeps_successful_paste_distinct_from_refusal() {
+        let sent = insertion_outcome(Ok(()), Err("Clipboard busy".into()));
+        let serialized = serde_json::to_value(sent).unwrap();
+        assert_eq!(serialized["pasteAttempted"], true);
+        assert_eq!(serialized["pasteSent"], true);
+        assert_eq!(serialized["clipboardRestored"], false);
+        let partial = insertion_outcome(Err("Partial SendInput".into()), Ok(true));
+        assert!(partial.paste_attempted);
+        assert!(!partial.paste_sent);
+        assert!(partial.clipboard_restored);
+        assert!(!InsertionResult::refused("Target changed").paste_attempted);
+    }
 }

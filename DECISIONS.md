@@ -87,6 +87,13 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - **Why:** Preserve retry and recovery without expanding Task 5 into the full Task 6 lifecycle. Discard cannot retract data already sent to the provider.
 - **Revisit when:** Task 6 adds cancellation/new-session rules or long-session buffering requires a different strategy.
 
+### D012 — Single-session dictation and insertion commit boundary
+
+- **Decision:** Task 6 captures a session-bound destination on hotkey press, automatically transcribes the complete recording on release, and inserts the exact canonical result. Allow one session at a time; retained transcripts require explicit discard before another recording. A cancelled sent request keeps its native-work lock until completion. Cancellation is available during capture and transcription; native paste dispatch is a commit boundary after which discard waits for the result.
+- **Alternative:** Concurrent sessions, silently replacing retained text, native request cancellation, or automatic repeated paste after an ambiguous outcome.
+- **Why:** Preserve dictation and destination ownership while keeping recovery understandable. A session token and native paste latch prevent stale/duplicate insertion. Distinguish paste submission from clipboard restoration; partial or unknown outcomes use Copy rather than automatic retry. A confirmed pre-paste refusal permits original-target hotkey retry without another API request. Microphone interruption retains partial audio for explicit transcription retry.
+- **Revisit when:** Daily use demonstrates a need for multiple sessions or native transport cancellation, or a more capable Windows text-destination API can confirm acceptance and track historical focus/caret changes.
+
 ## Progress
 
 ### 2026-09-21 — Task 0 decisions recorded
@@ -215,3 +222,12 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - Added root Git ignores for local environment/private-key files and a repeatable, redacted local audit. KEY_SECURITY.md records the command, scope, and memory/Windows-account limitations. Simultaneous transcription work was preserved.
 - Verification: frontend build passed, all 8 deterministic Rust tests passed, 3 UI privacy regression tests passed, and 4 scanner/redaction regression tests passed. Real API checks remained opt-in; this audit made no API requests and did not export or modify the saved credential.
 - Final saved-key comparison: 441 files/build outputs and 242 local Git objects checked with no matching exposures. Read-only Windows shared access allowed the running app's WebView caches to be included; no selected files remained unreadable.
+
+### October 1–2, 2026 — Task 6 implemented and verified with synthetic microphone input
+
+- Added explicit session lifecycle states, key-down destination ownership, automatic whole-recording transcription/insertion on release, cancellation, native-work locking, late-response suppression, and canonical transcript retention. Native insertion accepts arbitrary validated text, rejects stale session tokens, and latches a paste attempt. Copy supports clipboard backup/Restore and explicit replacement without backup. A failed clipboard restoration cannot cause another automatic paste.
+- Added opt-in synthetic speech and development WebView2 integration helpers. Windows System.Speech generated a fixed local fixture; WebView2's fake audio input fed the existing microphone capture path. No virtual audio driver, external TTS service, or new runtime audio dependency was needed. The fixture is synthetic and lives under ignored build output; real recordings remain memory-only.
+- Real OpenAI transcription and native paste succeeded in disposable Notepad and VS Code inputs. The canonical 92-character phrase was visually verified in both. A separate real Windows shortcut retried a refused insertion successfully without retranscription. Native Unicode/newline/URL/filename/identifier fixtures, duplicate refusal, changed-target refusal, and Copy/Restore recovery passed observed checks. Recording cancellation cleared audio/text and remained usable after the final UI changes.
+- Verification scope: long holds were replayed through the actual registered shortcut handler in the development debugger. Capture, AudioWorklet processing, WAV encoding, binary IPC, native provider requests, target checks, paste, and clipboard operations were real. Physical microphone/full-duration key holds and a new browser-input check were not repeated; their earlier platform probes remain documented. A Vite-reload-interrupted run was excluded and rerun.
+- Evidence and reproducible setup: desktop/scripts/task6-verification.md and desktop/README.md. Regular tests use fakes; live synthetic requests are explicit opt-in and read the saved key only inside Rust. Next: Task 7, live-transcription probe.
+- Final local checks passed: 14 deterministic Node session tests, 12 deterministic Rust tests (4 opt-in tests skipped), TypeScript/Vite build, Rust formatting, 3 existing UI privacy tests, and 4 leak-scanner regression tests. The pattern-only leak scan found no matching exposures in 77 files/build outputs and 250 Git objects; this final scan did not retrieve the saved key.
