@@ -1,0 +1,13 @@
+# Local credentials must never be committed.
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local Python tooling caches.
+__pycache__/
+*.pyc

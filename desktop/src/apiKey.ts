@@ -22,6 +22,18 @@ const errorMessages: Record<string, string> = {
   validation_network_failed: "Could not connect to OpenAI. Check your connection and retry; the key is still saved.",
 };
 
+export function apiKeyErrorMessage(error: unknown): string {
+  return typeof error === "string" && Object.prototype.hasOwnProperty.call(errorMessages, error)
+    ? errorMessages[error]
+    : "The API-key operation could not be completed. Try again.";
+}
+
+export function clearAndSubmitApiKey(input: { value: string }, save: (key: string) => Promise<void>): Promise<void> {
+  const key = input.value;
+  input.value = "";
+  return save(key);
+}
+
 export function initializeApiKeySettings() {
   const form = document.querySelector<HTMLFormElement>("#api-key-form")!;
   const input = document.querySelector<HTMLInputElement>("#api-key")!;
@@ -62,8 +74,7 @@ export function initializeApiKeySettings() {
       await work();
       operationStatus.textContent = success;
     } catch (error: unknown) {
-      operationStatus.textContent = (typeof error === "string" && errorMessages[error])
-        || "The API-key operation could not be completed. Try again.";
+      operationStatus.textContent = apiKeyErrorMessage(error);
     } finally {
       await refresh();
       busy = false;
@@ -75,12 +86,9 @@ export function initializeApiKeySettings() {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (busy) return;
-    // Start IPC, then clear the field immediately; never keep a saved key in UI state.
-    void run(() => {
-      const pending = invoke<void>("save_api_key", { key: input.value });
-      input.value = "";
-      return pending;
-    }, "Saving securely…", "Key saved securely. Choose Validate saved key to check API access.");
+    // Clear before invoking IPC, including when invocation throws synchronously.
+    void run(() => clearAndSubmitApiKey(input, (key) => invoke<void>("save_api_key", { key })),
+      "Saving securely…", "Key saved securely. Choose Validate saved key to check API access.");
   });
   validate.addEventListener("click", () => {
     void run(() => invoke<void>("validate_api_key"), "Checking the saved key with OpenAI…",
