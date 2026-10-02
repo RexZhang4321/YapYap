@@ -57,6 +57,22 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - **Why:** A permission prompt can consume some or all of a user's hold before capture starts. The first live attempt also returned zero PCM frames, so the updated probe shows AudioContext, AudioWorklet, and track diagnostics when capture is empty.
 - **Revisit when:** Manual Windows checks confirm whether preflight resolves the zero-frame result and whether permission remains available after app restart.
 
+## Decisions — 2026-10-01
+
+### D008 — Windows Credential Manager for API-key storage
+
+- **Decision:** Store the user's OpenAI key as a generic Windows credential using `CredWriteW`, `CredReadW`, and `CredDeleteW`, with local-machine persistence for the current Windows user. Keep the target identifier stable: `app.byokdictation.hotkeyprobe/openai-api-key`. The UI receives presence and operation status only; API requests read the key in Rust. Wipe owned Rust secret buffers and the native read allocation before release.
+- **Alternative:** Introduce an encrypted app-owned vault or a cross-platform keyring wrapper.
+- **Why:** Use the operating system's existing secure storage for the Windows-first probe. The generated Windows API bindings also support native HTTPS validation without adding a separate HTTP client stack.
+- **Revisit when:** macOS work begins, a credential migration is needed, or provider configuration expands. Memory wiping is limited to owned buffers and does not guarantee erasure of WebView/IPC/OS copies.
+
+### D009 — Explicit validation independent of saving
+
+- **Decision:** Saving and removing credentials are local operations. Validate only when explicitly requested, using native WinHTTP against OpenAI's models endpoint with certificate checks enabled, no redirects, and 10-second timeouts for each network phase. Surface fixed error codes and discard provider response bodies. Failed validation retains the saved credential.
+- **Alternative:** Validate on every launch or require successful network validation before saving.
+- **Why:** Secure storage must work offline. A restricted key may lack model-list permissions even when it has permission for another endpoint. Task 5 will verify actual transcription access and request format.
+- **Revisit when:** Additional provider settings or a more precise endpoint-specific connection check is introduced.
+
 ## Progress
 
 ### 2026-09-21 — Task 0 decisions recorded
@@ -146,3 +162,13 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 
 - User confirmed successful microphone recording and playback, clearing the recording, visible handling when microphone permission is denied, and partial-audio retention plus recovery after disconnecting and reconnecting the microphone.
 - Task 3 is complete on Windows.
+
+### 2026-10-01 — Task 4 implemented and verified complete on Windows
+
+- Added a masked API-key field with separate Save, Validate, and Remove actions. The field clears immediately on submission. The UI holds saved-key presence only, never retrieves the saved secret, and maps fixed backend error codes to local messages without logging raw errors.
+- Added native Windows Credential Manager storage with local-machine persistence for the current Windows user. Rust reads the secret for API validation, wipes owned secret buffers, and returns no raw key through the registered commands. There is no app-owned plaintext credential file.
+- Added explicit native HTTPS validation against OpenAI's models endpoint, with certificate checks, disabled redirects, per-phase timeouts, and separate handling for authentication, permissions, rate limits, provider failures, network errors, and TLS failures. Failed validation retains the saved credential; validation sends no audio.
+- Verification: `npm run build`, `cargo fmt --check`, and the two deterministic Rust tests passed. The opt-in Windows probe stored a disposable fixture, retrieved it in a fresh process, replaced it, removed it, and confirmed absence. The separate opt-in real OpenAI request with an invalid fixture key returned the expected authentication failure. Both probes read no app credential and the storage probe used a unique target.
+- `npm run tauri dev` compiled and started the updated app; Windows Computer Use found the window titled **BYOK Dictation — Capability Probes**. UI state inspection timed out waiting for app access, so control behavior has not been independently inspected.
+- The user entered and saved their key locally, then reported **OpenAI accepted the saved key. Transcription model access will be checked by the transcription probe.** This confirms the live entry/storage/validation flow.
+- Stopped the development app and relaunched it. Without re-entering the key, the user confirmed **Yes, saved key detected and validation succeeds**. Combined with the native storage/replacement/removal probe and source checks for secret logging/plaintext files, this completes Task 4. The app remains running with the user's key saved securely. Next: Task 5, the in-memory file-transcription API probe.

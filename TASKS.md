@@ -67,11 +67,13 @@ Done: the user confirmed successful recording/playback and all three remaining W
 
 ### 4. API-key storage probe
 
-- [ ] Add minimal API-key entry and validation.
-- [ ] Store the key using the operating-system-backed secure storage mechanism.
-- [ ] Verify the key can be retrieved after restart without appearing in plaintext settings or logs.
+Implemented and verified on Windows. The user confirmed successful key entry, storage, and validation, then validation after an app restart without re-entering the key.
 
-Done when: secure key entry, storage, and retrieval work on Windows.
+- [x] Add minimal API-key entry and validation. Masked entry, Save, Validate, and Remove are implemented; the user confirmed successful validation with their saved key. A real OpenAI request with an invalid fixture returned the expected authentication failure.
+- [x] Store the key using the operating-system-backed secure storage mechanism. Windows Credential Manager fixture storage, replacement, and deletion passed.
+- [x] Verify the key can be retrieved after restart without appearing in plaintext settings or logs. A fresh process retrieved a disposable native credential, and the user confirmed the saved key was detected and validated after restarting the actual app without re-entry. Source checks confirmed no app-owned plaintext credential file or credential logging; secrets are not returned through IPC.
+
+Done: secure key entry, storage, retrieval, and validation after restart work on Windows.
 
 ### 5. File-transcription API probe
 

@@ -4,7 +4,9 @@ use tauri::{
     Manager, WindowEvent,
 };
 
+mod credentials;
 mod insertion;
+mod openai;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,7 +19,11 @@ pub fn run() {
             insertion::copy_test_text,
             insertion::copy_test_text_without_backup,
             insertion::has_clipboard_backup,
-            insertion::restore_previous_clipboard
+            insertion::restore_previous_clipboard,
+            credentials::has_api_key,
+            credentials::save_api_key,
+            credentials::delete_api_key,
+            credentials::validate_api_key
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show probe", true, None::<&str>)?;

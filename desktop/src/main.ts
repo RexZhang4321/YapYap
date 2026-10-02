@@ -1,6 +1,7 @@
 import { register, unregister, type ShortcutEvent } from "@tauri-apps/plugin-global-shortcut";
 import { invoke } from "@tauri-apps/api/core";
 import { encodeWav, microphoneErrorMessage, PcmRecorder, type CapturedPcm } from "./audioCapture";
+import { initializeApiKeySettings } from "./apiKey";
 
 type HotkeyAction = "record" | "insert";
 
@@ -419,6 +420,7 @@ navigator.mediaDevices?.addEventListener?.("devicechange", () => {
 });
 
 showState();
+initializeApiKeySettings();
 void refreshRestoreButton();
 void refreshMicrophones().catch((error: unknown) => {
   recordingStatus.textContent = "Could not list microphones: " + String(error);

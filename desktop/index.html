@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BYOK Dictation — Microphone Probe</title>
+    <title>BYOK Dictation — Capability Probes</title>
     <link rel="stylesheet" href="/src/styles.css" />
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body>
     <main>
-      <h1>Microphone recording probe</h1>
+      <h1>BYOK dictation probes</h1>
       <p>Hold the global shortcut to record from the selected microphone, then release to stop. Audio is kept in this app's memory until you clear it or quit.</p>
       <form id="shortcut-form">
         <label for="shortcut">Global shortcut</label>
@@ -22,6 +22,23 @@
       <div class="states">
         <div>Hold state <strong id="hold-state">UP</strong></div>
       </div>
+      <section class="result" aria-labelledby="api-key-heading">
+        <h2 id="api-key-heading">OpenAI API key</h2>
+        <p id="api-key-stored-status" role="status" data-state="unknown">Checking for a saved key…</p>
+        <form id="api-key-form" autocomplete="off">
+          <label for="api-key">Enter or replace your API key</label>
+          <div class="row">
+            <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" aria-describedby="api-key-hint" disabled />
+            <button id="save-api-key" type="submit" disabled>Save key</button>
+          </div>
+        </form>
+        <div class="row recording-actions">
+          <button id="validate-api-key" type="button" disabled>Validate saved key</button>
+          <button id="remove-api-key" type="button" disabled>Remove saved key</button>
+        </div>
+        <p id="api-key-status" role="status"></p>
+        <p id="api-key-hint" class="hint">Stored in Windows Credential Manager. Validation sends an authenticated request directly to OpenAI; it does not send your recording. Saving works without an internet connection.</p>
+      </section>
       <section class="result">
         <h2>Hotkey action</h2>
         <label for="hotkey-action">When the shortcut is held</label>

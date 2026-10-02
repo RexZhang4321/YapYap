@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "BYOK Dictation — Microphone Probe",
+        "title": "BYOK Dictation — Capability Probes",
         "width": 700,
         "height": 580
       }
