@@ -73,6 +73,20 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - **Why:** Secure storage must work offline. A restricted key may lack model-list permissions even when it has permission for another endpoint. Task 5 will verify actual transcription access and request format.
 - **Revisit when:** Additional provider settings or a more precise endpoint-specific connection check is introduced.
 
+### D010 — Explicit whole-recording transcription probe
+
+- **Decision:** Task 5 uploads only when the user chooses Transcribe recording. Reuse the existing in-memory WAV encoder, binary Tauri IPC, Windows Credential Manager, and native WinHTTP. Keep final STT behind a small Rust interface with deterministic fakes. Use `gpt-transcribe` with a complete WAV and JSON response, preserving the exact returned canonical text.
+- **Alternative:** Upload automatically on hotkey release, add live streaming, or introduce a new HTTP client dependency.
+- **Why:** Prove file transcription separately before Task 6 session/insertion integration. Keep credentials in Rust and avoid storing audio on disk.
+- **Revisit when:** Task 6 connects final transcription to release-to-insertion behavior, or macOS/provider work changes the native transport.
+
+### D011 — Probe audio release and discard behavior
+
+- **Decision:** Retain PCM/WAV/playback on transcription failure, including malformed or empty successful responses. Release audio once a usable canonical transcript is retained in the view; retain that text until explicit discard or app exit. Discard invalidates late responses. An already-sent native request finishes before another recording is permitted, releasing its owned upload buffers when it returns. Reject empty/invalid WAVs, uploads over 25,000,000 bytes, and successful responses over 1 MiB.
+- **Alternative:** Discard audio before a usable transcript exists, silently replace a retained transcript with a new session, or implement native request cancellation now.
+- **Why:** Preserve retry and recovery without expanding Task 5 into the full Task 6 lifecycle. Discard cannot retract data already sent to the provider.
+- **Revisit when:** Task 6 adds cancellation/new-session rules or long-session buffering requires a different strategy.
+
 ## Progress
 
 ### 2026-09-21 — Task 0 decisions recorded
@@ -172,3 +186,23 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - `npm run tauri dev` compiled and started the updated app; Windows Computer Use found the window titled **BYOK Dictation — Capability Probes**. UI state inspection timed out waiting for app access, so control behavior has not been independently inspected.
 - The user entered and saved their key locally, then reported **OpenAI accepted the saved key. Transcription model access will be checked by the transcription probe.** This confirms the live entry/storage/validation flow.
 - Stopped the development app and relaunched it. Without re-entering the key, the user confirmed **Yes, saved key detected and validation succeeds**. Combined with the native storage/replacement/removal probe and source checks for secret logging/plaintext files, this completes Task 4. The app remains running with the user's key saved securely. Next: Task 5, the in-memory file-transcription API probe.
+
+### 2026-10-01 — Task 5 implemented; spoken-audio verification pending
+
+- Added explicit Transcribe / Retry / Discard controls and a selectable canonical-transcript view. Complete PCM16 mono WAV recordings stay in memory and cross binary Tauri IPC to Rust. Native WinHTTP uploads directly to OpenAI with the key read internally from Windows Credential Manager. No audio file is written or secret returned to the UI.
+- Final STT has a small interface with deterministic fakes. Failed, malformed, or empty responses retain retry audio. A usable transcript releases PCM, WAV, and playback resources while retaining canonical text until discard. Discard clears local results and suppresses late responses; an already-sent request finishes before another recording is allowed, releasing native upload buffers when it returns.
+- Verification: frontend build, 5 Node tests, 7 deterministic Rust tests, formatting, and native debug build passed. Checks cover WAV/multipart formatting, Unicode preservation, input validation, same-audio retry, duplicate requests, discard before upload, late success/failure suppression, and audio release on success.
+- The opt-in invalid-key transcription request initially failed to connect inside the sandbox. Outside the network sandbox it reached OpenAI and returned the expected authentication failure. It sent only synthetic silence and an invalid fixture key, never the saved credential. Successful account/model access remains pending.
+- Initial launch attempts collided with an existing Vite server and left a probe process with no window locking the executable after the server stopped. After the user reported the app could not open, the verified stale probe process was terminated and the app/server restarted together. Process inspection confirmed a nonzero window handle titled BYOK Dictation — Capability Probes; the local server serves the transcription controls.
+- The updated app is running. Task 5 remains in progress pending spoken-audio transcription and Windows retry/discard checks in desktop/README.md. Automatic insertion remains Task 6.
+
+### 2026-10-01 — Task 5 live transcription succeeds
+
+- The user reported that the transcript appears after the requested live recording/transcription check. This verifies successful recording upload, the request format and account/model access with the saved key, and transcript display.
+- Updated the corresponding Task 5 checklist items. Audio release after success, failed-request retry, and explicit discard still require observed Windows checks; Task 5 remains in progress. Transcript accuracy beyond appearing was not separately reported.
+
+### 2026-10-01 — Task 5 completion criteria verified
+
+- The user confirmed that the retry flow works after the requested network-failure/reconnect/retry check. Together with the earlier successful transcript display, this satisfies Task 5's completion criteria: a real recording transcribes with the saved key and a failed request retries using retained audio.
+- Marked Task 5 complete and updated the README. Audio release, explicit discard, duplicate-request prevention, and late-response suppression have passing deterministic coverage; this report does not separately establish live release/discard behavior. Those manual checks remain useful in the later lifecycle/recovery audits.
+- Next: Task 6, session lifecycle and transcript insertion. Connect hotkey release to whole-recording canonical transcription and safe insertion, with cancellation, late-response handling, duplicate-insertion prevention, and Copy/retry recovery.

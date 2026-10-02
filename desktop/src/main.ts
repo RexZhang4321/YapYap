@@ -2,6 +2,8 @@ import { register, unregister, type ShortcutEvent } from "@tauri-apps/plugin-glo
 import { invoke } from "@tauri-apps/api/core";
 import { encodeWav, microphoneErrorMessage, PcmRecorder, type CapturedPcm } from "./audioCapture";
 import { initializeApiKeySettings } from "./apiKey";
+import { TranscriptionSession } from "./transcriptionSession";
+import { transcriptionError } from "./transcription";
 
 type HotkeyAction = "record" | "insert";
 
@@ -23,6 +25,10 @@ const recordingPlayback = document.querySelector<HTMLAudioElement>("#recording-p
 const playRecordingButton = document.querySelector<HTMLButtonElement>("#play-recording")!;
 const stopPlaybackButton = document.querySelector<HTMLButtonElement>("#stop-playback")!;
 const clearRecordingButton = document.querySelector<HTMLButtonElement>("#clear-recording")!;
+const transcribeButton = document.querySelector<HTMLButtonElement>("#transcribe-recording")!;
+const discardButton = document.querySelector<HTMLButtonElement>("#discard-transcription")!;
+const transcriptionStatus = document.querySelector<HTMLElement>("#transcription-status")!;
+const transcriptView = document.querySelector<HTMLTextAreaElement>("#transcript")!;
 
 let activeShortcut: string | null = null;
 let held = false;
@@ -44,7 +50,7 @@ function log(message: string) {
 
 function showState() {
   holdState.textContent = held ? "DOWN" : "UP";
-  const locked = held || operationBusy;
+  const locked = held || operationBusy || transcription.busy;
   actionSelect.disabled = locked;
   microphoneSelect.disabled = locked;
   refreshDevicesButton.disabled = locked;
@@ -52,6 +58,25 @@ function showState() {
   playRecordingButton.disabled = locked || !recorder.hasPlayableRecording || !recordingPlayback.paused;
   stopPlaybackButton.disabled = locked || recordingPlayback.paused;
   clearRecordingButton.disabled = locked || !recorder.hasRecording;
+  transcribeButton.disabled = locked || !transcription.audio || !recordingPlayback.paused;
+  transcribeButton.textContent = transcription.error ? "Retry transcription" : "Transcribe recording";
+  discardButton.disabled = held || operationBusy || !transcription.hasResult;
+  transcriptView.value = transcription.transcript;
+  if (transcription.discarded) {
+    transcriptionStatus.textContent = transcription.busy
+      ? "Discarded locally. Waiting for the sent request to finish; its response will be ignored."
+      : "Recording and transcript discarded. Ready for another recording.";
+  } else if (transcription.busy) {
+    transcriptionStatus.textContent = "Sending this recording directly to OpenAI and waiting for the canonical transcript…";
+  } else if (transcription.error) {
+    transcriptionStatus.textContent = transcriptionError(transcription.error) + " Audio is retained in memory until you discard it or quit.";
+  } else if (transcription.transcript) {
+    transcriptionStatus.textContent = "Canonical transcript ready. Audio released from memory. Text stays here until you discard it or quit.";
+  } else {
+    transcriptionStatus.textContent = transcription.audio
+      ? "Recording ready. Choose Transcribe recording to send it to OpenAI."
+      : "Record speech first, then choose Transcribe recording.";
+  }
 }
 
 async function refreshRestoreButton() {
@@ -75,7 +100,10 @@ function displayRecording(recording: CapturedPcm) {
   clearRecordingButton.disabled = operationBusy || held;
 
   if (recording.frameCount > 0) {
-    playbackUrl = URL.createObjectURL(encodeWav(recording));
+    const wav = encodeWav(recording);
+    // A microphone interruption may display the same stopped capture again.
+    if (!transcription.hasResult) transcription.capture(wav);
+    playbackUrl = URL.createObjectURL(wav);
     recordingPlayback.src = playbackUrl;
     recordingPlayback.hidden = false;
     recordingPlayback.load();
@@ -108,6 +136,27 @@ const recorder = new PcmRecorder(
     inputLevelStatus.textContent = `Input level: ${(rms * 100).toFixed(1)}% RMS`;
   },
 );
+
+const transcription = new TranscriptionSession(
+  (audio) => invoke<string>("transcribe_recording", audio),
+  showState,
+  releaseRecording,
+);
+
+function releaseRecording() {
+  recordingPlayback.pause();
+  recordingPlayback.removeAttribute("src");
+  recordingPlayback.load();
+  recordingPlayback.hidden = true;
+  if (playbackUrl) URL.revokeObjectURL(playbackUrl);
+  playbackUrl = null;
+  recorder.clear();
+  captureInterruptionMessage = null;
+  inputLevelMeter.value = 0;
+  inputLevelStatus.textContent = "Waiting for recording.";
+  recordingMetadata.textContent = "No recording retained.";
+  recordingStatus.textContent = "Audio released from memory.";
+}
 
 async function refreshMicrophones(reportEmptyList = true) {
   if (!navigator.mediaDevices?.enumerateDevices) {
@@ -233,8 +282,12 @@ function runInsertion(pendingCapture: Promise<string> | null) {
 
 function onShortcut(event: ShortcutEvent) {
   if (event.state === "Pressed") {
-    if (held || operationBusy) return;
+    if (held || operationBusy || transcription.busy) return;
     const requestedAction = actionSelect.value === "insert" ? "insert" : "record";
+    if (requestedAction === "record" && transcription.hasResult) {
+      recordingStatus.textContent = "Discard the previous recording or transcript before starting another.";
+      return;
+    }
     if (requestedAction === "record" && !microphonePrepared) {
       recordingStatus.textContent = "Click Prepare microphone and allow access before using the recording shortcut.";
       log("recording skipped; microphone permission has not been prepared");
@@ -386,25 +439,23 @@ prepareMicrophoneButton.addEventListener("click", () => {
 });
 
 clearRecordingButton.addEventListener("click", () => {
+  if (held || operationBusy || transcription.busy) return;
   try {
-    recordingPlayback.pause();
-    recordingPlayback.removeAttribute("src");
-    recordingPlayback.load();
-    recordingPlayback.hidden = true;
-    recordingPlayback.currentTime = 0;
-    if (playbackUrl) URL.revokeObjectURL(playbackUrl);
-    playbackUrl = null;
-    recorder.clear();
-    captureInterruptionMessage = null;
-    inputLevelMeter.value = 0;
-    inputLevelStatus.textContent = "Waiting for recording.";
-    recordingMetadata.textContent = "No recording retained.";
-    recordingStatus.textContent = "Recording cleared from memory.";
+    transcription.discard();
     log("recording cleared from memory");
     showState();
   } catch (error) {
     recordingStatus.textContent = String(error);
   }
+});
+
+transcribeButton.addEventListener("click", () => {
+  if (held || operationBusy || !recordingPlayback.paused) return;
+  void transcription.transcribe();
+});
+discardButton.addEventListener("click", () => {
+  if (held || operationBusy) return;
+  transcription.discard();
 });
 
 actionSelect.addEventListener("change", () => {

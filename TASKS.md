@@ -77,13 +77,15 @@ Done: secure key entry, storage, retrieval, and validation after restart work on
 
 ### 5. File-transcription API probe
 
-- [ ] Send an in-memory recording to `gpt-transcribe` through the file-transcription API without saving audio to disk.
-- [ ] Display the returned transcript in a debug view.
-- [ ] Handle missing, invalid, expired, and network-failed requests.
-- [ ] Verify account access and request format with a real API call.
-- [ ] Retain audio in memory for retry on failure and release it after successful finalization or explicit discard.
+Implemented and verified against the Task 5 completion criteria. The user confirmed successful live transcription with the saved key and that the failed-request retry flow works. Audio release, explicit discard, duplicate-request prevention, and late-response suppression passed deterministic tests; separate live confirmation of release/discard was not reported.
 
-Done when: a real recording can be transcribed with the user’s key and a failed request can be retried or discarded.
+- [x] Send an in-memory recording to `gpt-transcribe` through the file-transcription API without saving audio to disk. WAV bytes use binary IPC and native WinHTTP; the user confirmed the live transcript appears.
+- [x] Display the returned transcript in a debug view. The user confirmed the transcript appears in the updated probe.
+- [x] Handle missing, invalid, expired, and network-failed requests. Fixed error messages implemented; deterministic error/retry checks and real invalid-key authentication check passed. The user confirmed the live network-failure retry flow works. HTTP 401 does not distinguish invalid, expired, and revoked credentials.
+- [x] Verify account access and request format with a real API call. OpenAI rejected the invalid fixture as expected, and the user confirmed successful transcription with the saved key.
+- [x] Retain audio in memory for retry on failure and release it after successful finalization or explicit discard. The user confirmed live retry works; deterministic tests verify release/discard, duplicate requests, and late-response suppression.
+
+Done: a real recording can be transcribed with the user's key and a failed request can be retried using retained audio, both confirmed by the user.
 
 ## Milestone 1 — Text destination and basic UX
 

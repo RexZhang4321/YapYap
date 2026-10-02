@@ -49,6 +49,12 @@ pub async fn validate_api_key() -> Result<(), String> {
     .await
 }
 
+// Rust callers only: secrets never cross the command boundary back to the UI.
+pub(crate) fn with_api_key<T>(work: impl FnOnce(&str) -> Result<T, String>) -> Result<T, String> {
+    let key = native::read(TARGET)?.ok_or_else(|| "key_missing".to_string())?;
+    work(key_text(&key)?)
+}
+
 #[cfg(windows)]
 mod native {
     use super::*;

@@ -7,6 +7,7 @@ use tauri::{
 mod credentials;
 mod insertion;
 mod openai;
+mod transcription;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,7 +24,8 @@ pub fn run() {
             credentials::has_api_key,
             credentials::save_api_key,
             credentials::delete_api_key,
-            credentials::validate_api_key
+            credentials::validate_api_key,
+            transcription::transcribe_recording
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show probe", true, None::<&str>)?;

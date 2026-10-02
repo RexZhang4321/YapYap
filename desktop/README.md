@@ -2,6 +2,26 @@
 
 Run `npm install` and `npm run tauri dev` from this directory. The app registers `Ctrl+Alt+F8` by default; enter another Tauri accelerator and choose **Apply** to change it. The default hotkey action records microphone audio. Choose **Run text insertion probe** to use the completed fixed-text probe.
 
+## File-transcription probe (Task 5)
+
+Prepare the microphone, hold the recording shortcut while speaking, then release. Stop playback before choosing **Transcribe recording**. This explicitly sends the complete in-memory PCM16 mono WAV to OpenAI's `/v1/audio/transcriptions` endpoint with `gpt-transcribe` and the saved key. There is no audio upload on recording stop or app startup. WAV data crosses Tauri IPC as binary bytes, and Rust reads the key directly from Credential Manager; no secret is returned to the UI and no audio file is written.
+
+The canonical transcript appears in a read-only selectable text field. On success, the app releases the recording PCM, WAV, and playback URL and retains the transcript until explicit discard or app exit. Failed or empty responses keep the recording for playback and **Retry transcription**. **Discard recording and transcript** clears local audio/text and suppresses late responses. If an upload is already in flight, its request buffers remain owned by the native worker until it finishes; discard cannot retract uploaded audio. Recording another session remains disabled while that request finishes, and a retained transcript must be explicitly discarded before another recording starts. **Clear recording** also discards the stopped recording.
+
+The probe limits WAV uploads to 25,000,000 bytes and successful response bodies to 1 MiB. Native HTTPS uses certificate verification and disables redirects. Resolve/connect timeouts are 10 seconds each, and send/receive timeouts are 60 seconds each for transcription (these are phase timeouts, not one total request deadline). Provider error bodies, credentials, audio, and transcripts are not written to ordinary logs. The endpoint and model follow the [official OpenAI file-transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text). HTTP 401 cannot distinguish an invalid key from an expired or revoked one.
+
+Manual Windows checks:
+
+1. Save your key locally, prepare the microphone, and record 5–10 seconds of speech. Listen to confirm the capture, stop playback, and choose **Transcribe recording**. Confirm the transcript matches your speech, the playback disappears, and the transcript remains selectable. Account/model access is only verified by a successful transcription.
+2. Choose **Discard recording and transcript**. Confirm no transcript or playback remains and a new recording can start.
+3. Record again, temporarily disconnect the network, and transcribe. Confirm an error and retained playback. Reconnect and choose **Retry transcription** without recording again; confirm success.
+4. Record again and choose Transcribe followed immediately by Discard. Confirm local text/audio clear, no late response restores them, and another recording can start after the outstanding request finishes. Also confirm repeated transcription clicks cannot send duplicate requests.
+5. With no request in progress, temporarily remove the saved key, record, and transcribe. Confirm the missing-key message retains audio. Save the key again locally and retry. For an invalid-key check, use the opt-in fixture probe below instead of replacing your saved key with an invalid value.
+
+Record observed results in `../DECISIONS.md`. Task 5's completion criteria are verified: the user confirmed successful spoken-audio transcription and the failed-request retry flow. Release/discard and late-response behavior have deterministic test coverage; their separate manual checks remain useful for the later lifecycle audit. Automatic insertion is Task 6.
+
+Run `npm test` (Node 22.14 or newer with experimental TypeScript transformation) and `npm run build` here; run `cargo test --lib --offline` and `cargo fmt --check` in `src-tauri/`. The opt-in endpoint test is `cargo test --lib transcription::tests::openai_rejects_invalid_transcription_key -- --ignored --exact`; it sends synthetic silence with an invalid fixture key and never reads the saved credential. Regular tests use deterministic fakes and make no network requests.
+
 ## API-key storage probe
 
 Enter your OpenAI API key in the masked field and choose **Save key**. The field clears immediately after submission. The app stores a generic credential at `app.byokdictation.hotkeyprobe/openai-api-key` in Windows Credential Manager for the current Windows user on this machine. The saved key is never returned to the UI; the UI requests only its presence. **Remove saved key** deletes the credential, and saving another key replaces it.
