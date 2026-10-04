@@ -45,6 +45,7 @@
         <label for="hotkey-action">When the shortcut is held</label>
         <select id="hotkey-action">
           <option value="record">Dictate and insert on release</option>
+          <option value="live">Probe live transcription; retain audio on release</option>
           <option value="insert">Run text insertion probe</option>
         </select>
       </section>
@@ -85,6 +86,17 @@
         <label for="transcript">Canonical transcript</label>
         <textarea id="transcript" rows="6" readonly spellcheck="false" placeholder="Your transcript will appear here."></textarea>
         <p class="hint">Release sends the whole recording to gpt-transcribe. Audio stays in memory on transcription failure; usable text releases audio and remains here until discard. An uncertain destination uses Copy. Cancel and discard ignores late responses but cannot retract uploaded audio. Once paste is dispatched, wait for its result. Discard the previous session before recording again. Quitting loses pending audio and text.</p>
+      </section>
+      <section class="result" aria-labelledby="live-heading">
+        <h2 id="live-heading">Live transcription probe</h2>
+        <label><input id="live-enabled" type="checkbox" checked /> Show live words while recording</label>
+        <p class="hint">When enabled, microphone audio streams directly to OpenAI while you hold the shortcut. Live text is provisional. Dictate mode transcribes and inserts on release; live probe mode retains audio for playback or Retry transcription without automatic insertion.</p>
+        <p id="live-status" role="status">Live preview ready.</p>
+        <p id="live-latency" class="metadata">First visible text: waiting</p>
+        <label for="live-transcript">Provisional live transcript</label>
+        <textarea id="live-transcript" rows="5" readonly spellcheck="false" placeholder="Words will appear while you speak."></textarea>
+        <button id="live-reconnect" type="button" disabled>Reconnect live preview</button>
+        <p class="hint">A failed stream leaves local recording intact. Reconnect resumes from current audio and marks the gap; the original audio remains complete for final transcription. Discard clears both transcripts.</p>
       </section>
       <section class="result">
         <h2>Text insertion probe</h2>

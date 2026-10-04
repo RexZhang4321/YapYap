@@ -36,6 +36,7 @@ export class PcmRecorder {
     private readonly onUnexpectedStop: (recording: CapturedPcm, message: string) => void,
     private readonly onUnexpectedError: (message: string) => void,
     private readonly onInputLevel: (rms: number) => void,
+    private readonly onPcmChunk?: (samples: Float32Array, sampleRate: number) => void,
   ) {}
 
   get isRecording(): boolean {
@@ -106,6 +107,8 @@ export class PcmRecorder {
           const samples = new Float32Array(event.data.buffer);
           this.chunks.push(samples);
           this.frameCount += samples.length;
+          // Store original samples first. A failed preview cannot stop capture.
+          try { this.onPcmChunk?.(samples, context!.sampleRate); } catch { /* Preview is optional. */ }
           let sumSquares = 0;
           for (const sample of samples) sumSquares += sample * sample;
           this.onInputLevel(Math.sqrt(sumSquares / Math.max(1, samples.length)));

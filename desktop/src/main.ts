@@ -4,8 +4,10 @@ import { encodeWav, microphoneErrorMessage, PcmRecorder, type CapturedPcm } from
 import { initializeApiKeySettings } from "./apiKey";
 import { TranscriptionSession, type InsertionResult } from "./transcriptionSession";
 import { transcriptionError } from "./transcription";
+import { LiveTranscription } from "./liveTranscription";
+import { nativeStreamingSTT } from "./liveTransport";
 
-type HotkeyAction = "record" | "insert" | "retry";
+type HotkeyAction = "record" | "live" | "insert" | "retry";
 
 const shortcutInput = document.querySelector<HTMLInputElement>("#shortcut")!;
 const status = document.querySelector<HTMLElement>("#status")!;
@@ -33,6 +35,11 @@ const sessionState = document.querySelector<HTMLElement>("#session-state")!;
 const copyTranscriptButton = document.querySelector<HTMLButtonElement>("#copy-transcript")!;
 const copyTranscriptWithoutBackupButton = document.querySelector<HTMLButtonElement>("#copy-transcript-without-backup")!;
 const applyShortcutButton = document.querySelector<HTMLButtonElement>("#shortcut-form button")!;
+const liveEnabled = document.querySelector<HTMLInputElement>("#live-enabled")!;
+const liveView = document.querySelector<HTMLTextAreaElement>("#live-transcript")!;
+const liveStatus = document.querySelector<HTMLElement>("#live-status")!;
+const liveLatency = document.querySelector<HTMLElement>("#live-latency")!;
+const liveReconnect = document.querySelector<HTMLButtonElement>("#live-reconnect")!;
 
 let activeShortcut: string | null = null;
 let held = false;
@@ -55,6 +62,8 @@ function log(message: string) {
 function showState() {
   holdState.textContent = held ? "DOWN" : "UP";
   const locked = held || operationBusy || transcription.busy;
+  liveEnabled.disabled = locked || !transcription.canStart;
+  liveReconnect.disabled = !recorder.isRecording || live.state !== "failed";
   applyShortcutButton.disabled = locked;
   shortcutInput.disabled = locked;
   actionSelect.disabled = locked;
@@ -84,7 +93,9 @@ function showState() {
   } else if (transcription.busy) {
     transcriptionStatus.textContent = "Sending this recording directly to OpenAI and waiting for the canonical transcript…";
   } else if (transcription.state === "recording") {
-    transcriptionStatus.textContent = "Listening. Release the shortcut to transcribe and insert.";
+    transcriptionStatus.textContent = actionSelect.value === "live"
+      ? "Listening. Release retains the recording for playback or explicit transcription."
+      : "Listening. Release the shortcut to transcribe and insert.";
   } else if (transcription.insertion) {
     transcriptionStatus.textContent = transcription.insertion.message
       + (transcription.canRetryInsertion ? " Return to the original input/caret and pointer position, then press and release the shortcut to retry insertion, or use Copy transcript." : " Transcript is retained until discard.");
@@ -97,9 +108,26 @@ function showState() {
   } else {
     transcriptionStatus.textContent = transcription.audio
       ? "Recording retained. Choose Retry transcription to send it to OpenAI."
+      : actionSelect.value === "live" ? "Prepare the microphone, then hold the shortcut to test live words. Release retains audio."
       : "Prepare the microphone, then hold the shortcut in your destination. Release transcribes and inserts.";
   }
 }
+
+function showLiveState() {
+  liveView.value = live.text;
+  liveLatency.textContent = live.firstVisibleMs === null ? "First visible text: waiting" : `First visible text: ${Math.round(live.firstVisibleMs)} ms after capture started`;
+  const labels = { idle: "Live preview ready.", connecting: "Connecting live preview…", listening: "Receiving provisional words while you speak.",
+    finishing: "Finishing live preview. Canonical transcription proceeds independently.", completed: "Live preview complete; this text remains provisional.",
+    failed: `${live.error} Local capture and final transcription remain available.`, discarded: "Live preview cleared." };
+  liveStatus.textContent = labels[live.state] + (live.hasGap ? " This preview contains a connection gap; final transcription uses the complete original audio." : "");
+  liveReconnect.disabled = !recorder.isRecording || live.state !== "failed";
+}
+
+const live = new LiveTranscription(nativeStreamingSTT, showLiveState);
+actionSelect.addEventListener("change", showState);
+liveReconnect.addEventListener("click", () => {
+  if (recorder.isRecording) live.reconnect();
+});
 
 async function refreshRestoreButton() {
   try {
@@ -146,6 +174,7 @@ function displayRecording(recording: CapturedPcm) {
 
 const recorder = new PcmRecorder(
   (recording, message) => {
+    void live.finish();
     if (transcription.discarded) { releaseRecording(); return; }
     captureInterruptionMessage = message;
     displayRecording(recording);
@@ -153,6 +182,7 @@ const recorder = new PcmRecorder(
     log("microphone disconnected; partial audio retained in memory");
   },
   (message) => {
+    void live.finish();
     recordingStatus.textContent = `Microphone capture stopped: ${message}`;
     log("microphone capture stopped unexpectedly");
   },
@@ -160,6 +190,7 @@ const recorder = new PcmRecorder(
     inputLevelMeter.value = Math.min(rms, 0.5);
     inputLevelStatus.textContent = `Input level: ${(rms * 100).toFixed(1)}% RMS`;
   },
+  (samples, sampleRate) => live.push(samples, sampleRate),
 );
 
 const transcription = new TranscriptionSession(
@@ -265,22 +296,24 @@ function recordingError(error: unknown) {
   log("microphone start failed: " + message);
 }
 
-async function finishRecording(started: Promise<string> | null) {
+async function finishRecording(started: Promise<string> | null, autoTranscribe = true) {
   operationBusy = true;
   showState();
   try {
     await started;
     const recording = await recorder.stop();
     if (transcription.discarded) { releaseRecording(); return; }
+    void live.finish();
     displayRecording(recording);
     if (captureInterruptionMessage) recordingStatus.textContent = captureInterruptionMessage;
     void refreshMicrophones(false).catch(() => undefined);
     // Disconnected microphones retain partial capture for an explicit retry.
-    if (!captureInterruptionMessage) {
+    if (!captureInterruptionMessage && autoTranscribe) {
       operationBusy = false;
       await transcription.transcribe();
     }
   } catch (error) {
+    if (!recorder.isRecording) void live.finish();
     if (transcription.discarded) return;
     transcription.failRecording();
     if (recordingStatus.textContent.startsWith("Microphone access was denied")
@@ -327,18 +360,18 @@ function onShortcut(event: ShortcutEvent) {
       recordingStatus.textContent = "A session is still finalizing or stopping. Wait, or cancel and discard it before recording again.";
       return;
     }
-    const requestedAction = actionSelect.value === "insert" ? "insert" : "record";
-    if (requestedAction === "record" && transcription.canRetryInsertion) {
+    const requestedAction = actionSelect.value === "insert" ? "insert" : actionSelect.value === "live" ? "live" : "record";
+    if (requestedAction !== "insert" && transcription.canRetryInsertion) {
       held = true;
       heldAction = "retry";
       showState();
       return;
     }
-    if (requestedAction === "record" && !transcription.canStart) {
+    if (requestedAction !== "insert" && !transcription.canStart) {
       recordingStatus.textContent = "Discard the previous recording or transcript before starting another.";
       return;
     }
-    if (requestedAction === "record" && !microphonePrepared) {
+    if (requestedAction !== "insert" && !microphonePrepared) {
       recordingStatus.textContent = "Click Prepare microphone and allow access before using the recording shortcut.";
       log("recording skipped; microphone permission has not been prepared");
       return;
@@ -355,7 +388,8 @@ function onShortcut(event: ShortcutEvent) {
       return;
     }
 
-    transcription.begin();
+    transcription.begin(heldAction !== "live");
+    if (liveEnabled.checked) live.begin();
 
     if (recorder.hasRecording) {
       recordingStatus.textContent = "Clear the previous recording before starting another.";
@@ -365,12 +399,14 @@ function onShortcut(event: ShortcutEvent) {
       recordingStart = recorder.start(microphoneSelect.value)
         .then(async (message) => {
           if (transcription.discarded) return message;
+          live.captureStarted();
           recordingStatus.textContent = "Listening… " + message;
           log("microphone recording started");
           void refreshMicrophones(false).catch(() => undefined);
           return message;
         })
         .catch((error: unknown) => {
+          live.cancel();
           transcription.failRecording();
           recordingError(error);
           throw error;
@@ -389,9 +425,9 @@ function onShortcut(event: ShortcutEvent) {
       const pendingCapture = insertionCapture;
       insertionCapture = null;
       runInsertion(pendingCapture);
-    } else if (action === "record") {
+    } else if (action === "record" || action === "live") {
       recordingStatus.textContent = "Stopping recording…";
-      finishRecording(recordingStart);
+      finishRecording(recordingStart, action === "record");
     } else if (action === "retry") {
       void transcription.retryInsertion();
     }
@@ -505,6 +541,7 @@ clearRecordingButton.addEventListener("click", () => {
   if (held || operationBusy || transcription.busy) return;
   try {
     transcription.discard();
+    live.cancel();
     log("recording cleared from memory");
     showState();
   } catch (error) {
@@ -518,11 +555,12 @@ transcribeButton.addEventListener("click", () => {
 });
 discardButton.addEventListener("click", () => {
   if (transcription.inserting) return;
-  const stoppingCapture = heldAction === "record" || recorder.isRecording;
+  const stoppingCapture = heldAction === "record" || heldAction === "live" || recorder.isRecording;
   const started = recordingStart;
   held = false;
   heldAction = null;
   if (!transcription.discard()) return;
+  live.cancel();
   if (stoppingCapture) {
     operationBusy = true;
     showState();

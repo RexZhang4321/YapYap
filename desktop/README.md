@@ -2,9 +2,51 @@
 
 Run `npm install` and `npm run tauri dev` from this directory. The app registers `Ctrl+Alt+F8` by default; enter another Tauri accelerator and choose **Apply** to change it. The default hotkey action records, transcribes, and inserts on release. Choose **Run text insertion probe** to use the completed fixed-text probe.
 
+## Live transcription (Task 7)
+
+**Show live words while recording** is enabled by default. Microphone audio streams directly to OpenAI while the shortcut is held, and the separate **Provisional live transcript** view updates before release. Uncheck this option before recording to use only the existing whole-recording final transcription. The preview never supplies text for automatic insertion.
+
+Choose **Probe live transcription; retain audio on release** for an isolated check. Prepare the microphone, hold the shortcut and speak, then release. This action leaves the original recording available for playback and **Retry transcription**; it does not capture an insertion destination or paste. An explicit transcription request produces a retained canonical transcript for Copy. Normal **Dictate and insert on release** continues to use the complete original audio for final transcription/insertion.
+
+The latency display measures microphone capture-start to the first visible nonempty transcript update using the frontend monotonic clock. It includes live connection setup that overlaps capture; it is not measured from shortcut press and is not release-to-insertion latency. Initial synthetic measurements were 1.00–1.73 seconds; representative physical-microphone targets remain for evaluation.
+
+On a live connection failure, recording continues and provisional words remain selectable. **Reconnect live preview** is available while recording; it resumes from current microphone audio, preserves earlier text and marks the missing interval. Original audio is unaffected. A full queue stops the preview instead of dropping local recording samples. **Cancel and discard** clears live/canonical text and audio, closes the live connection and suppresses late events. A live finish never delays or replaces canonical transcription.
+
+The native WebSocket uses the saved Windows credential against the fixed OpenAI host, certificate/hostname verification, no redirects, and 10-second connect/configuration/send/final-completion deadlines. Audio chunks cross binary IPC; only the preview copy is converted to 24 kHz PCM16 and Base64-encoded in Rust. The frontend queue holds at most 192,000 bytes plus one in-flight chunk; the native queue holds at most 32 chunks of 9,600 bytes. Provider events and the live view have 1 MiB limits. No audio, transcript or credential is written to ordinary logs or files. API/transport failures use fixed error codes; library/OS memory copies are not guaranteed to be wiped.
+
+The protocol follows [OpenAI's live transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription). Turn detection is disabled for this single-turn probe; release sends the audio commit. The overlay, local VAD, cleanup and incremental final transcription remain later tasks.
+
+Manual Windows check:
+
+1. Select live probe mode, leave live words enabled, prepare the actual microphone and hold the shortcut for 8–15 seconds. Confirm words appear before release and record the displayed latency. Release, listen to the original recording, and discard.
+2. Repeat while temporarily disconnecting the network after words appear. Confirm a visible live error, continued capture and retained provisional text. Restore the connection and reconnect while still recording; confirm the gap is marked. Release, play the complete recording and choose Retry transcription. Confirm canonical text covers the recording and audio is released only after usable canonical text exists.
+3. Cancel both shortly after press and after live words appear. Confirm local text/audio clear and late events do not restore them; start another session after capture stops.
+4. In normal dictate mode, focus a disposable external input and confirm release still inserts only canonical text. Test the existing changed-target/Copy recovery checks independently of the live view.
+
+### Opt-in Task 7 integration checks
+
+Use the synthetic-microphone launch below, then run from `desktop/`:
+
+```powershell
+node scripts/task7-webview-check.mjs prepare
+node scripts/task7-webview-check.mjs record --live
+node scripts/task7-webview-check.mjs discard
+node scripts/task7-webview-check.mjs interrupt --live
+node scripts/task7-webview-check.mjs retry --live
+node scripts/task7-webview-check.mjs discard
+node scripts/task7-webview-check.mjs reconnect --live
+node scripts/task7-webview-check.mjs discard
+node scripts/task7-webview-check.mjs cancel --live --after-words
+node scripts/task7-webview-check.mjs cancel --live
+```
+
+These helpers require a verified fake microphone. They replay shortcut events through the registered handler and print only fixed statuses, counters, durations and synthetic-phrase recognition booleans. The interrupt/reconnect checks terminate the real native connection and inject a fixed disconnect notification at the transport seam; they do not disconnect the physical network. See [Task 7 verification](scripts/task7-verification.md) for observed results and boundaries. Quit the synthetic app before launching normally without debugger/fake-device flags.
+
+For configuration/account access without uploading audio, run the explicit opt-in probe from `src-tauri/`: `cargo test --lib --offline streaming::tests::saved_key_live_configuration_probe -- --ignored --exact`. It reads the saved credential only in Rust and returns fixed failures. Regular `npm test` and Rust tests use deterministic fakes/in-memory peers and make no API calls.
+
 ## Dictation session (Task 6)
 
-Prepare the microphone, focus the intended external input, then hold the shortcut while speaking. Release sends the complete in-memory PCM16 mono WAV directly to OpenAI using the saved key, then inserts the exact canonical transcript at the captured destination. This mode uploads automatically on release. Streaming, overlays, cleanup, and segmentation come in later tasks.
+Prepare the microphone, focus the intended external input, then hold the shortcut while speaking. Release sends the complete in-memory PCM16 mono WAV directly to OpenAI using the saved key, then inserts the exact canonical transcript at the captured destination. This mode uploads automatically on release; Task 7's optional live preview also streams audio while held. Overlays, cleanup, and segmentation come in later tasks.
 
 The session has `idle`, `recording`, `finalizing`, `ready`, `inserted`, `failed`, and `discarded` states. Only one session is active. Discard a retained result before recording again; a new hotkey press during finalization visibly explains that the session is busy. Capture failure, empty recordings, and microphone interruption remain recoverable or explicitly discardable. A disconnect retains partial audio for playback and an explicit Retry transcription instead of silently uploading it.
 

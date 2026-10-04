@@ -94,6 +94,23 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - **Why:** Preserve dictation and destination ownership while keeping recovery understandable. A session token and native paste latch prevent stale/duplicate insertion. Distinguish paste submission from clipboard restoration; partial or unknown outcomes use Copy rather than automatic retry. A confirmed pre-paste refusal permits original-target hotkey retry without another API request. Microphone interruption retains partial audio for explicit transcription retry.
 - **Revisit when:** Daily use demonstrates a need for multiple sessions or native transport cancellation, or a more capable Windows text-destination API can confirm acceptance and track historical focus/caret changes.
 
+## Decisions — 2026-10-02
+
+### D013 — Native cancellable streaming transport and an independent preview
+
+- **Decision:** Task 7 connects directly to `wss://api.openai.com/v1/realtime?intent=transcription` using `gpt-live-transcribe`, a transcription-only session, 24 kHz mono PCM16, `delay: low`, and no server turn detection. Use tokio-tungstenite with native-tls/Windows certificate validation. Keep credential retrieval and Authorization in Rust; the UI receives sanitized status and transcript events through a session-bound Tauri channel. Retain the existing WinHTTP transport for final file transcription.
+- **Alternative:** Add concurrent WinHTTP WebSocket send/receive workers or expose temporary authentication to a browser connection.
+- **Why:** Async connect/send/receive futures can be dropped on cancellation without unsafe shared-handle lifetime management or returning authentication to the WebView. A small StreamingSTT seam and in-memory WebSocket peers support deterministic protocol tests. The current official transcription guide and a real saved-key configuration probe established model/configuration access.
+- **Revisit when:** Proxy support, another provider/platform, or measured performance justifies a transport change. Explicitly owned temporary secret strings are wiped; third-party handshake/header/TLS allocations are not guaranteed to be wiped.
+
+### D014 — Bounded live preview with explicit reconnect
+
+- **Decision:** Store original microphone PCM first, then independently convert a preview copy. Limit frontend queued PCM to 192,000 bytes plus one in-flight chunk, native queue capacity to 32 chunks of at most 9,600 bytes, and individual provider messages/live preview to 1 MiB (UTF-16 storage budget for preview text). Stop the preview on backlog or connection failure while recording continues. Reconnect explicitly from current audio, retain earlier provisional words, mark the gap, and ignore old connection events. Commit one live audio turn on release; local VAD remains Task 14.
+- **Alternative:** Unbounded buffering, automatic reconnect/replay of previous audio, or treating live text as the insertion result.
+- **Why:** A preview failure must not affect canonical transcription or grow memory indefinitely. Whole-recording final STT remains authoritative. Replaying partial live turns would require additional transcript reconciliation and recovery semantics.
+- **Revisit when:** The evaluation baseline establishes a need for automatic reconnect or different queue/latency limits. The probe's area-averaging resampler is independent of original audio and may need a higher-quality filter after representative microphone testing.
+- **Probe UX:** A new hotkey action retains audio on release and skips destination capture/automatic insertion, allowing safe live-text/playback/retry checks. Normal dictate mode also supports the optional live preview and preserves its existing release-to-canonical-insertion flow. Discard clears both transcripts and cancels the live connection.
+
 ## Progress
 
 ### 2026-09-21 — Task 0 decisions recorded
@@ -231,3 +248,18 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - Verification scope: long holds were replayed through the actual registered shortcut handler in the development debugger. Capture, AudioWorklet processing, WAV encoding, binary IPC, native provider requests, target checks, paste, and clipboard operations were real. Physical microphone/full-duration key holds and a new browser-input check were not repeated; their earlier platform probes remain documented. A Vite-reload-interrupted run was excluded and rerun.
 - Evidence and reproducible setup: desktop/scripts/task6-verification.md and desktop/README.md. Regular tests use fakes; live synthetic requests are explicit opt-in and read the saved key only inside Rust. Next: Task 7, live-transcription probe.
 - Final local checks passed: 14 deterministic Node session tests, 12 deterministic Rust tests (4 opt-in tests skipped), TypeScript/Vite build, Rust formatting, 3 existing UI privacy tests, and 4 leak-scanner regression tests. The pattern-only leak scan found no matching exposures in 77 files/build outputs and 250 Git objects; this final scan did not retrieve the saved key.
+
+### 2026-10-02 — Task 7 implemented and verified with real streaming and synthetic microphone input
+
+- Added native authenticated WebSocket streaming, independent 24 kHz PCM16 preview conversion, a provisional transcript/debug latency view, explicit reconnect with a marked gap, bounded queues/text, cancellation and late-event suppression. Original microphone PCM remains independent; final transcription/insertion never consumes live text. Added a dedicated live probe action that retains audio on release and skips insertion; normal dictate mode keeps its existing finalization behavior.
+- The explicit saved-key configuration probe passed against OpenAI without uploading audio. An eight-second synthetic-microphone check delivered 20 real transcript deltas before release and one completion; first visible text was 1,727 ms after capture started. Later synthetic observations were 1,004–1,100 ms. These observations are not physical-microphone acceptance targets.
+- Interruption recovery retained the complete 9.51-second original recording. Explicit real final transcription succeeded, returned recognized canonical text, released audio and left the probe result ready for Copy. Reconnect opened a second real provider connection, delivered further words/completion and marked the preview gap. Cancellation during startup and after eight live deltas cleared audio/text; another session remained usable.
+- Verification scope: synthetic speech and shortcut-handler replay; real capture/AudioWorklet, conversion, IPC, TLS/provider connections and final transcription. Disconnect integration uses real socket termination plus a fixed injected notification; deterministic native peers separately test unexpected socket closure. Physical microphone/network-outage checks and new target-app paste verification remain documented manual follow-ups. No recordings or transcripts were saved by the app/helpers, and credentials remained native.
+- Final checks: 29 deterministic Node checks, 18 deterministic Rust checks (five opt-in helpers skipped), TypeScript/Vite build, native debug build, Rust formatting, four leak-scanner regression checks and Git whitespace check passed. Source/UI review confirmed that live text has its own view, failed previews preserve original audio, and the probe action does not capture a paste target.
+- The saved-key/app-data audit initially could not read the running WebView cookie database. Closed only the task's synthetic app and reran it: all 486 selected files/build outputs and 271 local Git objects were readable, with no matching key exposures. This audit printed no key values and made no API requests.
+- Evidence and repeatable setup: desktop/scripts/task7-verification.md and desktop/README.md. The synthetic app was stopped before restoring the normal microphone/debugger configuration. Task 7 is complete within the documented verification scope. Next: Task 8, minimal floating overlay.
+
+### 2026-10-03 — Physical microphone and network-outage follow-ups
+
+- The user reports that the physical microphone test works perfectly. Recorded this user-observed result in desktop/scripts/task7-verification.md; no numerical latency measurement was supplied.
+- The user also reports that the network-outage check works. Recorded this as a user-observed pass of the recording-retention and transcription-recovery check. No separate result was supplied for the optional live preview reconnect during capture.

@@ -26,6 +26,7 @@ export class TranscriptionSession {
   inserting = false;
   private generation = 0;
   private targetReady: Promise<boolean> = Promise.resolve(false);
+  private automaticInsertion = true;
   private readonly provider: (audio: Uint8Array) => Promise<string>;
   private readonly changed: () => void;
   private readonly releaseAudio: () => void;
@@ -70,7 +71,7 @@ export class TranscriptionSession {
     finally { this.busy = false; this.changed(); }
   }
 
-  begin() {
+  begin(captureTarget = true) {
     if (!this.canStart) throw new Error("Resolve or discard the previous session first.");
     this.generation += 1;
     this.sessionId = crypto.randomUUID();
@@ -78,9 +79,10 @@ export class TranscriptionSession {
     this.error = null;
     this.insertion = null;
     this.state = "recording";
+    this.automaticInsertion = captureTarget;
     // Capture before microphone startup. An unavailable destination uses Copy.
     try {
-      this.targetReady = this.destination
+      this.targetReady = this.destination && captureTarget
         ? this.destination.capture(this.sessionId).then(() => true, () => false)
         : Promise.resolve(false);
     } catch { this.targetReady = Promise.resolve(false); }
@@ -150,7 +152,7 @@ export class TranscriptionSession {
       this.state = "ready";
       this.releaseAudio();
       this.changed();
-      if (!this.destination) return;
+      if (!this.destination || !this.automaticInsertion) return;
       const targetReady = await this.targetReady;
       if (generation !== this.generation) return;
       if (!targetReady) {

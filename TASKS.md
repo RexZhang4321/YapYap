@@ -102,14 +102,14 @@ Done: `record → transcribe → insert` works independently of the live overlay
 
 ### 7. Live-transcription probe
 
-- [ ] Stream microphone audio to `gpt-live-transcribe`.
-- [ ] Print or display transcript deltas in a debug view.
-- [ ] Measure time to first visible text.
-- [ ] Handle cancellation, disconnect, and reconnect.
-- [ ] Continue preserving the local original-audio buffer independently.
-- [ ] Verify account access and streaming behavior with a real API call.
+- [x] Stream microphone audio to `gpt-live-transcribe`. WebView PCM is independently converted to 24 kHz mono PCM16 and sent through a native authenticated WebSocket.
+- [x] Print or display transcript deltas in a debug view. A separate provisional view received 20 real deltas before release in the synthetic-microphone check.
+- [x] Measure time to first visible text. The debug view measures capture-start to first visible nonempty update; observed synthetic checks ranged from 1.00 to 1.73 seconds, without establishing physical-microphone latency targets.
+- [x] Handle cancellation, disconnect, and reconnect. Startup/active cancellation and reconnect passed integration checks; disconnect recovery used real socket termination plus an injected fixed notification, with independent deterministic native socket-failure coverage.
+- [x] Continue preserving the local original-audio buffer independently. After a live failure, 9.51 seconds of original audio remained playable and successfully produced a canonical transcript through an explicit real API request.
+- [x] Verify account access and streaming behavior with a real API call. The saved-key configuration probe and real synthetic-audio delta/completion checks passed without returning credentials to the UI.
 
-Done when: words appear while speaking and the recording remains recoverable after a live-stream failure.
+Done: words appear before release, and the original recording survives live-stream failure. The user confirmed physical microphone and network-outage checks on October 3, 2026. [Windows verification note](desktop/scripts/task7-verification.md) records evidence and synthetic/device/network test boundaries. Next: Task 8, minimal floating overlay.
 
 ### 8. Minimal floating overlay
 

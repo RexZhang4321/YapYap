@@ -7,6 +7,7 @@ use tauri::{
 mod credentials;
 mod insertion;
 mod openai;
+mod streaming;
 mod transcription;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,6 +15,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(insertion::ProbeState::default())
+        .manage(streaming::LiveState::default())
         .invoke_handler(tauri::generate_handler![
             insertion::capture_target,
             insertion::capture_dictation_target,
@@ -29,7 +31,11 @@ pub fn run() {
             credentials::save_api_key,
             credentials::delete_api_key,
             credentials::validate_api_key,
-            transcription::transcribe_recording
+            transcription::transcribe_recording,
+            streaming::start_live_stream,
+            streaming::append_live_audio,
+            streaming::finish_live_stream,
+            streaming::cancel_live_stream
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show probe", true, None::<&str>)?;

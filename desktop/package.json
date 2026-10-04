@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "node --experimental-transform-types --test scripts/transcription-session.test.mjs",
+    "test": "node --experimental-transform-types --test scripts/transcription-session.test.mjs scripts/live-transcription.test.mjs scripts/api-key-privacy.test.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

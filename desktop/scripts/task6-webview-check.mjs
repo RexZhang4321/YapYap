@@ -67,6 +67,7 @@ try {
         await new Promise(r=>setTimeout(r,100));
       }
       if (!window.__task6Shortcut) throw new Error('No shortcut callback registered');
+      Object.defineProperty(core.Channel.prototype, 'onmessage', descriptor);
       window.__task6Synthetic = true;
     })()`);
   } else if (operation === "record") {

@@ -4,9 +4,9 @@
 
 The app stores the user's key only in Windows Credential Manager at `app.byokdictation.hotkeyprobe/openai-api-key`. No raw-key getter is registered as a Tauri command. The UI gets saved-key presence and fixed operation results, clears the input before invoking Save, and displays only explicitly recognized error codes. Unknown IPC errors are not rendered or logged.
 
-Rust uses the key in the Authorization header for HTTPS requests to the fixed `api.openai.com` host. Certificate verification remains enabled and redirects are disabled. Provider failure bodies are not returned to the UI. Secret buffers owned by Rust are wiped on drop; HTTP headers reserve their entire allocation before the secret is copied, including any Content-Type header.
+Rust uses the key in the Authorization header for HTTPS requests and the live WebSocket to the fixed `api.openai.com` host. Certificate verification remains enabled and redirects are disabled. Provider failure bodies are not returned to the UI. Credential reads and explicitly owned temporary secret buffers are wiped on drop; WinHTTP headers reserve their entire allocation before the secret is copied, including any Content-Type header. The streaming client's Authorization HeaderValue is marked sensitive so its debug representation is redacted; third-party handshake/header/TLS allocations are not guaranteed to be wiped.
 
-This does not guarantee erasure of all WebView, IPC, WinHTTP, or OS memory copies. The key necessarily exists briefly in memory during entry and use. Other software operating with the same Windows user's credentials can generally access this generic Windows credential. This audit does not cover other applications, the user's clipboard, or whole-machine memory dumps.
+This does not guarantee erasure of all WebView, IPC, HTTP/WebSocket library, TLS, or OS memory copies. The key necessarily exists briefly in memory during entry and use. Other software operating with the same Windows user's credentials can generally access this generic Windows credential. This audit does not cover other applications, the user's clipboard, or whole-machine memory dumps.
 
 ## Repeatable local audit
 
