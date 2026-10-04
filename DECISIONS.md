@@ -111,6 +111,16 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - **Revisit when:** The evaluation baseline establishes a need for automatic reconnect or different queue/latency limits. The probe's area-averaging resampler is independent of original audio and may need a higher-quality filter after representative microphone testing.
 - **Probe UX:** A new hotkey action retains audio on release and skips destination capture/automatic insertion, allowing safe live-text/playback/retry checks. Normal dictate mode also supports the optional live preview and preserves its existing release-to-canonical-insertion flow. Discard clears both transcripts and cancels the live connection.
 
+## Decisions — 2026-10-03
+
+### D015 — Passive status overlay with main-window recovery
+
+- **Decision:** Task 8 adds a separate hidden-on-start, always-on-top, nonfocusable, mouse-through status WebView. Capture the original destination before showing it. Use native Windows `ShowWindow(SW_SHOWNOACTIVATE)` for every show and the matching native hide path; position within the foreground monitor's work area. Render fixed placeholder/status copy first; live text remains Task 9. Keep Retry/Copy/Restore/Discard in the tray-accessible main probe.
+- **Alternative:** Show an activating or interactive window during dictation, reuse the main frontend in a second WebView, or connect live deltas before proving the window lifecycle.
+- **Why:** Preserve destination focus and session ownership. The overlay receives only an ownership generation, revision, and fixed phase; it cannot invoke credential, capture, transcription, paste, or overlay-write commands. Serial/coalesced updates protect discard; a native generation rejects queued updates from a previous frontend after development reload. Errors and clipboard-recovery warnings persist; successful insertion or explicit discard hides the panel without discarding retained text.
+- **Reference:** [Microsoft ShowWindow documentation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow) defines the nonactivating show behavior; native styles and foreground focus were also verified on this Windows machine.
+- **Revisit when:** Task 9 needs bounded provisional text display, or user testing justifies interactive overlay recovery, placement settings, or a broader mixed-DPI/platform matrix.
+
 ## Progress
 
 ### 2026-09-21 — Task 0 decisions recorded
@@ -263,3 +273,11 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 
 - The user reports that the physical microphone test works perfectly. Recorded this user-observed result in desktop/scripts/task7-verification.md; no numerical latency measurement was supplied.
 - The user also reports that the network-outage check works. Recorded this as a user-observed pass of the recording-retention and transcription-recovery check. No separate result was supplied for the optional live preview reconnect during capture.
+
+### 2026-10-03 — Task 8 status overlay implemented and verified
+
+- Added the passive floating window, independent frontend, fixed status copy, native nonactivating show/hide, monitor work-area placement, and restricted overlay IPC. Destination capture precedes display; main-window session/audio ownership and recovery remain intact.
+- Real Windows observations preserved Notepad focus during Listening, delayed Processing, failure recovery, and hiding. A local fixed-STT failure retained synthetic audio; retry inserted fixed canonical text in Notepad, restored the clipboard, released audio, and hid the overlay. Cancellation suppressed the delayed result. Two-monitor placement and VS Code window focus were observed; no new VS Code editor or browser insertion pass is claimed.
+- Windows browser automation stopped because its URL-policy check could not determine the browser URL. This did not block the verified Notepad overlay completion criterion. The synthetic app and sandboxed task-launch attempts were stopped; no API calls or credentials were changed.
+- Final checks: 34 deterministic frontend tests and 20 deterministic native tests passed (six opt-in helpers skipped), alongside frontend/native builds, formatting, helper syntax, and whitespace checks. The pattern-only leak audit scanned 96 files/build outputs and 308 Git objects with no matching exposures. Ownership-generation hardening was checked deterministically after the UI run.
+- Evidence and repeatable setup: desktop/scripts/task8-verification.md and desktop/README.md. Task 8 is complete within that documented scope. Next: Task 9, connect provisional live transcript deltas to the overlay.

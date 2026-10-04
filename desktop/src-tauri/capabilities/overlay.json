@@ -1,0 +1,6 @@
+{
+  "identifier": "overlay",
+  "description": "Read-only status overlay: event subscription only; no shortcuts or window controls",
+  "windows": ["overlay"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

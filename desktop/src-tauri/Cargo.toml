@@ -28,7 +28,7 @@ tokio = { version = "1", features = ["macros", "time", "sync", "net", "io-util"]
 tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Networking_WinHttp"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Networking_WinHttp", "Win32_UI_WindowsAndMessaging"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

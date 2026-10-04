@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BYOK Dictation — Overlay</title>
+    <link rel="stylesheet" href="/src/overlay.css" />
+    <script type="module" src="/src/overlay.ts"></script>
+  </head>
+  <body>
+    <main id="overlay" data-phase="hidden" role="status" aria-live="polite">
+      <header><span class="signal" aria-hidden="true"></span><h1 id="overlay-title">Ready to dictate</h1><span class="brand">BYOK</span></header>
+      <p id="overlay-text"></p>
+      <p id="overlay-hint"></p>
+    </main>
+  </body>
+</html>

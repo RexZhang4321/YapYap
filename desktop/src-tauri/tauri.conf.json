@@ -15,6 +15,22 @@
         "title": "BYOK Dictation — Capability Probes",
         "width": 700,
         "height": 580
+      },
+      {
+        "label": "overlay",
+        "title": "BYOK Dictation — Overlay",
+        "url": "overlay.html",
+        "width": 440,
+        "height": 148,
+        "visible": false,
+        "focus": false,
+        "focusable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "decorations": false,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false
       }
     ],
     "security": {

@@ -6,6 +6,7 @@ import { TranscriptionSession, type InsertionResult } from "./transcriptionSessi
 import { transcriptionError } from "./transcription";
 import { LiveTranscription } from "./liveTranscription";
 import { nativeStreamingSTT } from "./liveTransport";
+import { OverlayController, overlayPhase, type OverlaySnapshot } from "./overlayState";
 
 type HotkeyAction = "record" | "live" | "insert" | "retry";
 
@@ -40,6 +41,7 @@ const liveView = document.querySelector<HTMLTextAreaElement>("#live-transcript")
 const liveStatus = document.querySelector<HTMLElement>("#live-status")!;
 const liveLatency = document.querySelector<HTMLElement>("#live-latency")!;
 const liveReconnect = document.querySelector<HTMLButtonElement>("#live-reconnect")!;
+const overlayStatus = document.querySelector<HTMLElement>("#overlay-status")!;
 
 let activeShortcut: string | null = null;
 let held = false;
@@ -50,6 +52,14 @@ let operationBusy = false;
 let playbackUrl: string | null = null;
 let captureInterruptionMessage: string | null = null;
 let microphonePrepared = false;
+let overlayCaptureReadySession = "";
+const overlay = new OverlayController(
+  () => invoke<OverlaySnapshot>("claim_overlay"),
+  snapshot => invoke<void>("update_overlay", { snapshot }),
+  failed => { overlayStatus.textContent = failed
+    ? "The floating status window is unavailable. Recording and recovery remain available here."
+    : "The floating window shows status and placeholder text. Open this probe from the tray for recovery."; },
+);
 
 function log(message: string) {
   const line = new Date().toISOString() + "  " + message;
@@ -60,6 +70,12 @@ function log(message: string) {
 }
 
 function showState() {
+  overlay.update(transcription.sessionId !== overlayCaptureReadySession ? "hidden" : overlayPhase({
+    state: transcription.state, busy: transcription.busy, inserting: transcription.inserting,
+    error: transcription.error, insertion: transcription.insertion,
+    interrupted: captureInterruptionMessage !== null && !transcription.transcript,
+    stopping: operationBusy && recordingStart !== null,
+  }));
   holdState.textContent = held ? "DOWN" : "UP";
   const locked = held || operationBusy || transcription.busy;
   liveEnabled.disabled = locked || !transcription.canStart;
@@ -198,7 +214,15 @@ const transcription = new TranscriptionSession(
   () => { showState(); void refreshRestoreButton(); },
   releaseRecording,
   {
-    capture: (sessionId) => invoke<void>("capture_dictation_target", { sessionId }),
+    capture: async (sessionId) => {
+      try { await invoke<void>("capture_dictation_target", { sessionId }); }
+      finally {
+        if (transcription.sessionId === sessionId && !transcription.discarded) {
+          overlayCaptureReadySession = sessionId;
+          showState();
+        }
+      }
+    },
     insert: (sessionId, text) => invoke<InsertionResult>("insert_dictation_text", { sessionId, text }),
     discard: (sessionId) => invoke<void>("discard_dictation_target", { sessionId }),
   },
@@ -389,6 +413,11 @@ function onShortcut(event: ShortcutEvent) {
     }
 
     transcription.begin(heldAction !== "live");
+    captureInterruptionMessage = null;
+    if (heldAction === "live") {
+      overlayCaptureReadySession = transcription.sessionId;
+      showState();
+    }
     if (liveEnabled.checked) live.begin();
 
     if (recorder.hasRecording) {
@@ -493,6 +522,7 @@ restoreButton.addEventListener("click", async () => {
   showState();
   try {
     insertionStatus.textContent = await invoke<string>("restore_previous_clipboard");
+    if (transcription.insertion?.pasteSent) transcription.insertion.clipboardRestored = true;
   } catch (error) {
     insertionStatus.textContent = "Restore failed: " + String(error);
   } finally {

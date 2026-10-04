@@ -113,13 +113,13 @@ Done: words appear before release, and the original recording survives live-stre
 
 ### 8. Minimal floating overlay
 
-- [ ] Add a small always-on-top overlay window.
-- [ ] Display recording and processing states.
-- [ ] Display fake/probe text before connecting it to live transcription.
-- [ ] Hide the overlay after success; keep error recovery accessible until resolved or discarded.
-- [ ] Verify it does not steal focus from the target application.
+- [x] Add a small always-on-top overlay window. A separate hidden-on-start, nonfocusable, mouse-through WebView is positioned in the foreground monitor's work area.
+- [x] Display recording and processing states. Session updates also show retained results and recovery warnings.
+- [x] Display fake/probe text before connecting it to live transcription. Only fixed status/placeholder copy crosses into the overlay; live deltas remain Task 9.
+- [x] Hide the overlay after success; keep error recovery accessible until resolved or discarded. Native Notepad insertion after a fixture failure/retry hid the overlay; cancellation cleared audio and hid it. Recovery stays available through the tray's main probe.
+- [x] Verify it does not steal focus from the target application. Native observations preserved Notepad's foreground window through recording, processing, recovery, and hiding; VS Code window focus was also preserved. No new VS Code editor/browser insertion pass is claimed.
 
-Done when: the overlay lifecycle works while another application remains active.
+Done: the overlay lifecycle works while another application remains active. [Windows verification note](desktop/scripts/task8-verification.md) records local fixture, real-window, and tooling boundaries. Next: Task 9, live transcription overlay.
 
 ### 9. Live transcription overlay
 
