@@ -43,7 +43,7 @@ export function overlayPhase(session: OverlaySession): OverlayPhase {
 export const overlayCopy: Record<OverlayPhase, { title: string; text: string; hint: string }> = {
   hidden: { title: "Ready to dictate", text: "", hint: "" },
   recording: { title: "Listening", text: "Listening to your microphone…", hint: "Release the shortcut to finish" },
-  processing: { title: "Processing", text: "Finishing your dictation…", hint: "Keep your destination active" },
+  processing: { title: "Finalizing", text: "Finishing your dictation…", hint: "Keep your destination active" },
   ready: { title: "Ready", text: "Your recording or transcript is retained.", hint: "Open the probe from the tray to transcribe, copy, or discard" },
   error: { title: "Needs attention", text: "Open the probe from the tray to recover or discard.", hint: "Available audio and text stay in memory until discard or quit" },
 };

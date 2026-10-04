@@ -134,13 +134,13 @@ Done: `hotkey → speak → see provisional text → stop` works without editing
 
 ### 10. Single-segment integration
 
-- [ ] Connect the live overlay to the existing record-to-insert session lifecycle.
-- [ ] Keep live and canonical transcripts as separate values.
-- [ ] Verify final transcription still uses the complete original audio.
-- [ ] Verify the overlay does not change the insertion target.
-- [ ] Show finalizing/completed/error states.
+- [x] Connect the live overlay to the existing record-to-insert session lifecycle. Existing normal dictate mode owns the combined flow.
+- [x] Keep live and canonical transcripts as separate values.
+- [x] Verify final transcription still uses the complete original audio. Byte-identical full-WAV retry is covered deterministically.
+- [-] Verify the overlay does not change the insertion target. Source/deterministic checks pass; the new combined Windows observer run is pending.
+- [x] Show finalizing/completed/error states. Successful insertion hides the overlay immediately.
 
-Done when: the complete real flow works without VAD or incremental transcription.
+Implemented and automatically checked; the complete real combined-flow verification remains pending. [Task 10 verification note](desktop/scripts/task10-verification.md) records the desktop automation timeout and evidence boundaries. No VAD or incremental transcription is introduced.
 
 ### 11. Conservative cleanup
 

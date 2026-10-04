@@ -118,7 +118,7 @@ function showState() {
       ? "Listening. Release retains the recording for playback or explicit transcription."
       : "Listening. Release the shortcut to transcribe and insert.";
   } else if (transcription.insertion) {
-    transcriptionStatus.textContent = transcription.insertion.message
+    transcriptionStatus.textContent = (transcription.state === "inserted" ? "Completed. " : "") + transcription.insertion.message
       + (transcription.canRetryInsertion ? " Return to the original input/caret and pointer position, then press and release the shortcut to retry insertion, or use Copy transcript." : " Transcript is retained until discard.");
   } else if (transcription.transcript && transcription.error) {
     transcriptionStatus.textContent = "The destination is unavailable or the paste outcome is uncertain. Check the target and use Copy transcript. Text is retained until discard.";

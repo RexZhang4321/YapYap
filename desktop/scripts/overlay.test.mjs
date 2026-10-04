@@ -3,6 +3,7 @@ import test from 'node:test';
 import { OverlayController, OverlayReceiver, overlayPhase, overlayContent, overlayPresentation, MAX_OVERLAY_TEXT } from '../src/overlayState.ts';
 import { TranscriptionSession } from '../src/transcriptionSession.ts';
 import { LiveTranscription } from '../src/liveTranscription.ts';
+import { encodeWav } from '../src/audioCapture.ts';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
@@ -71,7 +72,7 @@ test('preview is labelled provisional and failures do not replace session proces
   live.state = 'failed';
   const failure = overlayPresentation(overlayContent('recording', live));
   assert.match(failure.title, /Listening/); assert.match(failure.hint, /Recording continues/); assert.equal(failure.warning, true);
-  assert.equal(overlayPresentation(overlayContent('processing', live)).title, 'Processing');
+  assert.equal(overlayPresentation(overlayContent('processing', live)).title, 'Finalizing');
   assert.equal(overlayPresentation(overlayContent('error', live)).title, 'Needs attention');
   live.state = 'listening'; live.hasGap = true;
   assert.match(overlayPresentation(overlayContent('recording', live)).hint, /gap/);
@@ -138,6 +139,47 @@ test('cancel during a delayed preview send clears words and suppresses old-strea
   receive({ kind: 'delta', itemId: 'one', text: 'late' });
   slow.resolve(); await tick();
   assert.equal(sent.at(-1).phase, 'hidden'); assert.equal(sent.at(-1).text, ''); assert.equal(live.text, '');
+});
+
+test('whole-recording finalization and retry are independent of unfinished live text and keep the original target', async () => {
+  const sent = [], uploaded = [], captures = [], inserted = [];
+  let session, live, receive, attempts = 0;
+  const controller = new OverlayController(async () => ({ epoch: 1, revision: 0 }), async snapshot => sent.push(snapshot), () => {});
+  const publish = () => controller.update(overlayPhase({ ...base, ...session }), live);
+  live = new LiveTranscription({
+    async start(id, callback) { receive = event => callback({ streamId: id, ...event }); },
+    async append() {}, async finish() {}, async cancel() {},
+  }, publish);
+  session = new TranscriptionSession(async bytes => {
+    uploaded.push(bytes);
+    if (++attempts === 1) throw 'transcription_network_failed';
+    return 'Canonical result 42 https://example.com/a_1';
+  }, publish, () => {}, {
+    async capture(id) { captures.push(id); }, async discard() {},
+    async insert(id, text) { inserted.push({ id, text }); return { pasteSent: true, pasteAttempted: true, clipboardRestored: true }; },
+  });
+  session.begin(); live.begin(); await tick();
+  receive({ kind: 'delta', itemId: 'one', text: 'Unfinished provisional words' });
+  // A nonuniform sample sequence catches truncation/reordering and preview conversion.
+  const chunks = [new Float32Array([0.1, -0.5, 0.9]), new Float32Array([0.4, -0.3])];
+  const audio = encodeWav({ samples: chunks, sampleRate: 48000, channelCount: 1, frameCount: 5 });
+  session.capture(audio); void live.finish();
+  await session.transcribe(); await tick();
+  assert.equal(live.state, 'finishing'); assert.equal(session.audio, audio);
+  assert.equal(session.state, 'failed'); assert.equal(sent.at(-1).phase, 'error');
+  assert.equal(inserted.length, 0); assert.equal(session.transcript, '');
+  await session.transcribe(); await tick();
+  const expectedBytes = new Uint8Array(await audio.arrayBuffer());
+  assert.deepEqual(uploaded, [expectedBytes, expectedBytes]);
+  assert.equal(captures.length, 1);
+  assert.deepEqual(inserted, [{ id: captures[0], text: 'Canonical result 42 https://example.com/a_1' }]);
+  assert.equal(session.audio, null); assert.equal(session.state, 'inserted');
+  assert.equal(live.text, 'Unfinished provisional words');
+  assert.equal(sent.at(-1).phase, 'hidden'); assert.equal(sent.at(-1).text, '');
+  // Finalization did not wait for preview completion. Its late completion cannot reopen success.
+  receive({ kind: 'completed', itemId: 'one', text: 'Different live result' }); await tick();
+  assert.equal(sent.at(-1).phase, 'hidden'); assert.equal(inserted.length, 1);
+  live.cancel();
 });
 
 test('overlay failures do not break dictation and a later update retries', async () => {
