@@ -154,6 +154,8 @@ try {
       window.__task10Prepared = '${real ? 'real' : 'local'}';
       document.querySelector('#hotkey-action').value = 'record';
       document.querySelector('#live-enabled').checked = true;
+      // Task 10 asserts canonical insertion; Task 11 cleanup has separate coverage.
+      document.querySelector('#cleanup-enabled').checked = false;
     })()`);
     console.log(JSON.stringify({ prepared:true, mode:real ? 'real' : 'local' }));
   } else if (operation === 'check') {

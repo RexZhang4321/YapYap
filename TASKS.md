@@ -144,14 +144,14 @@ Implemented and automatically checked; the complete real combined-flow verificat
 
 ### 11. Conservative cleanup
 
-- [ ] Send the canonical transcript to `gpt-5.6-luna`.
-- [ ] Add light cleanup and a bypass that uses the canonical transcript.
-- [ ] Preserve meaning, tone, numbers, identifiers, URLs, filenames, and technical terms.
-- [ ] Insert cleaned text on success.
-- [ ] Fall back to canonical text if cleanup fails.
-- [ ] Provide Copy original transcript and retain the canonical text for the session until explicit discard.
+- [x] Send the canonical transcript to `gpt-5.6-luna`.
+- [x] Add light cleanup and a bypass that uses the canonical transcript.
+- [x] Preserve meaning, tone, numbers, identifiers, URLs, filenames, and technical terms.
+- [x] Insert cleaned text on success.
+- [x] Fall back to canonical text if cleanup fails.
+- [x] Provide Copy original transcript and retain the canonical text for the session until explicit discard.
 
-Done when: cleanup improves ordinary dictation without becoming the only recoverable transcript.
+Implemented and checked with deterministic fixtures and a real saved-key synthetic cleanup request. [Task 11 verification](desktop/scripts/task11-verification.md) records preservation guards, canonical recovery, API evidence and remaining manual/semantic limits. Full corpus evaluation remains Task 13.
 
 ### 12. Failure recovery audit
 

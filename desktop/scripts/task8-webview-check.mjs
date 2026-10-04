@@ -69,6 +69,8 @@ try {
       window.__task8Mode = '${mode}'; window.__task8Prepared = true;
       document.querySelector('#hotkey-action').value = 'record';
       document.querySelector('#live-enabled').checked = false;
+      // Keep this older fixture check local: cleanup is a separate provider stage.
+      document.querySelector('#cleanup-enabled').checked = false;
     })()`);
   } else if (operation === 'press' || operation === 'release') {
     await evaluate(`(() => {

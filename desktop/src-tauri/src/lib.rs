@@ -4,6 +4,7 @@ use tauri::{
     Manager, WindowEvent,
 };
 
+mod cleanup;
 mod credentials;
 mod insertion;
 mod openai;
@@ -32,6 +33,7 @@ pub fn run() {
         credentials::delete_api_key,
         credentials::validate_api_key,
         transcription::transcribe_recording,
+        cleanup::cleanup_transcript,
         streaming::start_live_stream,
         streaming::append_live_audio,
         streaming::finish_live_stream,

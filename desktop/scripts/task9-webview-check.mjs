@@ -92,6 +92,7 @@ try {
       ` : ''}
       document.querySelector('#hotkey-action').value = 'live';
       document.querySelector('#live-enabled').checked = true;
+      document.querySelector('#cleanup-enabled').checked = false;
     })()`);
     console.log(JSON.stringify({ prepared: true, mode: liveRun ? 'live' : 'local' }));
   } else if (operation === 'check') {

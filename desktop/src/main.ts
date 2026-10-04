@@ -35,6 +35,11 @@ const transcriptView = document.querySelector<HTMLTextAreaElement>("#transcript"
 const sessionState = document.querySelector<HTMLElement>("#session-state")!;
 const copyTranscriptButton = document.querySelector<HTMLButtonElement>("#copy-transcript")!;
 const copyTranscriptWithoutBackupButton = document.querySelector<HTMLButtonElement>("#copy-transcript-without-backup")!;
+const copyOriginalButton = document.querySelector<HTMLButtonElement>("#copy-original")!;
+const copyOriginalWithoutBackupButton = document.querySelector<HTMLButtonElement>("#copy-original-without-backup")!;
+const cleanupEnabled = document.querySelector<HTMLInputElement>("#cleanup-enabled")!;
+const cleanedTranscriptView = document.querySelector<HTMLTextAreaElement>("#cleaned-transcript")!;
+const cleanupStatus = document.querySelector<HTMLElement>("#cleanup-status")!;
 const applyShortcutButton = document.querySelector<HTMLButtonElement>("#shortcut-form button")!;
 const liveEnabled = document.querySelector<HTMLInputElement>("#live-enabled")!;
 const liveView = document.querySelector<HTMLTextAreaElement>("#live-transcript")!;
@@ -84,6 +89,7 @@ function showState() {
   holdState.textContent = held ? "DOWN" : "UP";
   const locked = held || operationBusy || transcription.busy;
   liveEnabled.disabled = locked || !transcription.canStart;
+  cleanupEnabled.disabled = locked || !transcription.canStart;
   liveReconnect.disabled = !recorder.isRecording || live.state !== "failed";
   applyShortcutButton.disabled = locked;
   shortcutInput.disabled = locked;
@@ -101,10 +107,25 @@ function showState() {
   discardButton.textContent = held || transcription.busy ? "Cancel and discard" : "Discard recording and transcript";
   copyTranscriptButton.disabled = locked || !transcription.transcript;
   copyTranscriptWithoutBackupButton.disabled = locked || !transcription.transcript;
+  copyOriginalButton.disabled = locked || !transcription.transcript;
+  copyOriginalWithoutBackupButton.disabled = locked || !transcription.transcript;
+  const copyLabel = transcription.cleanedTranscript !== null ? "Copy cleaned" : "Copy transcript";
+  copyTranscriptButton.textContent = copyLabel;
+  copyTranscriptWithoutBackupButton.textContent = `${copyLabel} without backup`;
   sessionState.textContent = transcription.state;
   document.querySelector<HTMLButtonElement>("#copy-text")!.disabled = locked;
   document.querySelector<HTMLButtonElement>("#copy-without-backup")!.disabled = locked;
   transcriptView.value = transcription.transcript;
+  cleanedTranscriptView.value = transcription.cleanedTranscript ?? "";
+  cleanupStatus.textContent = transcription.cleanupWarning
+    ? "Cleanup was unavailable or returned unsafe text. The original transcript is used for insertion and Copy."
+    : transcription.cleaning && !transcription.discarded ? "Conservatively cleaning the canonical transcript…"
+    : transcription.cleanedTranscript !== null ? "Cleanup ready. The original transcript remains available below."
+    : transcription.state !== "idle" && transcription.state !== "discarded"
+      ? transcription.usesCleanup ? "Cleanup is enabled for this session and runs after canonical transcription."
+        : "Cleanup was bypassed for this session. Insertion and Copy use the original transcript."
+      : cleanupEnabled.checked ? "Cleanup is enabled for the next recording. Uncheck to use the original transcript directly."
+        : "Cleanup will be bypassed for the next recording. Insertion and Copy will use the original transcript.";
   if (transcription.discarded) {
     transcriptionStatus.textContent = transcription.busy
       ? "Discarded locally. Waiting for the sent request to finish; its response will be ignored."
@@ -112,14 +133,16 @@ function showState() {
   } else if (transcription.inserting) {
     transcriptionStatus.textContent = "Checking the original destination and sending paste. Wait for its result before discarding.";
   } else if (transcription.busy) {
-    transcriptionStatus.textContent = "Sending this recording directly to OpenAI and waiting for the canonical transcript…";
+    transcriptionStatus.textContent = transcription.cleaning
+      ? "Canonical transcript received; audio released. Waiting for optional cleanup before insertion…"
+      : "Sending this recording directly to OpenAI and waiting for the canonical transcript…";
   } else if (transcription.state === "recording") {
     transcriptionStatus.textContent = actionSelect.value === "live"
       ? "Listening. Release retains the recording for playback or explicit transcription."
       : "Listening. Release the shortcut to transcribe and insert.";
   } else if (transcription.insertion) {
     transcriptionStatus.textContent = (transcription.state === "inserted" ? "Completed. " : "") + transcription.insertion.message
-      + (transcription.canRetryInsertion ? " Return to the original input/caret and pointer position, then press and release the shortcut to retry insertion, or use Copy transcript." : " Transcript is retained until discard.");
+      + (transcription.canRetryInsertion ? " Return to the original input/caret and pointer position, then press and release the shortcut to retry insertion, or use Copy. Cleanup will not run again." : " Original and output text are retained until discard.");
   } else if (transcription.transcript && transcription.error) {
     transcriptionStatus.textContent = "The destination is unavailable or the paste outcome is uncertain. Check the target and use Copy transcript. Text is retained until discard.";
   } else if (transcription.error) {
@@ -147,6 +170,7 @@ function showLiveState() {
 
 const live = new LiveTranscription(nativeStreamingSTT, showLiveState);
 actionSelect.addEventListener("change", showState);
+cleanupEnabled.addEventListener("change", showState);
 liveReconnect.addEventListener("click", () => {
   if (recorder.isRecording) live.reconnect();
 });
@@ -232,6 +256,7 @@ const transcription = new TranscriptionSession(
     insert: (sessionId, text) => invoke<InsertionResult>("insert_dictation_text", { sessionId, text }),
     discard: (sessionId) => invoke<void>("discard_dictation_target", { sessionId }),
   },
+  { clean: (text) => invoke<string>("cleanup_transcript", { text }) },
 );
 
 function releaseRecording() {
@@ -418,7 +443,7 @@ function onShortcut(event: ShortcutEvent) {
       return;
     }
 
-    transcription.begin(heldAction !== "live");
+    transcription.begin(heldAction !== "live", cleanupEnabled.checked);
     captureInterruptionMessage = null;
     if (heldAction === "live") {
       overlayCaptureReadySession = transcription.sessionId;
@@ -610,20 +635,22 @@ discardButton.addEventListener("click", () => {
   }
 });
 
-async function copyTranscript(withoutBackup: boolean) {
+async function copyTranscript(withoutBackup: boolean, original = false) {
   if (held || operationBusy || transcription.busy || !transcription.transcript) return;
   operationBusy = true;
   showState();
   try {
     insertionStatus.textContent = await invoke<string>("copy_dictation_text", {
-      text: transcription.transcript, withoutBackup,
+      text: original ? transcription.transcript : transcription.outputText, withoutBackup,
     });
   } catch {
-    insertionStatus.textContent = "Copy failed. Restore a pending clipboard backup, or use Copy transcript without backup to explicitly replace unsupported clipboard contents.";
+    insertionStatus.textContent = "Copy failed. Restore a pending clipboard backup, or use the matching Copy without backup action to explicitly replace unsupported clipboard contents.";
   } finally { operationBusy = false; await refreshRestoreButton(); showState(); }
 }
 copyTranscriptButton.addEventListener("click", () => { void copyTranscript(false); });
 copyTranscriptWithoutBackupButton.addEventListener("click", () => { void copyTranscript(true); });
+copyOriginalButton.addEventListener("click", () => { void copyTranscript(false, true); });
+copyOriginalWithoutBackupButton.addEventListener("click", () => { void copyTranscript(true, true); });
 
 actionSelect.addEventListener("change", () => {
   if (actionSelect.value === "insert") {

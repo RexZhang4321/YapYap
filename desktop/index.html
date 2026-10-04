@@ -10,7 +10,7 @@
   <body>
     <main>
       <h1>BYOK dictation probes</h1>
-      <p>Prepare the microphone, then hold the global shortcut in your destination to record. Release to send the recording directly to OpenAI and insert the canonical transcript.</p>
+      <p>Prepare the microphone, then hold the global shortcut in your destination to record. Release to transcribe, conservatively clean up, and insert. Optional cleanup can be bypassed before recording.</p>
       <form id="shortcut-form">
         <label for="shortcut">Global shortcut</label>
         <div class="row">
@@ -76,17 +76,24 @@
       </section>
       <section class="result">
         <h2>Dictation session</h2>
+        <label><input id="cleanup-enabled" type="checkbox" checked /> Clean punctuation, spacing, and spoken fillers before insertion</label>
+        <p class="hint">Cleanup sends the canonical transcript directly to OpenAI using gpt-5.6-luna. It aims to preserve meaning, language, names, numbers, URLs, and technical terms. Uncheck before recording to bypass it. Failed cleanup uses the original text.</p>
         <p id="overlay-status" class="hint" role="status">The floating window shows provisional live words and status.</p>
         <div class="row recording-actions">
           <button id="transcribe-recording" type="button" disabled>Retry transcription</button>
           <button id="discard-transcription" type="button" disabled>Discard recording and transcript</button>
           <button id="copy-transcript" type="button" disabled>Copy transcript</button>
           <button id="copy-transcript-without-backup" type="button" disabled>Copy transcript without backup</button>
+          <button id="copy-original" type="button" disabled>Copy original transcript</button>
+          <button id="copy-original-without-backup" type="button" disabled>Copy original transcript without backup</button>
         </div>
         <p id="transcription-status" role="status">Hold the shortcut in your destination. Release transcribes and inserts.</p>
+        <p id="cleanup-status" role="status"></p>
+        <label for="cleaned-transcript">Cleaned transcript</label>
+        <textarea id="cleaned-transcript" rows="6" readonly spellcheck="false" placeholder="Successful optional cleanup will appear here."></textarea>
         <label for="transcript">Canonical transcript</label>
         <textarea id="transcript" rows="6" readonly spellcheck="false" placeholder="Your transcript will appear here."></textarea>
-        <p class="hint">Release sends the whole recording to gpt-transcribe. Audio stays in memory on transcription failure; usable text releases audio and remains here until discard. An uncertain destination uses Copy. Cancel and discard ignores late responses but cannot retract uploaded audio. Once paste is dispatched, wait for its result. Discard the previous session before recording again. Quitting loses pending audio and text.</p>
+        <p class="hint">Release sends the whole recording to gpt-transcribe. Audio stays in memory on transcription failure; canonical text releases audio and remains here alongside successful cleanup until discard. Copy uses cleaned text when available; Copy original always uses the canonical transcript. An uncertain destination uses Copy. Cancel and discard ignores late transcription and cleanup responses but cannot retract uploaded audio or text. Once paste is dispatched, wait for its result. Discard the previous session before recording again. Quitting loses pending audio and text.</p>
       </section>
       <section class="result" aria-labelledby="live-heading">
         <h2 id="live-heading">Live transcription probe</h2>

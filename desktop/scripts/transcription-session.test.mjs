@@ -241,3 +241,103 @@ test("synchronous destination IPC failures preserve transcript and local discard
   assert.equal(session.discard(), true);
   assert.equal(session.state, "discarded"); assert.equal(session.transcript, "");
 });
+
+test("cleanup uses canonical final text, inserts cleaned output once, and retains both until discard", async () => {
+  const canonical = "um hello world", cleaned = "Hello, world.";
+  let stt = 0, cleanup = 0, releases = 0;
+  const events = [], inserted = [];
+  const session = new TranscriptionSession(async bytes => {
+    stt++; assert.equal(bytes.length, 48); return canonical;
+  }, () => {}, () => { releases++; events.push("release"); }, destination(async (_, text) => {
+    inserted.push(text); events.push("insert"); return sentPaste();
+  }), { clean: async text => {
+    cleanup++; events.push("clean"); assert.equal(text, canonical);
+    assert.equal(session.transcript, canonical); assert.equal(session.audio, null);
+    assert.equal(session.busy, true); assert.equal(session.cleaning, true);
+    return cleaned;
+  } });
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.deepEqual(events, ["release", "clean", "insert"]);
+  assert.deepEqual(inserted, [cleaned]);
+  assert.equal(session.transcript, canonical); assert.equal(session.cleanedTranscript, cleaned);
+  assert.equal(session.outputText, cleaned); assert.equal(session.cleanupWarning, null);
+  assert.equal(session.state, "inserted"); assert.equal(session.cleaning, false);
+  await session.transcribe(); await session.retryInsertion();
+  assert.equal(stt, 1); assert.equal(cleanup, 1); assert.equal(releases, 1);
+  assert.equal(session.discard(), true);
+  assert.equal(session.transcript, ""); assert.equal(session.cleanedTranscript, null);
+  assert.equal(session.outputText, "");
+});
+
+test("cleanup bypass is captured when recording begins and inserts the exact original", async () => {
+  const original = "你好 😀\nAS5047P https://example.com/a?q=2 user_id 12.50";
+  const session = new TranscriptionSession(async () => original, () => {}, () => {},
+    destination(async (_, text) => { assert.equal(text, original); return sentPaste(); }),
+    { clean: async () => assert.fail("Bypassed cleanup called") });
+  session.begin(true, false); session.capture(recording()); await session.transcribe();
+  assert.equal(session.state, "inserted"); assert.equal(session.transcript, original);
+  assert.equal(session.cleanedTranscript, null); assert.equal(session.cleanupWarning, null);
+});
+
+test("failed or malformed cleanup falls back to canonical insertion with a separate fixed warning", async () => {
+  // Runtime shape guards only; protected content/meaning checks are native tests.
+  for (const bad of [null, {}, "", "  \n", "bad\u0000text", "bad\u0085text", "bad\u202etext", "x".repeat(65_537), "😀".repeat(16_385), new Error("secret provider detail")]) {
+    const session = new TranscriptionSession(async () => "original", () => {}, () => {},
+      destination(async (_, text) => { assert.equal(text, "original"); return sentPaste(); }),
+      { clean: async () => { if (bad instanceof Error) throw bad; return bad; } });
+    session.begin(); session.capture(recording()); await session.transcribe();
+    assert.equal(session.transcript, "original"); assert.equal(session.outputText, "original");
+    assert.equal(session.cleanedTranscript, null); assert.equal(session.cleanupWarning, "cleanup_failed");
+    assert.equal(session.error, null); assert.equal(session.audio, null);
+    assert.equal(session.state, "inserted");
+    session.discard(); assert.equal(session.cleanupWarning, null);
+  }
+});
+
+test("cancel during cleanup ignores late success/failure and holds the lock until native settles", async () => {
+  for (const success of [true, false]) {
+    const started = deferred(), response = deferred();
+    const session = new TranscriptionSession(async () => "original", () => {}, () => {},
+      destination(async () => assert.fail("Cancelled cleanup pasted")),
+      { clean: () => { started.resolve(); return response.promise; } });
+    session.begin(); session.capture(recording()); const pending = session.transcribe();
+    await started.promise;
+    assert.equal(session.transcript, "original"); assert.equal(session.audio, null);
+    await session.transcribe(); assert.equal(session.discard(), true);
+    assert.equal(session.busy, true); assert.equal(session.canStart, false);
+    assert.throws(() => session.begin());
+    if (success) response.resolve("Original."); else response.reject("secret provider detail");
+    await pending;
+    assert.equal(session.transcript, ""); assert.equal(session.cleanedTranscript, null);
+    assert.equal(session.cleanupWarning, null); assert.equal(session.error, null);
+    assert.equal(session.cleaning, false); assert.equal(session.busy, false);
+    assert.equal(session.state, "discarded"); assert.equal(session.canStart, true);
+  }
+});
+
+test("insertion refusal retry reuses cleaned output without repeating either provider request", async () => {
+  let stt = 0, cleanup = 0, insertions = 0;
+  const session = new TranscriptionSession(async () => { stt++; return "um hello"; }, () => {}, () => {},
+    destination(async (_, text) => {
+      assert.equal(text, "Hello.");
+      return ++insertions === 1 ? sentPaste({ pasteAttempted: false, pasteSent: false }) : sentPaste();
+    }), { clean: async () => { cleanup++; return "Hello."; } });
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.equal(session.canRetryInsertion, true); assert.equal(session.error, "insertion_failed");
+  assert.equal(session.transcript, "um hello"); assert.equal(session.cleanedTranscript, "Hello.");
+  await Promise.all([session.retryInsertion(), session.retryInsertion()]);
+  await session.transcribe(); await session.retryInsertion();
+  assert.equal(stt, 1); assert.equal(cleanup, 1); assert.equal(insertions, 2);
+  assert.equal(session.state, "inserted"); assert.equal(session.error, null);
+});
+
+test("cleaned output survives unavailable destination while canonical Copy stays exact", async () => {
+  const session = new TranscriptionSession(async () => "um hello", () => {}, () => {}, {
+    ...destination(async () => assert.fail("Unavailable target pasted")),
+    capture: async () => { throw new Error("target unavailable"); },
+  }, { clean: async () => "Hello." });
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.equal(session.state, "failed"); assert.equal(session.error, "insertion_target_unavailable");
+  assert.equal(session.transcript, "um hello"); assert.equal(session.outputText, "Hello.");
+  assert.equal(session.audio, null); assert.equal(session.cleanupWarning, null);
+});
