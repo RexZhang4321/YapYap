@@ -94,7 +94,9 @@ try {
     const { invoke } = await import('/node_modules/.vite/deps/@tauri-apps_api_core.js');
     const snapshot = await invoke('overlay_snapshot');
     return { state: document.querySelector('#session-state').textContent,
-      overlay: snapshot, audioRetained: !document.querySelector('#recording-playback').hidden,
+      overlay: { epoch: snapshot.epoch, revision: snapshot.revision, phase: snapshot.phase,
+        preview: snapshot.preview, hasGap: snapshot.hasGap, characters: snapshot.text.length },
+      audioRetained: !document.querySelector('#recording-playback').hidden,
       hasTranscript: !!document.querySelector('#transcript').value,
       discardDisabled: document.querySelector('#discard-transcription').disabled,
       fixturePrepared: !!window.__task8Prepared };

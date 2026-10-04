@@ -1,19 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { overlayCopy, type OverlaySnapshot } from "./overlayState";
+import { OverlayReceiver, overlayPresentation, type OverlaySnapshot } from "./overlayState";
 
-let revision = -1;
-let epoch = -1;
+const receiver = new OverlayReceiver();
 function render(snapshot: OverlaySnapshot) {
-  if (!Number.isSafeInteger(snapshot.epoch) || !Number.isSafeInteger(snapshot.revision)
-    || snapshot.epoch < epoch || (snapshot.epoch === epoch && snapshot.revision <= revision)
-    || !Object.prototype.hasOwnProperty.call(overlayCopy, snapshot.phase)) return;
-  epoch = snapshot.epoch;
-  revision = snapshot.revision;
-  const copy = overlayCopy[snapshot.phase];
-  document.querySelector<HTMLElement>("#overlay")!.dataset.phase = snapshot.phase;
+  if (!receiver.accept(snapshot)) return;
+  const copy = overlayPresentation(snapshot);
+  const panel = document.querySelector<HTMLElement>("#overlay")!;
+  panel.dataset.phase = snapshot.phase;
+  panel.dataset.warning = String(copy.warning);
   document.querySelector<HTMLElement>("#overlay-title")!.textContent = copy.title;
-  document.querySelector<HTMLElement>("#overlay-text")!.textContent = copy.text;
+  document.querySelector<HTMLElement>("#overlay-label")!.textContent = copy.label;
+  const text = document.querySelector<HTMLElement>("#overlay-text")!;
+  text.textContent = copy.text;
+  text.scrollTop = text.scrollHeight;
   document.querySelector<HTMLElement>("#overlay-hint")!.textContent = copy.hint;
 }
 

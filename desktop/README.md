@@ -2,11 +2,33 @@
 
 Run `npm install` and `npm run tauri dev` from this directory. The app registers `Ctrl+Alt+F8` by default; enter another Tauri accelerator and choose **Apply** to change it. The default hotkey action records, transcribes, and inserts on release. Choose **Run text insertion probe** to use the completed fixed-text probe.
 
-## Floating status overlay (Task 8)
+## Floating live overlay (Tasks 8–9)
 
-Recording shows a small always-on-top **Listening** panel with fixed placeholder text. Release shows **Processing**; a successful canonical paste hides it. Failed recording/transcription/insertion and unresolved clipboard restoration keep **Needs attention** visible. Retained probe results show **Ready** until recovery or discard. Use the tray's **Show probe** action for existing Retry, Copy, Restore, and Discard controls. The panel ignores mouse input and never requests focus; destination capture completes before it appears. It sits near the bottom of the foreground application's monitor, within the work area.
+Recording shows a small always-on-top **Listening** panel with live words labelled **Provisional** when live preview is enabled. While connecting, recording continues; with preview disabled, the panel shows a fixed listening status. It displays the latest 2,048 UTF-16 units, preserves emoji at the tail boundary, wraps long identifiers, and follows the newest lines. The complete bounded live preview remains in the main probe. Release shows **Processing** with the provisional preview; a successful canonical paste hides and clears the overlay. Failed recording/transcription/insertion and unresolved clipboard restoration keep **Needs attention** visible. Retained probe results show **Ready** until recovery or discard. Use the tray's **Show probe** action for existing Retry, Copy, Restore, and Discard controls. The panel ignores mouse input and never requests focus; destination capture completes before it appears. It sits near the bottom of the foreground application's monitor, within the work area.
 
-The overlay has its own frontend entry point and event-subscription capability. Native dispatch denies it all application commands except reading the fixed overlay snapshot. It receives no audio, credentials, canonical transcript, or live text. State updates are serialized, coalesced, and revisioned so cancellation/reload cannot apply an older status over a newer one. Overlay failures are reported in the main probe and do not cancel dictation. Live transcript wiring remains Task 9.
+The overlay has its own frontend entry point and event-subscription capability. Native dispatch denies it all application commands except reading the bounded overlay snapshot. It receives provisional text, fixed preview status, and a gap flag; it receives no audio, credentials, or canonical transcript. Text is rendered as plain text. State updates are serialized, coalesced, and revisioned so cancellation/reload cannot apply an older status over a newer one. Hidden updates clear both the native snapshot and the overlay DOM. Overlay failures are reported in the main probe and do not cancel dictation. Preview failure shows a warning while capture continues; explicit reconnect marks the gap. Provisional text never enters the insertion path.
+
+Task 9 manual Windows check: choose **Run live transcription probe**, enable live words, prepare the actual microphone, and focus a disposable Notepad/VS Code/browser input. Hold the shortcut for 8–15 seconds and confirm provisional words appear before release while focus/input contents stay unchanged. Release retains audio and performs no automatic insertion in this mode. Test preview failure/reconnect while capturing, then cancel/discard and confirm no late text reappears. In normal dictate mode, confirm the existing canonical-only insertion, Processing state, clipboard restoration, and success hiding. Real provider requests occur with live preview enabled. See [Task 9 verification](scripts/task9-verification.md) for observed scope.
+
+### Task 9 integration checks
+
+Use the existing synthetic-microphone/debugger launch setup below. From `desktop/`, run:
+
+```powershell
+node scripts/task9-webview-check.mjs prepare
+powershell -NoProfile -ExecutionPolicy Bypass -STA -File scripts/task9-window-check.ps1
+```
+
+This local pass uses fixed live/final-STT fixtures, real synthetic microphone capture, both WebViews, native overlay commands, and a disposable Windows input. It checks Unicode, literal markup, long previews, failure/reconnect, processing cancellation, stale events, disabled-preview reset, native payload rejection, focus preservation, and unchanged input. It cancels before any canonical paste. The helper temporarily clicks its own disposable input to establish focus and restores the pointer afterward. Summaries print booleans/counts only; screenshots of synthetic content are saved under ignored `src-tauri/target/task9/`.
+
+Restart the test app to remove fixture patches before opting into real streaming:
+
+```powershell
+node scripts/task9-webview-check.mjs prepare --live
+powershell -NoProfile -ExecutionPolicy Bypass -STA -File scripts/task9-window-check.ps1 -Live
+```
+
+The explicit live mode uploads the fixed synthetic speech through the native transport using the saved key. It verifies words before release, focus/no-edit behavior, retained original audio, discard, and startup cancellation. Preview failure/reconnect and delayed processing are covered by the local pass. Run `node scripts/task8-webview-check.mjs security` to confirm overlay command restrictions. Quit the test process before normal use; fake-device/debugger flags and provider patches must not persist.
 
 Manual Windows checks:
 
@@ -35,7 +57,7 @@ On a live connection failure, recording continues and provisional words remain s
 
 The native WebSocket uses the saved Windows credential against the fixed OpenAI host, certificate/hostname verification, no redirects, and 10-second connect/configuration/send/final-completion deadlines. Audio chunks cross binary IPC; only the preview copy is converted to 24 kHz PCM16 and Base64-encoded in Rust. The frontend queue holds at most 192,000 bytes plus one in-flight chunk; the native queue holds at most 32 chunks of 9,600 bytes. Provider events and the live view have 1 MiB limits. No audio, transcript or credential is written to ordinary logs or files. API/transport failures use fixed error codes; library/OS memory copies are not guaranteed to be wiped.
 
-The protocol follows [OpenAI's live transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription). Turn detection is disabled for this single-turn probe; release sends the audio commit. Live overlay text, local VAD, cleanup and incremental final transcription remain later tasks.
+The protocol follows [OpenAI's live transcription guide](https://developers.openai.com/api/docs/guides/realtime-transcription). Turn detection is disabled for this single-turn probe; release sends the audio commit. Task 9 now displays the live preview in the passive overlay. Local VAD, cleanup and incremental final transcription remain later tasks.
 
 Manual Windows check:
 
@@ -67,7 +89,7 @@ For configuration/account access without uploading audio, run the explicit opt-i
 
 ## Dictation session (Task 6)
 
-Prepare the microphone, focus the intended external input, then hold the shortcut while speaking. Release sends the complete in-memory PCM16 mono WAV directly to OpenAI using the saved key, then inserts the exact canonical transcript at the captured destination. This mode uploads automatically on release; Task 7's optional live preview also streams audio while held. The status overlay is available; live overlay text, cleanup, and segmentation come in later tasks.
+Prepare the microphone, focus the intended external input, then hold the shortcut while speaking. Release sends the complete in-memory PCM16 mono WAV directly to OpenAI using the saved key, then inserts the exact canonical transcript at the captured destination. This mode uploads automatically on release; the optional live preview also streams audio while held and displays provisional words in the passive overlay. Cleanup and segmentation come in later tasks. Task 10 verifies the complete combined single-segment experience.
 
 The session has `idle`, `recording`, `finalizing`, `ready`, `inserted`, `failed`, and `discarded` states. Only one session is active. Discard a retained result before recording again; a new hotkey press during finalization visibly explains that the session is busy. Capture failure, empty recordings, and microphone interruption remain recoverable or explicitly discardable. A disconnect retains partial audio for playback and an explicit Retry transcription instead of silently uploading it.
 

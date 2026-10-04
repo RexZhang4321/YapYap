@@ -121,6 +121,13 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - **Reference:** [Microsoft ShowWindow documentation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow) defines the nonactivating show behavior; native styles and foreground focus were also verified on this Windows machine.
 - **Revisit when:** Task 9 needs bounded provisional text display, or user testing justifies interactive overlay recovery, placement settings, or a broader mixed-DPI/platform matrix.
 
+### D016 — Bounded provisional text in a passive overlay
+
+- **Decision:** Task 9 publishes only the current session's enabled provisional preview, retaining the latest 2,048 UTF-16 units in the overlay. Include fixed preview status and reconnect-gap feedback, compare full content for updates, render plain text, and keep the complete existing live view in the main probe. Preserve destination-before-show, native nonactivation, read-only overlay access, owner/revision guards, and main-window recovery.
+- **Alternative:** Send the complete 1 MiB live preview on every update, insert provisional text directly, or add interactive overlay controls now.
+- **Why:** Words must update while the phase stays Listening, without unbounded IPC/window content or losing destination focus. Preview errors remain independent of local recording/canonical finalization. Hide clears both native state and the overlay DOM; live words never become insertion input.
+- **Revisit when:** Task 10's combined-flow testing or representative long-session/DPI evaluation demonstrates a need for another display budget, placement, or interaction.
+
 ## Progress
 
 ### 2026-09-21 — Task 0 decisions recorded
@@ -281,3 +288,17 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - Windows browser automation stopped because its URL-policy check could not determine the browser URL. This did not block the verified Notepad overlay completion criterion. The synthetic app and sandboxed task-launch attempts were stopped; no API calls or credentials were changed.
 - Final checks: 34 deterministic frontend tests and 20 deterministic native tests passed (six opt-in helpers skipped), alongside frontend/native builds, formatting, helper syntax, and whitespace checks. The pattern-only leak audit scanned 96 files/build outputs and 308 Git objects with no matching exposures. Ownership-generation hardening was checked deterministically after the UI run.
 - Evidence and repeatable setup: desktop/scripts/task8-verification.md and desktop/README.md. Task 8 is complete within that documented scope. Next: Task 9, connect provisional live transcript deltas to the overlay.
+
+### 2026-10-03 — Task 9 live overlay implemented and verified
+
+- Connected the existing live preview to the passive overlay, with bounded plain-text tails, Provisional labels, connecting/listening/processing feedback, preview-failure and reconnect-gap warnings, and content-based serialized/coalesced updates. Hidden snapshots/events clear preview text and suppress stale updates. No provisional text enters canonical transcription or insertion.
+- Local two-WebView and native Windows checks covered Unicode/literal markup, long-text layout, failure/reconnect, retained original audio, cancellation/late responses, delayed finalization, preview-disabled reset, payload rejection, and overlay command restrictions. A disposable native input stayed foreground and unchanged across 28 visible-overlay samples in the final local pass.
+- A separate real native streaming run uploaded only the existing fixed synthetic speech. Provisional words appeared before release; release retained original audio without canonical text/paste in live probe mode. Discard and startup cancellation cleared text/audio. The disposable input stayed foreground and unchanged across 34 visible-overlay samples. Screenshots were reviewed; physical-device/key-hold/network and fresh Notepad/VS Code/browser checks are not claimed.
+- Verification: 40 frontend and 20 native tests passed (six opt-in native helpers skipped), alongside frontend/native builds, formatting, helper syntax, privacy-scanner regressions, pattern-only leak audit and whitespace checks. Fixtures/debug flags remain process-local; task test processes are stopped afterward. Credentials were neither changed nor returned to the UI.
+- Evidence and repeatable setup: desktop/scripts/task9-verification.md and desktop/README.md. Task 9 is complete within that scope. Next: Task 10, single-segment integration and the complete combined-flow verification.
+
+### 2026-10-03 — Task 9 user manual pass and overlay UX feedback
+
+- The user reports that the manual test is complete and works. Individual device/application, latency, and recovery subchecks were not separately specified; the verification note records the report without expanding its scope.
+- The overlay remained after transcription. The user expected automatic disappearance or a dismiss/paste action and explicitly requested no behavior change now. The live probe intentionally retains a Ready session and skips destination capture/automatic insertion, while successful normal dictation hides after canonical paste and clipboard restoration. The passive overlay currently sends recovery actions to the main probe.
+- Preserve this feedback for the combined experience: session retention and overlay dismissal can be separate, with convenient recovery/paste access. No UI or lifecycle code was changed for this report.

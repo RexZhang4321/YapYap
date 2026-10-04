@@ -13,12 +13,43 @@ pub enum Phase {
     Error,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Preview {
+    #[default]
+    Off,
+    Connecting,
+    Listening,
+    Finishing,
+    Completed,
+    Failed,
+}
+
+const MAX_OVERLAY_TEXT: usize = 2048; // Same UTF-16 budget as the frontend.
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
     pub epoch: u32,
     pub revision: u32,
     pub phase: Phase,
+    pub text: String,
+    pub preview: Preview,
+    #[serde(rename = "hasGap")]
+    pub has_gap: bool,
+}
+
+impl Snapshot {
+    fn validate(&self) -> Result<(), &'static str> {
+        if self.text.encode_utf16().count() > MAX_OVERLAY_TEXT
+            || ((self.phase == Phase::Hidden || self.preview == Preview::Off)
+                && (!self.text.is_empty() || self.has_gap))
+            || (self.phase == Phase::Hidden && self.preview != Preview::Off)
+        {
+            return Err("overlay_payload_invalid");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -29,10 +60,10 @@ pub fn claim_overlay(state: tauri::State<'_, OverlayState>) -> Result<Snapshot, 
     let mut current = state.0.lock().map_err(|_| "overlay_unavailable")?;
     current.epoch = current.epoch.checked_add(1).ok_or("overlay_unavailable")?;
     current.revision = 0;
-    Ok(*current)
+    Ok(current.clone())
 }
 
-fn is_newer(current: Snapshot, next: Snapshot) -> bool {
+fn is_newer(current: &Snapshot, next: &Snapshot) -> bool {
     next.epoch == current.epoch && next.revision > current.revision
 }
 
@@ -41,7 +72,7 @@ pub fn overlay_snapshot(state: tauri::State<'_, OverlayState>) -> Result<Snapsho
     state
         .0
         .lock()
-        .map(|value| *value)
+        .map(|value| value.clone())
         .map_err(|_| "overlay_unavailable")
 }
 
@@ -82,7 +113,7 @@ fn position(window: &WebviewWindow) -> tauri::Result<()> {
 fn apply(app: &tauri::AppHandle, snapshot: Snapshot) -> Result<(), &'static str> {
     let state = app.state::<OverlayState>();
     let mut current = state.0.lock().map_err(|_| "overlay_unavailable")?;
-    if !is_newer(*current, snapshot) {
+    if !is_newer(&current, &snapshot) {
         return Ok(());
     }
     let window = app
@@ -95,7 +126,7 @@ fn apply(app: &tauri::AppHandle, snapshot: Snapshot) -> Result<(), &'static str>
             position(&window).map_err(|_| "overlay_unavailable")?;
         }
         window
-            .emit("overlay-state", snapshot)
+            .emit("overlay-state", &snapshot)
             .map_err(|_| "overlay_unavailable")?;
         #[cfg(windows)]
         {
@@ -109,6 +140,13 @@ fn apply(app: &tauri::AppHandle, snapshot: Snapshot) -> Result<(), &'static str>
         }
         #[cfg(not(windows))]
         window.show().map_err(|_| "overlay_unavailable")?;
+    }
+    // Clear the hidden WebView's text too, so discarded previews are not kept
+    // in its DOM and delayed events cannot restore them.
+    if snapshot.phase == Phase::Hidden {
+        window
+            .emit("overlay-state", &snapshot)
+            .map_err(|_| "overlay_unavailable")?;
     }
     *current = snapshot;
     Ok(())
@@ -132,6 +170,7 @@ pub fn hide(window: &WebviewWindow) -> tauri::Result<()> {
 
 #[tauri::command]
 pub async fn update_overlay(app: tauri::AppHandle, snapshot: Snapshot) -> Result<(), &'static str> {
+    snapshot.validate()?;
     let (send, receive) = tokio::sync::oneshot::channel();
     let handle = app.clone();
     app.run_on_main_thread(move || {
@@ -145,27 +184,51 @@ pub async fn update_overlay(app: tauri::AppHandle, snapshot: Snapshot) -> Result
 mod tests {
     use super::*;
     #[test]
-    fn snapshots_accept_only_fixed_states_and_no_text() {
+    fn snapshots_accept_bounded_preview_only_and_reject_unknown_fields() {
         assert!(
             serde_json::from_str::<Snapshot>(r#"{"epoch":1,"revision":1,"phase":"unknown"}"#)
                 .is_err()
         );
         assert!(serde_json::from_str::<Snapshot>(
-            r#"{"epoch":1,"revision":1,"phase":"recording"}"#
+            r#"{"epoch":1,"revision":1,"phase":"recording","text":"你好 😀","preview":"listening","hasGap":false}"#
         )
         .is_ok());
         let value = serde_json::to_value(Snapshot {
             epoch: 1,
             revision: 2,
             phase: Phase::Error,
+            ..Snapshot::default()
         })
         .unwrap();
-        assert_eq!(value.as_object().unwrap().len(), 3);
+        assert_eq!(value.as_object().unwrap().len(), 6);
         assert_eq!(value["phase"], "error");
         assert!(serde_json::from_str::<Snapshot>(
-            r#"{"epoch":1,"revision":1,"phase":"recording","text":"secret"}"#
+            r#"{"epoch":1,"revision":1,"phase":"recording","text":"","preview":"off","hasGap":false,"apiKey":"fixture"}"#
         )
         .is_err());
+        assert!(serde_json::from_str::<Snapshot>(
+            r#"{"epoch":1,"revision":1,"phase":"recording","text":"","preview":"unknown","hasGap":false}"#
+        ).is_err());
+        let mut snapshot = Snapshot {
+            phase: Phase::Recording,
+            preview: Preview::Listening,
+            text: "😀".repeat(MAX_OVERLAY_TEXT / 2),
+            ..Snapshot::default()
+        };
+        assert!(snapshot.validate().is_ok());
+        snapshot.text.push('a');
+        assert_eq!(snapshot.validate(), Err("overlay_payload_invalid"));
+        snapshot.text = "retained preview".into();
+        snapshot.phase = Phase::Hidden;
+        assert!(snapshot.validate().is_err());
+        snapshot.phase = Phase::Recording;
+        snapshot.preview = Preview::Off;
+        assert!(snapshot.validate().is_err());
+        snapshot.text.clear();
+        snapshot.has_gap = true;
+        assert!(snapshot.validate().is_err());
+        snapshot.has_gap = false;
+        assert!(snapshot.validate().is_ok());
     }
 
     #[test]
@@ -174,29 +237,35 @@ mod tests {
             epoch: 2,
             revision: 1,
             phase: Phase::Hidden,
+            ..Snapshot::default()
         };
         assert!(!is_newer(
-            current,
-            Snapshot {
+            &current,
+            &Snapshot {
                 epoch: 1,
                 revision: 100,
-                phase: Phase::Recording
+                phase: Phase::Recording,
+                text: "old preview".into(),
+                preview: Preview::Listening,
+                ..Snapshot::default()
             }
         ));
         assert!(!is_newer(
-            current,
-            Snapshot {
+            &current,
+            &Snapshot {
                 epoch: 2,
                 revision: 1,
-                phase: Phase::Recording
+                phase: Phase::Recording,
+                ..Snapshot::default()
             }
         ));
         assert!(is_newer(
-            current,
-            Snapshot {
+            &current,
+            &Snapshot {
                 epoch: 2,
                 revision: 2,
-                phase: Phase::Recording
+                phase: Phase::Recording,
+                ..Snapshot::default()
             }
         ));
     }

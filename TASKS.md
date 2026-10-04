@@ -123,12 +123,12 @@ Done: the overlay lifecycle works while another application remains active. [Win
 
 ### 9. Live transcription overlay
 
-- [ ] Connect live transcript deltas to the overlay.
-- [ ] Mark live text clearly as provisional.
-- [ ] Show listening, processing, and error states.
-- [ ] Do not insert provisional text into the target application.
+- [x] Connect live transcript deltas to the overlay. Same-phase text updates are serialized/coalesced into a bounded native snapshot; real streaming words appeared before release with synthetic microphone input.
+- [x] Mark live text clearly as provisional. The passive overlay labels preview text and reconnect gaps; Unicode/long-text layouts were checked in both WebViews.
+- [x] Show listening, processing, and error states. Local fixtures verified preview failure/reconnect, delayed finalization, cancellation, discard, and a new session with live preview disabled.
+- [x] Do not insert provisional text into the target application. A disposable native Windows input stayed focused and unchanged in local and real-streaming checks; deterministic checks verify that only canonical text reaches insertion.
 
-Done when: `hotkey → speak → see provisional text → stop` works without editing the foreground app.
+Done: `hotkey → speak → see provisional text → stop` works without editing the foreground app, verified with synthetic microphone input and shortcut-handler replay. The user also reported the manual test works on October 3, 2026. [Windows verification note](desktop/scripts/task9-verification.md) records real-streaming, local-fixture, and user-observed boundaries, plus feedback about overlay dismissal after transcription. Next: Task 10, single-segment integration.
 
 ## Milestone 2 — First experience MVP
 

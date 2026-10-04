@@ -44,7 +44,7 @@ pub fn run() {
         .manage(overlay::OverlayState::default())
         .invoke_handler(move |invoke| {
             // App commands have no generated plugin ACL. Restrict the second
-            // WebView explicitly; it may read fixed overlay state only.
+            // WebView explicitly; it may read bounded overlay state only.
             if invoke.message.webview().label() != "main"
                 && invoke.message.command() != "overlay_snapshot"
             {

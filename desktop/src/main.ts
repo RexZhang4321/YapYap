@@ -53,12 +53,13 @@ let playbackUrl: string | null = null;
 let captureInterruptionMessage: string | null = null;
 let microphonePrepared = false;
 let overlayCaptureReadySession = "";
+let livePreviewSession = "";
 const overlay = new OverlayController(
   () => invoke<OverlaySnapshot>("claim_overlay"),
   snapshot => invoke<void>("update_overlay", { snapshot }),
   failed => { overlayStatus.textContent = failed
     ? "The floating status window is unavailable. Recording and recovery remain available here."
-    : "The floating window shows status and placeholder text. Open this probe from the tray for recovery."; },
+    : "The floating window shows provisional live words and status. Open this probe from the tray for recovery."; },
 );
 
 function log(message: string) {
@@ -69,13 +70,17 @@ function log(message: string) {
   console.info(line);
 }
 
-function showState() {
+function showOverlay() {
   overlay.update(transcription.sessionId !== overlayCaptureReadySession ? "hidden" : overlayPhase({
     state: transcription.state, busy: transcription.busy, inserting: transcription.inserting,
     error: transcription.error, insertion: transcription.insertion,
     interrupted: captureInterruptionMessage !== null && !transcription.transcript,
     stopping: operationBusy && recordingStart !== null,
-  }));
+  }), livePreviewSession === transcription.sessionId && liveEnabled.checked ? live : undefined);
+}
+
+function showState() {
+  showOverlay();
   holdState.textContent = held ? "DOWN" : "UP";
   const locked = held || operationBusy || transcription.busy;
   liveEnabled.disabled = locked || !transcription.canStart;
@@ -130,6 +135,7 @@ function showState() {
 }
 
 function showLiveState() {
+  showOverlay();
   liveView.value = live.text;
   liveLatency.textContent = live.firstVisibleMs === null ? "First visible text: waiting" : `First visible text: ${Math.round(live.firstVisibleMs)} ms after capture started`;
   const labels = { idle: "Live preview ready.", connecting: "Connecting live preview…", listening: "Receiving provisional words while you speak.",
@@ -418,7 +424,9 @@ function onShortcut(event: ShortcutEvent) {
       overlayCaptureReadySession = transcription.sessionId;
       showState();
     }
+    livePreviewSession = transcription.sessionId;
     if (liveEnabled.checked) live.begin();
+    else live.cancel();
 
     if (recorder.hasRecording) {
       recordingStatus.textContent = "Clear the previous recording before starting another.";
