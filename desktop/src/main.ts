@@ -7,6 +7,7 @@ import { transcriptionError } from "./transcription";
 import { LiveTranscription } from "./liveTranscription";
 import { nativeStreamingSTT } from "./liveTransport";
 import { OverlayController, overlayPhase, type OverlaySnapshot } from "./overlayState";
+import { selectProvisionalText } from "./provisionalRecovery";
 
 type HotkeyAction = "record" | "live" | "insert" | "retry";
 
@@ -46,6 +47,9 @@ const liveView = document.querySelector<HTMLTextAreaElement>("#live-transcript")
 const liveStatus = document.querySelector<HTMLElement>("#live-status")!;
 const liveLatency = document.querySelector<HTMLElement>("#live-latency")!;
 const liveReconnect = document.querySelector<HTMLButtonElement>("#live-reconnect")!;
+const copyProvisionalButton = document.querySelector<HTMLButtonElement>("#copy-provisional")!;
+const copyProvisionalWithoutBackupButton = document.querySelector<HTMLButtonElement>("#copy-provisional-without-backup")!;
+const provisionalCopyStatus = document.querySelector<HTMLElement>("#provisional-copy-status")!;
 const overlayStatus = document.querySelector<HTMLElement>("#overlay-status")!;
 
 let activeShortcut: string | null = null;
@@ -84,8 +88,24 @@ function showOverlay() {
   }), livePreviewSession === transcription.sessionId && liveEnabled.checked ? live : undefined);
 }
 
+function provisionalRecoveryText(): string | null {
+  return selectProvisionalText({
+    sessionId: transcription.sessionId, previewSessionId: livePreviewSession,
+    sessionState: transcription.state, discarded: transcription.discarded,
+    held, operationBusy, busy: transcription.busy, inserting: transcription.inserting,
+    liveState: live.state, text: live.text,
+  });
+}
+
+function showProvisionalRecovery() {
+  const unavailable = provisionalRecoveryText() === null;
+  copyProvisionalButton.disabled = unavailable;
+  copyProvisionalWithoutBackupButton.disabled = unavailable;
+}
+
 function showState() {
   showOverlay();
+  showProvisionalRecovery();
   holdState.textContent = held ? "DOWN" : "UP";
   const locked = held || operationBusy || transcription.busy;
   liveEnabled.disabled = locked || !transcription.canStart;
@@ -146,7 +166,8 @@ function showState() {
   } else if (transcription.transcript && transcription.error) {
     transcriptionStatus.textContent = "The destination is unavailable or the paste outcome is uncertain. Check the target and use Copy transcript. Text is retained until discard.";
   } else if (transcription.error) {
-    transcriptionStatus.textContent = transcriptionError(transcription.error) + " Audio is retained in memory until you discard it or quit.";
+    transcriptionStatus.textContent = transcriptionError(transcription.error) + " Audio is retained in memory until you discard it or quit."
+      + (provisionalRecoveryText() !== null ? " You may explicitly Copy provisional live text below; review it before pasting." : "");
   } else if (transcription.transcript) {
     transcriptionStatus.textContent = "Canonical transcript ready. Audio released from memory. Text stays here until you discard it or quit.";
   } else {
@@ -159,6 +180,7 @@ function showState() {
 
 function showLiveState() {
   showOverlay();
+  showProvisionalRecovery();
   liveView.value = live.text;
   liveLatency.textContent = live.firstVisibleMs === null ? "First visible text: waiting" : `First visible text: ${Math.round(live.firstVisibleMs)} ms after capture started`;
   const labels = { idle: "Live preview ready.", connecting: "Connecting live preview…", listening: "Receiving provisional words while you speak.",
@@ -444,6 +466,7 @@ function onShortcut(event: ShortcutEvent) {
     }
 
     transcription.begin(heldAction !== "live", cleanupEnabled.checked);
+    provisionalCopyStatus.textContent = "";
     captureInterruptionMessage = null;
     if (heldAction === "live") {
       overlayCaptureReadySession = transcription.sessionId;
@@ -604,6 +627,7 @@ clearRecordingButton.addEventListener("click", () => {
   if (held || operationBusy || transcription.busy) return;
   try {
     transcription.discard();
+    provisionalCopyStatus.textContent = "";
     live.cancel();
     log("recording cleared from memory");
     showState();
@@ -623,6 +647,7 @@ discardButton.addEventListener("click", () => {
   held = false;
   heldAction = null;
   if (!transcription.discard()) return;
+  provisionalCopyStatus.textContent = "";
   live.cancel();
   if (stoppingCapture) {
     operationBusy = true;
@@ -635,22 +660,29 @@ discardButton.addEventListener("click", () => {
   }
 });
 
-async function copyTranscript(withoutBackup: boolean, original = false) {
-  if (held || operationBusy || transcription.busy || !transcription.transcript) return;
+async function copySessionText(withoutBackup: boolean, source: "output" | "original" | "provisional") {
+  if (held || operationBusy || transcription.busy || transcription.inserting) return;
+  const text = source === "provisional" ? provisionalRecoveryText()
+    : source === "original" ? transcription.transcript : transcription.outputText;
+  if (!text) return;
+  const resultStatus = source === "provisional" ? provisionalCopyStatus : insertionStatus;
   operationBusy = true;
   showState();
   try {
-    insertionStatus.textContent = await invoke<string>("copy_dictation_text", {
-      text: original ? transcription.transcript : transcription.outputText, withoutBackup,
-    });
+    const result = await invoke<string>("copy_dictation_text", { text, withoutBackup });
+    resultStatus.textContent = source === "provisional"
+      ? "Provisional live text copied. Review it before pasting; it may be incomplete or contain errors. " + result
+      : result;
   } catch {
-    insertionStatus.textContent = "Copy failed. Restore a pending clipboard backup, or use the matching Copy without backup action to explicitly replace unsupported clipboard contents.";
+    resultStatus.textContent = "Copy failed. Restore a pending clipboard backup, or use the matching Copy without backup action to explicitly replace unsupported clipboard contents.";
   } finally { operationBusy = false; await refreshRestoreButton(); showState(); }
 }
-copyTranscriptButton.addEventListener("click", () => { void copyTranscript(false); });
-copyTranscriptWithoutBackupButton.addEventListener("click", () => { void copyTranscript(true); });
-copyOriginalButton.addEventListener("click", () => { void copyTranscript(false, true); });
-copyOriginalWithoutBackupButton.addEventListener("click", () => { void copyTranscript(true, true); });
+copyTranscriptButton.addEventListener("click", () => { void copySessionText(false, "output"); });
+copyTranscriptWithoutBackupButton.addEventListener("click", () => { void copySessionText(true, "output"); });
+copyOriginalButton.addEventListener("click", () => { void copySessionText(false, "original"); });
+copyOriginalWithoutBackupButton.addEventListener("click", () => { void copySessionText(true, "original"); });
+copyProvisionalButton.addEventListener("click", () => { void copySessionText(false, "provisional"); });
+copyProvisionalWithoutBackupButton.addEventListener("click", () => { void copySessionText(true, "provisional"); });
 
 actionSelect.addEventListener("change", () => {
   if (actionSelect.value === "insert") {

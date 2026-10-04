@@ -183,8 +183,18 @@ The combined regression and optional Windows helper are documented in [Task 10 v
 
 ## Conservative cleanup (Task 11)
 
-**Conservative cleanup** is enabled by default. Disable it before recording to insert the canonical transcript directly; the choice is fixed for the session. After canonical transcription, the app sends that text directly to `gpt-5.6-luna` with minimal-edit instructions. Accepted cleanup supplies insertion and **Copy cleaned**. Failed, incomplete or rejected cleanup uses canonical text and shows a recovery notice; it does not block insertion. The original transcript stays available through **Copy original transcript** until explicit discard or exit.
+**Conservative cleanup** is enabled by default. Disable it before recording to insert the canonical transcript directly; the choice is fixed for the session. After canonical transcription, the app sends that text directly to `gpt-6-luna` with minimal-edit instructions. Accepted cleanup supplies insertion and **Copy cleaned**. Failed, incomplete or rejected cleanup uses canonical text and shows a recovery notice; it does not block insertion. The original transcript stays available through **Copy original transcript** until explicit discard or exit.
 
 The guard permits only conservative edits and rejects changed lexical content/order or protected values. It may fall back on text that could have been acceptably cleaned. Neither the prompt nor the guard proves meaning preservation; the original and bypass remain available. No foreground application content is collected. Cleanup uses native saved-key access, fixed HTTPS endpoints, bounded payloads and `store: false`; dictated text is not written to app logs/files. Provider-side retention is governed by the account/provider policy.
 
 See [Task 11 verification](scripts/task11-verification.md) for deterministic/API checks and the manual comparison/cancellation checklist. Existing local-only Task 8–10 helpers explicitly bypass cleanup so their fixtures do not cause new provider requests.
+
+## Failure recovery (Task 12)
+
+Failed or malformed canonical transcription retains the original audio for **Retry transcription**. Cleanup failure uses the exact canonical fallback. Insertion failure retains original, accepted cleaned and provisional text; only a confirmed refusal before paste permits insertion retry without another provider request. An uncertain or partial paste requires checking the destination before explicit Copy/paste.
+
+**Copy provisional live text** copies the exact available snapshot after the current session settles, even if live preview is still finishing. It warns that words may be incomplete, inaccurate or contain gaps. It does not replace canonical text. Copy uses the same clipboard backup/Restore behavior; its no-backup counterpart explicitly replaces unsupported clipboard content.
+
+Cancellation clears local session sources and suppresses late results. A new session waits for outstanding native work to finish, and paste cannot be cancelled after dispatch. Native request timeouts apply per phase rather than as one total deadline. Exit or crash loses pending audio, transcripts and in-memory clipboard backups.
+
+See [Task 12 verification](scripts/task12-verification.md) for the recovery matrix and final checks. Milestone 2 implementation is complete; the full new combined Windows manual validation remains pending as recorded in Task 10.

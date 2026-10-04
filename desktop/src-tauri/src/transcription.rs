@@ -107,6 +107,11 @@ fn parse_transcript(response: &[u8]) -> Result<String, String> {
         .get("text")
         .and_then(|text| text.as_str())
         .ok_or_else(|| "transcription_response_invalid".to_string())?;
+    // Clipboard insertion/Copy cannot transport an embedded NUL. Reject it
+    // before canonical success so the UI retains the original audio for retry.
+    if text.contains('\0') {
+        return Err("transcription_response_invalid".into());
+    }
     if text.trim().is_empty() {
         return Err("transcription_empty".into());
     }
@@ -205,7 +210,12 @@ mod tests {
             .unwrap(),
             "Hello\n你好 MicroDuck XL330 https://example.com"
         );
-        for response in [b"not json".as_slice(), br#"{"text":123}"#, br#"{}"#] {
+        for response in [
+            b"not json".as_slice(),
+            br#"{"text":123}"#,
+            br#"{}"#,
+            br#"{"text":"hello\u0000hidden"}"#,
+        ] {
             assert_eq!(
                 parse_transcript(response).unwrap_err(),
                 "transcription_response_invalid"

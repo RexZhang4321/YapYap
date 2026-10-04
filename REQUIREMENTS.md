@@ -92,7 +92,7 @@ Priority definitions:
         
 10. **Final text cleanup**
     
-    - Default to light cleanup, with a bypass that uses the canonical transcript. After canonical transcription is available, send the complete text through `gpt-5.6-luna`.
+    - Default to light cleanup, with a bypass that uses the canonical transcript. After canonical transcription is available, send the complete text through `gpt-6-luna`.
         
     - Cleanup should:
         
@@ -324,7 +324,7 @@ Priority definitions:
             
         - Canonical STT: `gpt-transcribe`;
             
-        - Cleanup: `gpt-5.6-luna`.
+        - Cleanup: `gpt-6-luna`.
             
 32. **Offline/local model support**
     
@@ -359,7 +359,7 @@ In parallel:
 
 When recording ends:
 
-`Canonical transcript → GPT-5.6-Luna cleanup → Insert into foreground application`
+`Canonical transcript → GPT-6-Luna cleanup → Insert into foreground application`
 
 The original audio should remain the source of truth for transcription. Live transcription exists primarily to provide immediate feedback. The first integration uses the complete recording as one segment; VAD and incremental canonical transcription follow the measured baseline.
 

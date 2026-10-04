@@ -167,6 +167,10 @@ export class TranscriptionSession {
       bytes = null;
       const transcript = await pending;
       if (generation !== this.generation) return;
+      // A canonical result must remain usable by native insertion/Copy before
+      // releasing the only retry audio. Provider interfaces are runtime seams.
+      if (typeof transcript !== "string" || transcript.includes("\0")
+        || new TextEncoder().encode(transcript).byteLength > 1024 * 1024) throw "transcription_response_invalid";
       if (!transcript.trim()) throw "transcription_empty";
       this.transcript = transcript;
       this.audio = null;

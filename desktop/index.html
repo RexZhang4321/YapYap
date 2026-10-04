@@ -77,7 +77,7 @@
       <section class="result">
         <h2>Dictation session</h2>
         <label><input id="cleanup-enabled" type="checkbox" checked /> Clean punctuation, spacing, and spoken fillers before insertion</label>
-        <p class="hint">Cleanup sends the canonical transcript directly to OpenAI using gpt-5.6-luna. It aims to preserve meaning, language, names, numbers, URLs, and technical terms. Uncheck before recording to bypass it. Failed cleanup uses the original text.</p>
+        <p class="hint">Cleanup sends the canonical transcript directly to OpenAI using gpt-6-luna. It aims to preserve meaning, language, names, numbers, URLs, and technical terms. Uncheck before recording to bypass it. Failed cleanup uses the original text.</p>
         <p id="overlay-status" class="hint" role="status">The floating window shows provisional live words and status.</p>
         <div class="row recording-actions">
           <button id="transcribe-recording" type="button" disabled>Retry transcription</button>
@@ -103,8 +103,14 @@
         <p id="live-latency" class="metadata">First visible text: waiting</p>
         <label for="live-transcript">Provisional live transcript</label>
         <textarea id="live-transcript" rows="5" readonly spellcheck="false" placeholder="Words will appear while you speak."></textarea>
-        <button id="live-reconnect" type="button" disabled>Reconnect live preview</button>
-        <p class="hint">A failed stream leaves local recording intact. Reconnect resumes from current audio and marks the gap; the original audio remains complete for final transcription. Discard clears both transcripts.</p>
+        <div class="row recording-actions">
+          <button id="live-reconnect" type="button" disabled>Reconnect live preview</button>
+          <button id="copy-provisional" type="button" disabled>Copy provisional live text</button>
+          <button id="copy-provisional-without-backup" type="button" disabled>Copy provisional live text without backup</button>
+        </div>
+        <p id="provisional-copy-status" role="status"></p>
+        <p class="hint">If final transcription fails, Retry transcription uses the original recording. Once recording and finalization settle, you may explicitly Copy the current provisional live text as recovery, even if live updates are still finishing. These words may be incomplete, inaccurate, or contain connection gaps. Review them before pasting. Provisional text is never inserted automatically or used as the canonical transcript. Copy saves supported clipboard contents for Restore; Copy without backup explicitly replaces unsupported contents. Live words stay here until discard or quit.</p>
+        <p class="hint">A failed stream leaves local recording intact. Reconnect resumes from current audio and marks the gap; the original audio remains complete for final transcription. Discard clears retained audio and all transcripts.</p>
       </section>
       <section class="result">
         <h2>Text insertion probe</h2>

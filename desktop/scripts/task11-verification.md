@@ -28,3 +28,7 @@ No fresh physical-microphone, full-key-hold or combined foreground-application U
 - The explicit saved-key probe initially returned `key_missing` in the sandbox. Running it as the actual Windows user succeeded. The final real request uploaded only `um hello world`; fixed booleans reported changed=true, fillerRemoved=true, nonempty=true and wordsPreserved=true. The final request completed in 1.79 seconds; this is a single synthetic request observation, not a dictation latency target or corpus evaluation. No key/provider response/transcript was printed.
 - Four privacy-scanner regression tests and the pattern-only audit passed (105 files/build outputs, 379 Git objects at that check). No saved-key comparison is claimed for that pattern-only audit. Source review found no new text/audio/credential logging or persistence.
 - Full UI, physical microphone and foreground-application integration follow-ups remain listed above; no new combined UI pass is claimed.
+
+### October 4 model update
+
+The user changed the cleanup model to `gpt-6-luna` while Task 12 was in progress. This note's earlier request evidence records the original Task 11 model. Current app/requirements use GPT-6 Luna; current model verification and account-access evidence are recorded in [Task 12](task12-verification.md).

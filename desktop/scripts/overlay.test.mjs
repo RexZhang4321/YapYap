@@ -162,7 +162,9 @@ test('whole-recording finalization and retry are independent of unfinished live 
   receive({ kind: 'delta', itemId: 'one', text: 'Unfinished provisional words' });
   // A nonuniform sample sequence catches truncation/reordering and preview conversion.
   const chunks = [new Float32Array([0.1, -0.5, 0.9]), new Float32Array([0.4, -0.3])];
-  const audio = encodeWav({ samples: chunks, sampleRate: 48000, channelCount: 1, frameCount: 5 });
+  // CapturedPcm stores one concatenated array per channel, not one per chunk.
+  const originalSamples = Float32Array.from(chunks.flatMap(chunk => [...chunk]));
+  const audio = encodeWav({ samples: [originalSamples], sampleRate: 48000, channelCount: 1, frameCount: 5 });
   session.capture(audio); void live.finish();
   await session.transcribe(); await tick();
   assert.equal(live.state, 'finishing'); assert.equal(session.audio, audio);

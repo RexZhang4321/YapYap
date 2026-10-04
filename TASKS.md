@@ -144,7 +144,7 @@ Implemented and automatically checked; the complete real combined-flow verificat
 
 ### 11. Conservative cleanup
 
-- [x] Send the canonical transcript to `gpt-5.6-luna`.
+- [x] Send the canonical transcript to `gpt-6-luna`.
 - [x] Add light cleanup and a bypass that uses the canonical transcript.
 - [x] Preserve meaning, tone, numbers, identifiers, URLs, filenames, and technical terms.
 - [x] Insert cleaned text on success.
@@ -155,16 +155,16 @@ Implemented and checked with deterministic fixtures and a real saved-key synthet
 
 ### 12. Failure recovery audit
 
-- [ ] Test live-transcription failure.
-- [ ] Test canonical-transcription failure.
-- [ ] Test cleanup failure.
-- [ ] Test insertion failure.
-- [ ] Verify recovery using canonical or live text and audio retry where available.
-- [ ] Test cancellation, late responses, repeated insertion attempts, and a new dictation during finalization.
-- [ ] Preserve session transcripts until the user’s result is safely inserted or explicitly discarded.
-- [ ] Verify API retries use retained in-memory audio; document that app exit or crash loses pending audio.
+- [x] Test live-transcription failure.
+- [x] Test canonical-transcription failure.
+- [x] Test cleanup failure.
+- [x] Test insertion failure.
+- [x] Verify recovery using canonical or live text and audio retry where available.
+- [x] Test cancellation, late responses, repeated insertion attempts, and a new dictation during finalization.
+- [x] Preserve session transcripts until the user’s result is safely inserted or explicitly discarded.
+- [x] Verify API retries use retained in-memory audio; document that app exit or crash loses pending audio.
 
-Done when: no downstream failure silently discards dictated text while the app remains running; crash recovery is outside the initial scope.
+Implemented and audited with a combined deterministic failure matrix and native/source review. [Task 12 verification](desktop/scripts/task12-verification.md) records recovery behavior, the malformed-canonical fix, GPT-6 Luna access and the remaining combined Windows manual gap. Exit/crash recovery is outside the initial scope. Milestone 2 implementation is complete; Task 10's full live validation remains pending.
 
 ## Milestone 3 — Full P0 processing pipeline
 
