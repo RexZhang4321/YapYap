@@ -63,6 +63,7 @@ fn request_body(text: &str) -> Result<Vec<u8>, String> {
         "instructions": INSTRUCTIONS,
         "input": [{"role": "user", "content": [{"type": "input_text", "text": text}]}],
         "store": false,
+        "service_tier": "fast",
         "reasoning": {"effort": "none"},
         "max_output_tokens": 16384
     }))
@@ -309,6 +310,7 @@ mod tests {
             serde_json::from_slice(&request_body(text).unwrap()).unwrap();
         assert_eq!(payload["model"], MODEL);
         assert_eq!(payload["store"], false);
+        assert_eq!(payload["service_tier"], "fast");
         assert_eq!(payload["reasoning"]["effort"], "none");
         assert_eq!(payload["max_output_tokens"], 16384);
         assert_eq!(payload["input"][0]["role"], "user");
@@ -484,6 +486,98 @@ mod tests {
             sanitize_transport_error("validation_timeout".into()),
             "cleanup_timeout"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "38 real Responses requests using the saved key and synthetic text; may incur API cost"]
+    fn saved_key_cleanup_latency_benchmark() {
+        // Compare exactly the same production payload/transport, changing only
+        // service_tier. Interleave and alternate order to limit time/order bias.
+        // Never print credentials, response bodies, or returned transcript text.
+        const CASES: [(&str, &str); 3] = [
+            ("short", "um please send the draft tomorrow and do not delete it"),
+            ("medium", "um please send the draft tomorrow and do not delete it the budget is 17.50 and the reference is user_id keep both values exactly as written uh we should review the changes before the release and confirm that the original words are still available"),
+            ("long", "um please send the draft tomorrow and do not delete it we should review the changes before the release and confirm that the original words are still available the recording includes a short introduction followed by several details about the proposed schedule uh the first step is to collect a small set of examples the next step is to run the same examples through each configuration and compare the time required to finish we should include short messages longer paragraphs numbers and technical identifiers the budget is 17.50 and the reference is user_id keep both values exactly as written do not change the order of these steps and do not add any new information erm once the results are available please record the typical delay and the slowest observed requests we can then decide whether this change is useful before starting another experiment keep the original transcript available in case the cleanup fails and make sure that every substantive word remains in the final result"),
+        ];
+        fn sample(case: &str, text: &str, tier: &str, round: usize, warmup: bool) {
+            let mut payload: serde_json::Value =
+                serde_json::from_slice(&request_body(text).unwrap()).unwrap();
+            payload["service_tier"] = serde_json::json!(tier);
+            let body = serde_json::to_vec(&payload).unwrap();
+            let started = std::time::Instant::now();
+            let result = crate::credentials::with_api_key(|key| {
+                crate::openai::request(
+                    key,
+                    "POST",
+                    "/v1/responses",
+                    &body,
+                    Some("application/json"),
+                    cleanup_status,
+                    true,
+                )
+                .map_err(sanitize_transport_error)
+            });
+            let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+            let record = match result {
+                Ok(response) => {
+                    let metadata: serde_json::Value =
+                        serde_json::from_slice(&response).expect("cleanup_response_invalid");
+                    match parse_response(&response) {
+                        Ok(cleaned) => serde_json::json!({
+                            "case": case, "round": round, "warmup": warmup,
+                            "requestedTier": tier, "returnedTier": metadata["service_tier"],
+                            "elapsedMs": elapsed_ms, "ok": true,
+                            "wordsPreserved": preserves_words(text, &cleaned),
+                            "changed": text != cleaned,
+                            "fillersRemoved": !lexical_tokens(&cleaned).iter()
+                                .any(|word| matches!(word.as_str(), "um" | "uh" | "erm")),
+                            "inputTokens": metadata["usage"]["input_tokens"],
+                            "outputTokens": metadata["usage"]["output_tokens"],
+                        }),
+                        Err(code) => serde_json::json!({
+                            "case": case, "round": round, "warmup": warmup,
+                            "requestedTier": tier, "elapsedMs": elapsed_ms,
+                            "ok": false, "error": code,
+                        }),
+                    }
+                }
+                Err(code) => {
+                    // No useful benchmark can continue without account access.
+                    if matches!(
+                        code.as_str(),
+                        "key_missing"
+                            | "credential_read_failed"
+                            | "cleanup_unauthorized"
+                            | "cleanup_forbidden"
+                            | "cleanup_model_unavailable"
+                    ) {
+                        panic!("Cleanup benchmark unavailable: {code}");
+                    }
+                    serde_json::json!({
+                        "case": case, "round": round, "warmup": warmup,
+                        "requestedTier": tier, "elapsedMs": elapsed_ms,
+                        "ok": false, "error": code,
+                    })
+                }
+            };
+            println!("CLEANUP_LATENCY_SAMPLE {record}");
+        }
+        for tier in ["default", "fast"] {
+            sample(CASES[0].0, CASES[0].1, tier, 0, true);
+        }
+        for round in 1..=6 {
+            for (index, (case, text)) in CASES.iter().enumerate() {
+                let tiers = if (round + index) % 2 == 0 {
+                    ["default", "fast"]
+                } else {
+                    ["fast", "default"]
+                };
+                for tier in tiers {
+                    sample(case, text, tier, round, false);
+                }
+            }
+        }
     }
 
     #[cfg(windows)]
