@@ -9,14 +9,15 @@ export interface ProvisionalRecoverySnapshot {
   inserting: boolean;
   liveState: string;
   text: string;
+  allowProcessing?: boolean;
 }
 
-// Recovery is an explicit copy from a settled, current dictation session.
+// Processing recovery requires an explicit confirmation before stopping work.
 // A prior session's preview can never become a new session's fallback text.
 export function selectProvisionalText(snapshot: ProvisionalRecoverySnapshot): string | null {
   if (!snapshot.sessionId || snapshot.previewSessionId !== snapshot.sessionId
-    || snapshot.discarded || snapshot.held || snapshot.operationBusy || snapshot.busy || snapshot.inserting
-    || !["ready", "failed", "inserted"].includes(snapshot.sessionState)
+    || snapshot.discarded || snapshot.held || snapshot.operationBusy || (snapshot.busy && !snapshot.allowProcessing) || snapshot.inserting
+    || !["ready", "failed", "inserted", ...(snapshot.allowProcessing ? ["finalizing"] : [])].includes(snapshot.sessionState)
     || !["connecting", "listening", "finishing", "completed", "failed"].includes(snapshot.liveState)
     || !snapshot.text.trim()) return null;
   return snapshot.text;

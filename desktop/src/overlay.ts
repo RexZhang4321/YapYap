@@ -23,5 +23,5 @@ async function initialize() {
   render(await invoke<OverlaySnapshot>("overlay_snapshot"));
 }
 void initialize().catch(() => {
-  document.querySelector<HTMLElement>("#overlay-title")!.textContent = "Open the probe from the tray";
+  document.querySelector<HTMLElement>("#overlay-title")!.textContent = "Open Dictation from the tray";
 });

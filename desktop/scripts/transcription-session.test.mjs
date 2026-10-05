@@ -48,8 +48,8 @@ test("duplicate calls send once and discard ignores late success or failure", as
     assert.equal(calls, 1);
     session.discard();
     assert.equal(session.audio, null);
-    assert.equal(session.busy, true);
-    assert.throws(() => session.capture(recording()));
+    assert.equal(session.busy, false);
+    assert.equal(session.canStart, true);
     if (succeed) pending.resolve("Late text"); else pending.reject("validation_timeout");
     await first;
     assert.equal(session.transcript, "");
@@ -124,10 +124,13 @@ test("session captures destination before recording and inserts exact canonical 
   assert.deepEqual(events, ["target", "transcribe", "release", "insert"]);
   await session.transcribe(); await session.retryInsertion();
   assert.equal(events.filter((event) => event === "insert").length, 1);
-  assert.throws(() => session.begin());
+  session.begin();
+  assert.equal(session.retainedResults[0].transcript, text);
+  assert.equal(session.transcript, "");
+  assert.notEqual(session.sessionId, ids[0]);
 });
 
-test("cancelled transcription never inserts and new dictation waits for native completion", async () => {
+test("cancelled transcription never inserts and a new dictation can start immediately", async () => {
   const response = deferred();
   let insertions = 0;
   const session = new TranscriptionSession(() => response.promise, () => {}, () => {},
@@ -140,12 +143,11 @@ test("cancelled transcription never inserts and new dictation waits for native c
   assert.throws(() => session.begin());
   assert.equal(session.discard(), true);
   assert.equal(session.state, "discarded");
-  assert.throws(() => session.begin());
+  session.begin();
   response.resolve("cancelled text");
   await pending;
   assert.equal(insertions, 0);
   assert.equal(session.transcript, "");
-  session.begin();
   assert.notEqual(session.sessionId, firstId);
 });
 
@@ -294,7 +296,7 @@ test("failed or malformed cleanup falls back to canonical insertion with a separ
   }
 });
 
-test("cancel during cleanup ignores late success/failure and holds the lock until native settles", async () => {
+test("cancel during cleanup ignores late success/failure and releases the local lock immediately", async () => {
   for (const success of [true, false]) {
     const started = deferred(), response = deferred();
     const session = new TranscriptionSession(async () => "original", () => {}, () => {},
@@ -304,8 +306,7 @@ test("cancel during cleanup ignores late success/failure and holds the lock unti
     await started.promise;
     assert.equal(session.transcript, "original"); assert.equal(session.audio, null);
     await session.transcribe(); assert.equal(session.discard(), true);
-    assert.equal(session.busy, true); assert.equal(session.canStart, false);
-    assert.throws(() => session.begin());
+    assert.equal(session.busy, false); assert.equal(session.canStart, true);
     if (success) response.resolve("Original."); else response.reject("secret provider detail");
     await pending;
     assert.equal(session.transcript, ""); assert.equal(session.cleanedTranscript, null);

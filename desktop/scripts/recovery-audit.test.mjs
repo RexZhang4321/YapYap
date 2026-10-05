@@ -148,7 +148,7 @@ test('combined recovery matrix preserves source hierarchy and prevents repeated 
   }
 });
 
-test('cancel matrix ignores late final/cleanup success or failure and permits a new session only after native settlement', async t => {
+test('cancel matrix ignores late final/cleanup success or failure and immediately permits a new local session', async t => {
   for (const stage of ['final', 'cleanup']) {
     for (const success of [false, true]) {
       for (const previewFailure of [false, true]) {
@@ -164,8 +164,7 @@ test('cancel matrix ignores late final/cleanup success or failure and permits a 
           assert.equal(h.session.state, 'finalizing'); assert.equal(h.session.canStart, false);
           assert.throws(() => h.session.begin());
           await h.discard();
-          assert.equal(h.session.busy, true); assert.equal(h.session.canStart, false);
-          assert.throws(() => h.session.begin());
+          assert.equal(h.session.busy, false); assert.equal(h.session.canStart, true);
           oldReceive({ kind: 'delta', itemId: 'late', text: 'Old-stream words must be ignored' });
           if (success) pending.resolve(stage === 'final' ? canonical : cleaned);
           else pending.reject('transcription_network_failed');

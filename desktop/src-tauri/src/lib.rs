@@ -59,12 +59,13 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("overlay") {
                 window.set_ignore_cursor_events(true)?;
             }
-            let show = MenuItem::with_id(app, "show", "Show probe", true, None::<&str>)?;
+            let show = MenuItem::with_id(app, "show", "Open Dictation", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("BYOK Dictation")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {

@@ -27,10 +27,13 @@ export class PcmRecorder {
   private workletProcessCalls = 0;
   private workletInputChannels = 0;
   private finishPromise: Promise<CapturedPcm> | null = null;
+  private stopPending = false;
   private lastCaptured: CapturedPcm | null = null;
   private sampleRate = 0;
   private deviceId = "";
   private deviceLabel = "";
+  private startPending = false;
+  private startGeneration = 0;
 
   constructor(
     private readonly onUnexpectedStop: (recording: CapturedPcm, message: string) => void,
@@ -42,6 +45,8 @@ export class PcmRecorder {
   get isRecording(): boolean {
     return this.active;
   }
+
+  get isStopping(): boolean { return this.stopPending; }
 
   get hasRecording(): boolean {
     return this.lastCaptured !== null;
@@ -56,6 +61,17 @@ export class PcmRecorder {
   }
 
   async start(deviceId: string): Promise<string> {
+    if (this.stopPending) throw new Error("Microphone capture is still stopping.");
+    if (this.startPending) throw new Error("Microphone startup is still finishing.");
+    this.startPending = true;
+    const generation = ++this.startGeneration;
+    try { return await this.startCapture(deviceId, generation); }
+    finally { if (generation === this.startGeneration) this.startPending = false; }
+  }
+
+  cancelStartup() { this.startGeneration += 1; this.startPending = false; }
+
+  private async startCapture(deviceId: string, generation: number): Promise<string> {
     if (this.active) throw new Error("A microphone recording is already active.");
     if (this.lastCaptured) throw new Error("Clear the previous recording before starting another.");
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -82,12 +98,18 @@ export class PcmRecorder {
     let source: MediaStreamAudioSourceNode | null = null;
     let processor: AudioWorkletNode | null = null;
     try {
+      const checkCancelled = () => {
+        if (generation !== this.startGeneration) throw new DOMException("Recording cancelled.", "AbortError");
+      };
+      checkCancelled();
       const track = stream.getAudioTracks()[0];
       if (!track) throw new Error("The selected input did not provide an audio track.");
 
       context = new AudioContext({ latencyHint: "interactive" });
       await context.resume();
+      checkCancelled();
       await context.audioWorklet.addModule(new URL("pcm-capture-worklet.js", window.location.href));
+      checkCancelled();
 
       source = context.createMediaStreamSource(stream);
       processor = new AudioWorkletNode(context, "byok-pcm-capture", {
@@ -103,6 +125,7 @@ export class PcmRecorder {
         processCalls?: number;
         inputChannels?: number;
       }>) => {
+        if (event.data.type !== "flushed" && generation !== this.startGeneration) return;
         if (event.data.type === "pcm" && event.data.buffer && this.acceptingPcm) {
           const samples = new Float32Array(event.data.buffer);
           this.chunks.push(samples);
@@ -134,18 +157,20 @@ export class PcmRecorder {
       this.active = true;
 
       this.endedHandler = () => {
-        if (!this.active) return;
+        if (!this.active || generation !== this.startGeneration) return;
         const message = "The microphone disconnected. The audio captured so far is retained in memory.";
         void this.stop()
-          .then((recording) => this.onUnexpectedStop(recording, message))
-          .catch((error: unknown) => this.onUnexpectedError(errorMessage(error)));
+          .then((recording) => { if (generation === this.startGeneration) this.onUnexpectedStop(recording, message); })
+          .catch((error: unknown) => { if (generation === this.startGeneration) this.onUnexpectedError(errorMessage(error)); });
       };
       track.addEventListener("ended", this.endedHandler, { once: true });
 
       return `Recording from ${this.deviceLabel} at ${this.sampleRate.toLocaleString()} Hz.`;
     } catch (error) {
-      this.active = false;
-      this.acceptingPcm = false;
+      if (generation === this.startGeneration) {
+        this.active = false;
+        this.acceptingPcm = false;
+      }
       if (processor) {
         processor.port.onmessage = null;
         try { processor.disconnect(); } catch { /* Already disconnected. */ }
@@ -155,12 +180,14 @@ export class PcmRecorder {
         try { source.disconnect(); } catch { /* Already disconnected. */ }
       }
       for (const track of stream.getTracks()) track.stop();
-      if (context && context.state !== "closed") await context.close().catch(() => undefined);
-      this.stream = null;
-      this.context = null;
-      this.source = null;
-      this.processor = null;
-      this.endedHandler = null;
+      if (context && context.state !== "closed") await this.closeContext(context);
+      if (generation === this.startGeneration) {
+        this.stream = null;
+        this.context = null;
+        this.source = null;
+        this.processor = null;
+        this.endedHandler = null;
+      }
       throw error;
     }
   }
@@ -173,6 +200,7 @@ export class PcmRecorder {
     }
 
     this.active = false;
+    this.stopPending = true;
     const stream = this.stream;
     const context = this.context;
     const source = this.source;
@@ -208,7 +236,7 @@ export class PcmRecorder {
       if (source) {
         try { source.disconnect(); } catch { /* Already disconnected. */ }
       }
-      if (context && context.state !== "closed") await context.close().catch(() => undefined);
+      if (context && context.state !== "closed") await this.closeContext(context);
 
       const samples = new Float32Array(this.frameCount);
       let offset = 0;
@@ -234,9 +262,17 @@ export class PcmRecorder {
       };
       this.lastCaptured = recording;
       return recording;
-    })();
+    })().finally(() => { this.stopPending = false; });
 
     return this.finishPromise;
+  }
+
+  private async closeContext(context: AudioContext): Promise<void> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([context.close().catch(() => undefined),
+        new Promise<void>(resolve => { timeout = setTimeout(resolve, 1500); })]);
+    } finally { clearTimeout(timeout); }
   }
 
   private flushWorklet(processor: AudioWorkletNode): Promise<void> {
@@ -256,6 +292,7 @@ export class PcmRecorder {
   }
 
   clear(): void {
+    if (this.stopPending) throw new Error("Wait for microphone capture to stop before clearing it.");
     if (this.active) throw new Error("Stop the recording before clearing it.");
     this.lastCaptured = null;
     this.finishPromise = null;

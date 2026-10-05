@@ -42,10 +42,10 @@ export function overlayPhase(session: OverlaySession): OverlayPhase {
 
 export const overlayCopy: Record<OverlayPhase, { title: string; text: string; hint: string }> = {
   hidden: { title: "Ready to dictate", text: "", hint: "" },
-  recording: { title: "Listening", text: "Listening to your microphone…", hint: "Release the shortcut to finish" },
-  processing: { title: "Finalizing", text: "Finishing your dictation…", hint: "Keep your destination active" },
-  ready: { title: "Ready", text: "Your recording or transcript is retained.", hint: "Open the probe from the tray to transcribe, copy, or discard" },
-  error: { title: "Needs attention", text: "Open the probe from the tray to recover or discard.", hint: "Available audio and text stay in memory until discard or quit" },
+  recording: { title: "Listening", text: "Listening to your microphone…", hint: "Release the shortcut to insert" },
+  processing: { title: "Finalizing", text: "Finishing your dictation…", hint: "Open Dictation from the tray to stop waiting, copy, or cancel" },
+  ready: { title: "Ready", text: "Your words are available in Dictation.", hint: "Open Dictation from the tray to retry, copy, or discard" },
+  error: { title: "Needs attention", text: "Open Dictation from the tray to see the issue and recover your words.", hint: "Retry, review and copy, restore your clipboard, or discard there" },
 };
 
 export function overlayPresentation(content: OverlayContent) {
@@ -57,15 +57,15 @@ export function overlayPresentation(content: OverlayContent) {
     copy.warning = true;
     copy.title = content.phase === "recording" ? "Listening · preview unavailable" : copy.title;
     copy.hint = content.phase === "recording"
-      ? "Live preview stopped · Recording continues · Open the probe to reconnect"
-      : "Live preview stopped · Open the probe for recovery";
+      ? "Recording continues. Open Dictation to reconnect the preview."
+      : "Open Dictation to recover your words.";
   } else if (content.phase === "recording") {
     if (content.preview === "connecting") {
       if (!content.text) copy.text = "Connecting live preview…";
       copy.hint = "Provisional · Recording continues while connecting";
     } else if (content.preview !== "off") copy.hint = "Provisional · Release the shortcut to finish";
     else copy.hint = "Live preview is off · Release the shortcut to finish";
-  } else if (content.phase === "processing" && content.preview !== "off") copy.hint = "Provisional · Final transcription uses the original audio";
+  } else if (content.phase === "processing" && content.preview !== "off") copy.hint = "Provisional · Open Dictation to stop waiting, review words, or cancel";
   if (content.hasGap) { copy.warning = true; copy.hint = "Preview has a gap · " + copy.hint; }
   return copy;
 }

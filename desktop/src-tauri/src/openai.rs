@@ -11,6 +11,19 @@ fn validation_status(status: u32) -> Result<(), String> {
     }
 }
 
+// A response that sends a trickle of bytes must not hold REQUEST_ACTIVE forever.
+// WinHTTP also bounds DNS/connect separately; the response/send budget is shared.
+#[cfg(any(windows, test))]
+const REQUEST_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+#[cfg(any(windows, test))]
+fn remaining_timeout(started: std::time::Instant) -> Result<i32, String> {
+    let remaining = REQUEST_BUDGET.saturating_sub(started.elapsed());
+    if remaining.is_zero() {
+        return Err("validation_timeout".into());
+    }
+    Ok(remaining.as_millis().clamp(1, 60_000) as i32)
+}
+
 #[cfg(any(windows, test))]
 fn request_headers(key: &str, content_type: Option<&str>) -> zeroize::Zeroizing<Vec<u16>> {
     // Reserve the complete header before writing any secret: later Content-Type
@@ -126,6 +139,11 @@ pub(crate) fn request(
             ptr::null(),
             WINHTTP_FLAG_SECURE,
         ))?;
+        let started = std::time::Instant::now();
+        let timeout = remaining_timeout(started)?.min(if read_body { 60_000 } else { 10_000 });
+        check(WinHttpSetTimeouts(
+            request.0, 10_000, 10_000, timeout, timeout,
+        ))?;
         let redirect_policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
         check(WinHttpSetOption(
             request.0,
@@ -146,7 +164,12 @@ pub(crate) fn request(
             body.len() as u32,
             0,
         ))?;
+        let timeout = remaining_timeout(started)?.min(if read_body { 60_000 } else { 10_000 });
+        check(WinHttpSetTimeouts(
+            request.0, 10_000, 10_000, timeout, timeout,
+        ))?;
         check(WinHttpReceiveResponse(request.0, ptr::null_mut()))?;
+        remaining_timeout(started)?;
         let mut status = 0u32;
         let mut bytes = size_of::<u32>() as u32;
         check(WinHttpQueryHeaders(
@@ -163,6 +186,10 @@ pub(crate) fn request(
         if read_body {
             let mut chunk = [0u8; 8192];
             loop {
+                let timeout = remaining_timeout(started)?;
+                check(WinHttpSetTimeouts(
+                    request.0, 10_000, 10_000, timeout, timeout,
+                ))?;
                 let mut received = 0u32;
                 check(WinHttpReadData(
                     request.0,
@@ -191,6 +218,20 @@ pub fn validate_key(_: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn total_response_budget_expires_even_when_bytes_keep_arriving() {
+        let now = std::time::Instant::now();
+        assert!((1..=60_000).contains(&remaining_timeout(now).unwrap()));
+        assert_eq!(
+            remaining_timeout(now - REQUEST_BUDGET).unwrap_err(),
+            "validation_timeout"
+        );
+        assert_eq!(
+            remaining_timeout(now - REQUEST_BUDGET - std::time::Duration::from_secs(1))
+                .unwrap_err(),
+            "validation_timeout"
+        );
+    }
     #[test]
     fn secret_headers_reserve_the_full_buffer_before_copying_the_key() {
         let large_content_type = format!("multipart/form-data; boundary={}", "x".repeat(4096));

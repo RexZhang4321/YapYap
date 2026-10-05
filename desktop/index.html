@@ -3,130 +3,115 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BYOK Dictation — Capability Probes</title>
+    <title>BYOK Dictation</title>
     <link rel="stylesheet" href="/src/styles.css" />
     <script type="module" src="/src/main.ts" defer></script>
   </head>
   <body>
-    <main>
-      <h1>BYOK dictation probes</h1>
-      <p>Prepare the microphone, then hold the global shortcut in your destination to record. Release to transcribe, conservatively clean up, and insert. Optional cleanup can be bypassed before recording.</p>
-      <form id="shortcut-form">
-        <label for="shortcut">Global shortcut</label>
-        <div class="row">
-          <input id="shortcut" value="Ctrl+Alt+F8" spellcheck="false" />
-          <button type="submit">Apply</button>
-        </div>
-      </form>
-      <p id="status" role="status">Registering…</p>
-      <div class="states">
-        <div>Hold state <strong id="hold-state">UP</strong></div>
-        <div>Session <strong id="session-state">idle</strong></div>
-      </div>
-      <section class="result" aria-labelledby="api-key-heading">
-        <h2 id="api-key-heading">OpenAI API key</h2>
-        <p id="api-key-stored-status" role="status" data-state="unknown">Checking for a saved key…</p>
-        <form id="api-key-form" autocomplete="off">
-          <label for="api-key">Enter or replace your API key</label>
-          <div class="row">
-            <input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" aria-describedby="api-key-hint" disabled />
-            <button id="save-api-key" type="submit" disabled>Save key</button>
-          </div>
-        </form>
-        <div class="row recording-actions">
-          <button id="validate-api-key" type="button" disabled>Validate saved key</button>
-          <button id="remove-api-key" type="button" disabled>Remove saved key</button>
-        </div>
-        <p id="api-key-status" role="status"></p>
-        <p id="api-key-hint" class="hint">Stored in Windows Credential Manager. Validation sends an authenticated request directly to OpenAI; it does not send your recording. Saving works without an internet connection.</p>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="wordmark"><span class="app-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><h1>BYOK Dictation</h1></div>
+        <button id="open-settings" type="button" class="quiet-button">Settings</button>
+      </header>
+      <section id="home-panel" class="readiness" data-state="checking" aria-labelledby="dictation-status">
+        <div class="readiness-heading"><span class="readiness-dot" aria-hidden="true"></span><h2 id="dictation-status" role="status">Getting ready…</h2></div>
+        <p id="dictation-detail" class="hint" role="status" hidden></p>
+        <div id="dictation-alert" class="dictation-alert" role="alert" hidden><p id="dictation-alert-text"></p></div>
+        <p class="shortcut-intro">Hold your shortcut in any text field</p>
+        <kbd id="shortcut-display" class="shortcut-display">Ctrl + Alt + F8</kbd>
+        <p class="dictation-instruction">Speak, then release to insert your words.</p>
+        <div class="cancel-row"><p id="cancel-hint" class="hint">Press Esc to cancel before insertion.</p><button id="cancel-dictation" type="button" class="danger-button" hidden>Cancel dictation</button></div>
       </section>
-      <section class="result">
-        <h2>Hotkey action</h2>
-        <label for="hotkey-action">When the shortcut is held</label>
-        <select id="hotkey-action">
-          <option value="record">Dictate and insert on release</option>
-          <option value="live">Probe live transcription; retain audio on release</option>
-          <option value="insert">Run text insertion probe</option>
-        </select>
+      <section id="setup-callout" class="setup-callout" aria-label="Setup">
+        <div><h2>One-time setup</h2><p id="setup-message">Add your OpenAI API key and allow microphone access to start dictating.</p></div>
+        <button id="open-setup" type="button" class="primary-button">Set up dictation</button>
       </section>
-      <section class="result">
-        <h2>Microphone recording</h2>
-        <div class="row device-row">
-          <label for="microphone">Input device</label>
-          <button id="refresh-devices" type="button">Refresh</button>
-        </div>
-        <select id="microphone" aria-label="Microphone input device">
-          <option value="">System default microphone</option>
-        </select>
-        <div class="meter-group">
-          <label for="input-level">Live input level</label>
-          <meter id="input-level" min="0" max="0.5" low="0.03" high="0.25" optimum="0.12" value="0"></meter>
-          <span id="input-level-status">Waiting for recording.</span>
-        </div>
-        <p id="recording-status" role="status">Ready. Hold the shortcut to record.</p>
-        <p id="recording-metadata" class="metadata">No recording retained.</p>
-        <audio id="recording-playback" controls hidden></audio>
-        <div class="row recording-actions">
-          <button id="prepare-microphone" type="button">Prepare microphone</button>
-          <button id="play-recording" type="button" disabled>Play captured audio</button>
-          <button id="stop-playback" type="button" disabled>Stop playback</button>
-          <button id="clear-recording" type="button" disabled>Clear recording</button>
-        </div>
-        <p class="hint">Prepare once to grant microphone access and reveal device names. Failed or interrupted recordings remain available for playback and retry. Recordings are not saved to disk.</p>
-      </section>
-      <section class="result">
-        <h2>Dictation session</h2>
-        <label><input id="cleanup-enabled" type="checkbox" checked /> Clean punctuation, spacing, and spoken fillers before insertion</label>
-        <p class="hint">Cleanup sends the canonical transcript directly to OpenAI using gpt-6-luna. It aims to preserve meaning, language, names, numbers, URLs, and technical terms. Uncheck before recording to bypass it. Failed cleanup uses the original text.</p>
-        <p id="overlay-status" class="hint" role="status">The floating window shows provisional live words and status.</p>
-        <div class="row recording-actions">
-          <button id="transcribe-recording" type="button" disabled>Retry transcription</button>
-          <button id="discard-transcription" type="button" disabled>Discard recording and transcript</button>
-          <button id="copy-transcript" type="button" disabled>Copy transcript</button>
-          <button id="copy-transcript-without-backup" type="button" disabled>Copy transcript without backup</button>
-          <button id="copy-original" type="button" disabled>Copy original transcript</button>
-          <button id="copy-original-without-backup" type="button" disabled>Copy original transcript without backup</button>
-        </div>
-        <p id="transcription-status" role="status">Hold the shortcut in your destination. Release transcribes and inserts.</p>
-        <p id="cleanup-status" role="status"></p>
-        <label for="cleaned-transcript">Cleaned transcript</label>
-        <textarea id="cleaned-transcript" rows="6" readonly spellcheck="false" placeholder="Successful optional cleanup will appear here."></textarea>
-        <label for="transcript">Canonical transcript</label>
-        <textarea id="transcript" rows="6" readonly spellcheck="false" placeholder="Your transcript will appear here."></textarea>
-        <p class="hint">Release sends the whole recording to gpt-transcribe. Audio stays in memory on transcription failure; canonical text releases audio and remains here alongside successful cleanup until discard. Copy uses cleaned text when available; Copy original always uses the canonical transcript. An uncertain destination uses Copy. Cancel and discard ignores late transcription and cleanup responses but cannot retract uploaded audio or text. Once paste is dispatched, wait for its result. Discard the previous session before recording again. Quitting loses pending audio and text.</p>
-      </section>
-      <section class="result" aria-labelledby="live-heading">
-        <h2 id="live-heading">Live transcription probe</h2>
-        <label><input id="live-enabled" type="checkbox" checked /> Show live words while recording</label>
-        <p class="hint">When enabled, microphone audio streams directly to OpenAI while you hold the shortcut. Live text is provisional. Dictate mode transcribes and inserts on release; live probe mode retains audio for playback or Retry transcription without automatic insertion.</p>
+      <section id="live-panel" class="session-panel" aria-labelledby="live-heading" hidden>
+        <div class="section-heading"><h2 id="live-heading">Live words</h2><span class="text-badge">Preview</span></div>
         <p id="live-status" role="status">Live preview ready.</p>
-        <p id="live-latency" class="metadata">First visible text: waiting</p>
-        <label for="live-transcript">Provisional live transcript</label>
-        <textarea id="live-transcript" rows="5" readonly spellcheck="false" placeholder="Words will appear while you speak."></textarea>
-        <div class="row recording-actions">
-          <button id="live-reconnect" type="button" disabled>Reconnect live preview</button>
-          <button id="copy-provisional" type="button" disabled>Copy provisional live text</button>
-          <button id="copy-provisional-without-backup" type="button" disabled>Copy provisional live text without backup</button>
+        <label class="sr-only" for="live-transcript">Live preview, may change</label>
+        <textarea id="live-transcript" class="live-text" rows="3" readonly spellcheck="false" placeholder="Your words will appear as you speak."></textarea>
+        <button id="live-reconnect" type="button" disabled>Reconnect preview</button>
+        <div id="provisional-recovery" class="recovery-actions" hidden>
+          <p class="hint">These live words may be incomplete. Review them before pasting.</p>
+          <button id="copy-provisional" type="button" disabled>Copy live words</button>
+          <details class="clipboard-options"><summary>Clipboard options</summary><button id="copy-provisional-without-backup" type="button" disabled>Replace clipboard with live words</button><p class="hint">Use only if Copy cannot preserve the current clipboard.</p></details>
+          <p id="provisional-copy-status" role="status"></p>
         </div>
-        <p id="provisional-copy-status" role="status"></p>
-        <p class="hint">If final transcription fails, Retry transcription uses the original recording. Once recording and finalization settle, you may explicitly Copy the current provisional live text as recovery, even if live updates are still finishing. These words may be incomplete, inaccurate, or contain connection gaps. Review them before pasting. Provisional text is never inserted automatically or used as the canonical transcript. Copy saves supported clipboard contents for Restore; Copy without backup explicitly replaces unsupported contents. Live words stay here until discard or quit.</p>
-        <p class="hint">A failed stream leaves local recording intact. Reconnect resumes from current audio and marks the gap; the original audio remains complete for final transcription. Discard clears retained audio and all transcripts.</p>
       </section>
-      <section class="result">
-        <h2>Text insertion probe</h2>
-        <p><code id="test-text">BYOK dictation insertion probe</code></p>
-        <p id="insertion-status" role="status">Choose “Run text insertion probe” as the hotkey action to test a target.</p>
-        <button id="copy-text" type="button">Copy test text</button>
-        <button id="copy-without-backup" type="button">Copy without backup</button>
-        <button id="restore-clipboard" type="button" disabled>Restore previous clipboard</button>
-        <p class="hint">Copy test text saves supported clipboard formats for Restore. If it cannot save the current clipboard, use Copy without backup only when you are ready to replace it.</p>
+      <section id="recovery-panel" class="session-panel" aria-labelledby="recovery-heading" hidden>
+        <div class="section-heading"><h2 id="recovery-heading">Current dictation</h2><button id="discard-transcription" type="button" class="quiet-button" disabled>Discard</button></div>
+        <p id="transcription-status" role="status"></p><p id="cleanup-status" class="hint" role="status"></p>
+        <div id="processing-recovery" class="recovery-actions" hidden>
+          <p id="processing-recovery-hint" class="hint"></p>
+          <div class="row"><button id="bypass-processing" type="button" class="primary-button" hidden>Review available text…</button><button id="stop-waiting" type="button">Stop waiting · keep recovery</button></div>
+          <p id="recovery-copy-status" role="status"></p>
+        </div>
+        <div id="audio-recovery" hidden>
+          <audio id="recording-playback" controls hidden></audio>
+          <div class="row recording-actions"><button id="transcribe-recording" type="button" class="primary-button" disabled>Retry transcription</button><button id="play-recording" type="button" disabled>Play recording</button><button id="stop-playback" type="button" disabled>Stop playback</button></div>
+          <p class="hint">Your recording stays in memory for retry until you discard it or quit.</p>
+        </div>
+        <div id="current-result" hidden>
+          <div id="cleaned-transcript-panel"><label for="cleaned-transcript">Text for insertion</label><textarea id="cleaned-transcript" rows="4" readonly spellcheck="false"></textarea></div>
+          <div class="row recording-actions"><button id="copy-transcript" type="button" class="primary-button" disabled>Copy text</button><button id="copy-original" type="button" disabled>Copy original</button></div><p id="copy-status" role="status"></p>
+          <details id="original-transcript-panel" class="original-panel"><summary>Original transcript</summary><label class="sr-only" for="transcript">Original transcript</label><textarea id="transcript" rows="4" readonly spellcheck="false"></textarea><p class="hint">The original words are kept separately from cleanup.</p></details>
+          <details class="clipboard-options"><summary>Clipboard options</summary><div class="row"><button id="copy-transcript-without-backup" type="button" disabled>Replace clipboard with text</button><button id="copy-original-without-backup" type="button" disabled>Replace clipboard with original</button></div><p class="hint">Use only if Copy cannot preserve the current clipboard.</p></details>
+        </div>
       </section>
-      <div class="log-heading">
-        <h2>Events</h2>
-        <button id="clear-log" type="button">Clear</button>
-      </div>
-      <ol id="events" aria-live="polite"></ol>
-      <p class="hint">Closing this window hides it. Use the tray icon to show it or quit. Quitting releases any recording held in memory.</p>
+      <section id="clipboard-recovery" class="clipboard-recovery" hidden><p class="hint">A previous clipboard copy is available.</p><button id="restore-clipboard" type="button" disabled>Restore previous clipboard</button></section>
+      <section id="retained-panel" class="session-panel" aria-labelledby="retained-heading" hidden>
+        <div class="section-heading"><h2 id="retained-heading">Saved for this session</h2><span class="text-badge">In memory</span></div>
+        <p class="hint">Originals remain available as you dictate again. Discard them when finished; quitting clears them.</p>
+        <p id="retained-copy-status" role="status"></p><ul id="retained-results" class="retained-results"></ul>
+      </section>
+      <footer class="app-footer"><span class="privacy-indicator" aria-hidden="true"></span><p>Your key. Direct to OpenAI.</p><p>Close to keep dictating from the tray.</p></footer>
     </main>
+    <dialog id="recovery-confirm-dialog" aria-labelledby="recovery-confirm-heading" aria-describedby="recovery-confirm-warning">
+      <div class="settings-header"><h2 id="recovery-confirm-heading">Review text before copying</h2></div>
+      <form method="dialog" class="recovery-confirm-content">
+        <p id="recovery-confirm-warning"></p>
+        <label id="recovery-confirm-label" for="recovery-confirm-text">Available text</label>
+        <textarea id="recovery-confirm-text" rows="8" readonly spellcheck="false"></textarea>
+        <p class="hint">This copies the exact text above. Return to your intended text field and press Ctrl+V to paste.</p>
+        <div class="row recording-actions"><button id="recovery-confirm-copy" value="copy" type="submit" class="primary-button">Confirm and copy</button><button id="recovery-confirm-cancel" value="cancel" type="submit">Keep waiting</button></div>
+      </form>
+    </dialog>
+    <dialog id="settings-dialog" aria-labelledby="settings-heading">
+      <div class="settings-header"><h2 id="settings-heading">Settings</h2><button id="settings-close" type="button" class="quiet-button" aria-label="Close settings">Done</button></div>
+      <div class="settings-content">
+        <section class="settings-section" aria-labelledby="api-key-heading">
+          <h3 id="api-key-heading">OpenAI API key</h3><p id="api-key-stored-status" role="status" data-state="unknown">Checking for a saved key…</p>
+          <form id="api-key-form" autocomplete="off"><label for="api-key">Add or replace your key</label><div class="row"><input id="api-key" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" aria-describedby="api-key-hint" placeholder="Paste API key" disabled /><button id="save-api-key" type="submit" class="primary-button" disabled>Save key</button></div></form>
+          <div class="row recording-actions"><button id="validate-api-key" type="button" disabled>Check connection</button><button id="remove-api-key" type="button" class="quiet-button" disabled>Remove key</button></div>
+          <p id="api-key-status" role="status"></p><p id="api-key-hint" class="hint">Stored securely in Windows Credential Manager. Checking the connection sends no recording. Dictation sends audio directly to OpenAI.</p>
+        </section>
+        <section class="settings-section" aria-labelledby="microphone-heading">
+          <div class="section-heading"><h3 id="microphone-heading">Microphone</h3><button id="refresh-devices" type="button" class="quiet-button">Refresh devices</button></div>
+          <label class="sr-only" for="microphone">Microphone input device</label><select id="microphone"><option value="">System default microphone</option></select>
+          <p id="microphone-access-help" class="hint">Microphone access is checked automatically. Allow access once when Windows asks.</p><button id="prepare-microphone" type="button">Allow microphone</button>
+        </section>
+        <section class="settings-section" aria-labelledby="shortcut-heading">
+          <h3 id="shortcut-heading">Dictation shortcut</h3><p class="hint">Choose a shortcut you can comfortably hold while speaking.</p>
+          <form id="shortcut-form"><label class="sr-only" for="shortcut">Recorded shortcut</label><div class="row"><input id="shortcut" value="Ctrl+Alt+F8" readonly spellcheck="false" aria-describedby="shortcut-capture-hint" /><button type="submit" hidden>Apply shortcut</button></div><button id="shortcut-record" type="button" class="record-shortcut">Record shortcut</button></form>
+          <p id="shortcut-capture-hint" class="hint">Choose Record shortcut, then press and release your key combination to save it. Esc cancels.</p><p id="status" role="status">Registering shortcut…</p>
+        </section>
+        <section class="settings-section" aria-labelledby="preferences-heading">
+          <h3 id="preferences-heading">While you dictate</h3>
+          <label class="check-row"><input id="live-enabled" type="checkbox" checked /><span>Show live words<span class="hint">A preview while speaking. The final transcript may differ.</span></span></label>
+          <label class="check-row"><input id="cleanup-enabled" type="checkbox" checked /><span>Light cleanup<span class="hint">Tidy punctuation and spoken fillers. Keep the original transcript.</span></span></label>
+          <p class="hint">Cleanup sends the original transcript directly to OpenAI. Turn it off to insert the original words.</p>
+        </section>
+        <details id="diagnostics" class="diagnostics"><summary>Developer diagnostics</summary><p class="hint">Optional capability checks. Normal dictation uses Dictate and insert.</p>
+          <label for="hotkey-action">Shortcut test mode</label><select id="hotkey-action"><option value="record">Dictate and insert</option><option value="live">Live transcription test (no insertion)</option><option value="insert">Text insertion test</option></select>
+          <div class="states"><span>Key <strong id="hold-state">UP</strong></span><span>Session <strong id="session-state">idle</strong></span></div>
+          <div class="meter-group"><label for="input-level">Microphone input level</label><meter id="input-level" min="0" max="0.5" low="0.03" high="0.25" optimum="0.12" value="0"></meter><span id="input-level-status">Waiting for recording.</span></div>
+          <p id="recording-status" role="status">Ready.</p><p id="recording-metadata" class="metadata">No recording retained.</p><button id="clear-recording" type="button" disabled>Clear captured audio</button>
+          <p id="overlay-status" class="hint" role="status"></p><p id="live-latency" class="metadata">First visible text: waiting</p>
+          <h3>Text insertion test</h3><p><code id="test-text">BYOK dictation insertion probe</code></p><p id="insertion-status" role="status">Choose Text insertion test to check a destination.</p><div class="row"><button id="copy-text" type="button">Copy test text</button><button id="copy-without-backup" type="button">Replace clipboard with test text</button></div>
+          <div class="section-heading log-heading"><h3>Events</h3><button id="clear-log" type="button" class="quiet-button">Clear</button></div><ol id="events"></ol>
+        </details>
+      </div>
+    </dialog>
   </body>
 </html>

@@ -93,7 +93,7 @@ Done: a real recording can be transcribed with the user's key and a failed reque
 
 - [x] Define recording, finalizing, ready, inserted, failed, and discarded states; idle is the initial state.
 - [x] On stop, transcribe the complete recording as one segment and insert the canonical result. Synthetic microphone capture with real OpenAI transcription and native paste succeeded in Notepad and VS Code.
-- [x] Define cancellation and starting another dictation during finalization. One session at a time; cancel recording/transcription, wait for outstanding native work, and discard retained results before another dictation. Paste dispatch is the noncancellable commit boundary.
+- [x] Define cancellation and starting another dictation during finalization. One active local session at a time; cancellation now unlocks it immediately and ignores late results. Stop waiting preserves sources for explicit recovery. A bounded native request may still return busy, retaining the next recording for retry. Paste dispatch is the noncancellable commit boundary.
 - [x] Ignore late responses from cancelled sessions and prevent duplicate insertion. Deterministic tests cover late results and partial/unknown paste outcomes; repeated native insertion was refused in a Windows check.
 - [x] Retain results for Copy/retry when insertion fails or the destination is uncertain. Real hotkey insertion retry and native Copy/Restore recovery passed.
 - [x] Test Unicode, newlines, URLs, filenames, identifiers, and technical terminology. Exact fixtures passed deterministic checks and were visually verified through native Notepad insertion.
@@ -165,6 +165,21 @@ Implemented and checked with deterministic fixtures and a real saved-key synthet
 - [x] Verify API retries use retained in-memory audio; document that app exit or crash loses pending audio.
 
 Implemented and audited with a combined deterministic failure matrix and native/source review. [Task 12 verification](desktop/scripts/task12-verification.md) records recovery behavior, the malformed-canonical fix, GPT-6 Luna access and the remaining combined Windows manual gap. Exit/crash recovery is outside the initial scope. Milestone 2 implementation is complete; Task 10's full live validation remains pending.
+
+## UX checkpoint — Before Milestone 3
+
+The user requested a complete daily-use UX pass before processing-pipeline work. Keep the tray and hold-to-talk shortcut as the primary interaction. Implementation and acceptance verification are tracked separately below.
+
+- [x] Replace the capability-probe screen with a compact readiness home and a prominent current shortcut. Separate Settings from current-session recovery; hide empty result views and irrelevant actions.
+- [x] Keep API key, microphone, recorded key combination, live preview, and light cleanup in Settings. Keep insertion/live probe modes, audio metadata, input diagnostics, and event logs behind closed Developer diagnostics.
+- [x] Report saved-key presence without retrieving the secret or making a provider request on launch. Use ordinary setup and key-failure language; lock credential changes while dictation is active.
+- [x] Implement automatic microphone readiness, permission recovery, persisted device/preferences, key-combination recording, cancellation before paste dispatch, and repeated successful dictations without requiring a discard first. Original transcripts stay in memory until explicit discard or quit.
+- [x] Keep retry, playback, Copy original, provisional recovery, and explicit clipboard replacement available in the relevant session state. Rename app/tray/overlay labels for ordinary dictation use.
+- [x] Verify automated checks and rendered browser setup/settings behavior. All 132 deterministic frontend tests, frontend/native builds, and 25 native tests pass (seven ignored). Browser checks passed setup focus, Settings focus, shortcut-capture Escape cancellation, closed diagnostics, and 380 × 430 home/modal width with vertical scrolling. See [UX verification](desktop/scripts/ux-verification.md).
+- [-] Verify the complete native recording/recovery interaction flow. The compiled app starts, but this pass could not target its window or connect a WebView debugging port. Browser evidence had no Tauri IPC and does not verify native interactions.
+- [ ] Confirm the updated tray/hotkey flow on Windows with the physical microphone, application targets, restart readiness, permission denial/retry, shortcut conflicts, and cancellation during capture/finalization. This checkpoint does not close Task 10's earlier complete combined Windows verification gap.
+
+Implementation is complete; acceptance is partial. Done when: the native home/settings/recording/recovery flow and remaining real Windows acceptance checks are recorded. No Milestone 3 processing work belongs to this checkpoint.
 
 ## Milestone 3 — Full P0 processing pipeline
 

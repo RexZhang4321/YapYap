@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "BYOK Dictation Probe",
+  "productName": "BYOK Dictation",
   "version": "0.1.0",
   "identifier": "app.byokdictation.hotkeyprobe",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "BYOK Dictation — Capability Probes",
-        "width": 700,
-        "height": 580
+        "title": "BYOK Dictation",
+        "width": 600,
+        "height": 640,
+        "minWidth": 380,
+        "minHeight": 430
       },
       {
         "label": "overlay",
