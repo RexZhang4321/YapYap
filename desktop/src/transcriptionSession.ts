@@ -1,3 +1,5 @@
+import { ProcessingTimings } from "./processingTimings.ts";
+
 export const MAX_AUDIO_BYTES = 25_000_000;
 
 export type SessionState = "idle" | "recording" | "finalizing" | "ready" | "inserted" | "failed" | "discarded";
@@ -54,6 +56,7 @@ export class TranscriptionSession {
   insertion: InsertionResult | null = null;
   inserting = false;
   stalled = false;
+  metrics: ProcessingTimings | null = null;
   // Session-only recovery, deliberately never persisted as history.
   readonly retainedResults: RetainedResult[] = [];
   private generation = 0;
@@ -67,7 +70,8 @@ export class TranscriptionSession {
 
   constructor(provider: (audio: Uint8Array) => Promise<string>, changed: () => void, releaseAudio: () => void,
     private readonly destination?: TextDestination, private readonly cleanup?: CleanupModel,
-    private readonly timing: SessionTiming = defaultTiming) {
+    private readonly timing: SessionTiming = defaultTiming,
+    private readonly now = () => performance.now()) {
     this.provider = provider;
     this.changed = changed;
     this.releaseAudio = releaseAudio;
@@ -96,6 +100,7 @@ export class TranscriptionSession {
   }
 
   private invalidate() {
+    this.metrics?.finish("stopped");
     this.generation += 1;
     for (const cancel of [...this.pendingWaits]) cancel();
     this.busy = false;
@@ -141,6 +146,7 @@ export class TranscriptionSession {
     const generation = this.generation;
     const sessionId = this.sessionId;
     const text = this.outputText;
+    this.metrics?.start("insertion");
     this.inserting = true;
     this.error = null;
     this.changed();
@@ -149,11 +155,13 @@ export class TranscriptionSession {
         this.timing.insertionMs, "insertion_outcome_unknown");
       if (generation !== this.generation) return;
       this.insertion = insertion;
+      this.metrics?.end("insertion", insertion.pasteSent ? "completed" : "failed");
       this.state = this.insertion.pasteSent ? "inserted" : "failed";
       if (!this.insertion.pasteSent) this.error = "insertion_failed";
     } catch {
       if (generation !== this.generation) return;
       this.insertion = null;
+      this.metrics?.end("insertion", "failed");
       this.error = "insertion_outcome_unknown";
       this.state = "failed";
     } finally {
@@ -163,6 +171,11 @@ export class TranscriptionSession {
 
   async retryInsertion() {
     if (!this.canRetryInsertion || !this.destination) return;
+    this.metrics = new ProcessingTimings("Insertion retry", this.now);
+    this.metrics.skip("preparation");
+    this.metrics.skip("transcription");
+    this.metrics.skip("cleanup");
+    this.metrics.start("destination");
     this.busy = true;
     const generation = this.generation;
     this.changed();
@@ -172,6 +185,7 @@ export class TranscriptionSession {
       await this.waitFor(this.destination.capture(this.sessionId), generation,
         this.timing.targetMs, "insertion_target_unavailable");
       if (generation !== this.generation) return;
+      this.metrics.end("destination");
       await this.insert();
     } catch {
       if (generation === this.generation) {
@@ -180,7 +194,10 @@ export class TranscriptionSession {
         this.state = "failed";
       }
     }
-    finally { if (generation === this.generation) { this.busy = false; this.changed(); } }
+    finally { if (generation === this.generation) {
+      this.metrics?.finish(this.state === "failed" ? "failed" : "completed");
+      this.busy = false; this.changed();
+    } }
   }
 
   begin(captureTarget = true, cleanupEnabled = true) {
@@ -192,6 +209,7 @@ export class TranscriptionSession {
       this.transcript = "";
     }
     this.invalidate();
+    this.metrics = null;
     this.sessionId = crypto.randomUUID();
     this.discarded = false;
     this.error = null;
@@ -213,6 +231,7 @@ export class TranscriptionSession {
 
   failRecording() {
     if (this.discarded) return;
+    this.metrics?.finish("failed");
     this.state = "failed";
     this.error = "transcription_audio_invalid";
     this.changed();
@@ -232,6 +251,7 @@ export class TranscriptionSession {
     // A dispatched paste cannot be undone. Wait for its result before discard.
     if (this.inserting) return false;
     this.invalidate();
+    this.metrics = null;
     try {
       if (this.sessionId) void this.destination?.discard(this.sessionId).catch(() => undefined);
     } catch { /* Local discard remains valid if native IPC is unavailable. */ }
@@ -248,9 +268,25 @@ export class TranscriptionSession {
     return true;
   }
 
+  beginFinalization() {
+    this.metrics = new ProcessingTimings("After release", this.now);
+    this.metrics.start("preparation");
+    this.changed();
+  }
+
   async transcribe() {
     if (this.busy || !this.audio) return;
+    if (!this.metrics?.running) {
+      this.metrics = new ProcessingTimings("Transcription attempt", this.now);
+      this.metrics.start("preparation");
+    }
+    if (!this.cleanupEnabled) this.metrics.skip("cleanup");
+    if (!this.destination || !this.automaticInsertion) {
+      this.metrics.skip("destination");
+      this.metrics.skip("insertion");
+    }
     if (this.audio.size <= 44 || this.audio.size > MAX_AUDIO_BYTES) {
+      this.metrics.finish("failed");
       this.error = this.audio.size > MAX_AUDIO_BYTES ? "transcription_audio_too_large" : "transcription_audio_invalid";
       this.state = "failed";
       this.changed();
@@ -267,6 +303,8 @@ export class TranscriptionSession {
         this.timing.targetMs, "transcription_audio_invalid"));
       audio = null;
       if (generation !== this.generation) return;
+      this.metrics.end("preparation");
+      this.metrics.start("transcription");
       const pending = this.provider(bytes);
       bytes = null;
       const transcript = await this.waitFor(pending, generation, this.timing.transcriptionMs, "validation_timeout");
@@ -276,12 +314,14 @@ export class TranscriptionSession {
       if (typeof transcript !== "string" || transcript.includes("\0")
         || new TextEncoder().encode(transcript).byteLength > 1024 * 1024) throw "transcription_response_invalid";
       if (!transcript.trim()) throw "transcription_empty";
+      this.metrics.end("transcription");
       this.transcript = transcript;
       this.audio = null;
       this.releaseAudio();
       this.changed();
       if (this.cleanupEnabled && this.cleanup) {
         this.cleaning = true;
+        this.metrics.start("cleanup");
         this.changed();
         try {
           const cleaned = await this.waitFor(this.cleanup.clean(transcript), generation,
@@ -289,10 +329,12 @@ export class TranscriptionSession {
           if (generation !== this.generation) return;
           if (!validCleanup(cleaned)) throw new Error("Invalid cleanup result");
           this.cleanedTranscript = cleaned.trim();
+          this.metrics.end("cleanup");
         } catch {
           if (generation !== this.generation) return;
           // Cleanup is optional. Failure must not block insertion or expose raw errors.
           this.cleanupWarning = "cleanup_failed";
+          this.metrics.end("cleanup", "failed");
         } finally {
           if (generation === this.generation) this.cleaning = false;
         }
@@ -301,6 +343,7 @@ export class TranscriptionSession {
       this.state = "ready";
       this.changed();
       if (!this.destination || !this.automaticInsertion) return;
+      this.metrics.start("destination");
       const targetReady = await this.waitFor(this.targetReady, generation, this.timing.targetMs,
         "insertion_target_unavailable");
       if (generation !== this.generation) return;
@@ -309,6 +352,7 @@ export class TranscriptionSession {
         this.state = "failed";
         return;
       }
+      this.metrics.end("destination");
       await this.insert();
     } catch (error: unknown) {
       if (generation === this.generation) {
@@ -319,6 +363,7 @@ export class TranscriptionSession {
     } finally {
       audio = null;
       if (generation === this.generation) {
+        this.metrics?.finish(this.state === "failed" ? "failed" : "completed");
         this.cleaning = false;
         this.busy = false;
         this.changed();

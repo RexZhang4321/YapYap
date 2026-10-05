@@ -17,6 +17,34 @@ async function snapshot(page) {
   return page.evaluate(() => window.__recoveryFixture.snapshot());
 }
 
+test("processing times update during requests, freeze on stop and clear on discard", async ({ page }) => {
+  await ready(page);
+  await expect(page.locator("#processing-timings")).toBeHidden();
+  await seed(page, "startFinalStall");
+  await expect(page.locator("#timing-transcription")).toContainText("running");
+  await expect(page.locator("#timing-cleanup")).toHaveText("Skipped");
+  const initial = await page.locator("#timing-transcription").textContent();
+  await expect.poll(() => page.locator("#timing-transcription").textContent()).not.toBe(initial);
+  await page.locator("#stop-waiting").click();
+  await expect(page.locator("#timing-transcription")).toContainText("stopped");
+  const frozen = await page.locator("#timing-transcription").textContent();
+  await page.evaluate(() => window.__fixtureIPC.resolve("transcription", "Late response"));
+  await expect(page.locator("#timing-transcription")).toHaveText(frozen);
+  await page.locator("#discard-transcription").click();
+  await expect(page.locator("#processing-timings")).toBeHidden();
+});
+
+test("completed timings remain visible and fit a narrow window", async ({ page }) => {
+  await page.setViewportSize({ width: 380, height: 430 });
+  await ready(page);
+  await page.evaluate(() => window.__recoveryFixture.startSuccessful());
+  await expect(page.locator("#processing-timings")).toBeVisible();
+  for (const stage of ["preparation", "transcription", "cleanup", "destination", "insertion", "total"]) {
+    await expect(page.locator(`#timing-${stage}`)).toHaveText(/^\d+\.\d{2} s$/);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test("insertion refusal explains the reason and shortcut retry pastes saved output at a newly captured target", async ({ page }) => {
   await ready(page);
   await page.evaluate(async () => {

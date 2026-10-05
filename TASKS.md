@@ -185,6 +185,7 @@ Implementation is complete; acceptance is partial. Done when: the native home/se
 
 ### 13. Evaluation baseline
 
+- [x] Add local per-stage timing display for audio preparation, final transcription, cleanup, destination checks, insertion, and total after release. Running/completed/failed/stopped/skipped stages and retry isolation are verified with deterministic and browser fixtures; corpus benchmarks and acceptance targets remain below.
 - [ ] Create a small corpus covering short/long speech, corrections, numbers, identifiers, and intended languages.
 - [ ] Measure first-visible-text and release-to-insertion latency, canonical accuracy, cleanup meaning changes, and total API cost.
 - [ ] Set acceptance targets from the real probe results, including typical and slow-case latency.

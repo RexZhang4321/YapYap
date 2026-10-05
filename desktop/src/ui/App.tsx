@@ -3,6 +3,7 @@ import { initializeDictation } from "../dictationController";
 import { ui } from "./store";
 import { View } from "./View";
 import { SettingsContent } from "./SettingsContent";
+import { ProcessingTimes } from "./ProcessingTimes";
 import { AppHeader, Readiness, SetupCallout, AppFooter } from "./Home";
 import {
   LivePreview,
@@ -45,6 +46,7 @@ export function App() {
         <AppHeader />
         <Readiness />
         <SetupCallout />
+        <ProcessingTimes />
         <LivePreview />
         <SessionRecovery />
         <ClipboardRecovery />

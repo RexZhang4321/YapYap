@@ -27,6 +27,7 @@ import {
 import { selectProvisionalText } from "./provisionalRecovery";
 import { shortcutFromKey, ShortcutBinding, ScopedShortcut } from "./shortcuts";
 import { confirmRecoveryCopy, type RecoveryCopyChoice } from "./recoveryCopy";
+import { processingStages } from "./processingTimings";
 
 type HotkeyAction = "record" | "live" | "insert" | "retry";
 
@@ -232,6 +233,7 @@ export function initializeDictation(ports: {
   }
 
   function showState() {
+    showTimings();
     showOverlay();
     showProvisionalRecovery();
     const cancellable = canCancelDictation();
@@ -853,6 +855,7 @@ export function initializeDictation(ports: {
     const owner = ++dictationOperation;
     const sessionId = transcription.sessionId;
     operationBusy = true;
+    if (autoTranscribe) transcription.beginFinalization();
     showState();
     try {
       await started;
@@ -868,6 +871,7 @@ export function initializeDictation(ports: {
       }
       void live.finish();
       displayRecording(recording);
+      if (captureInterruptionMessage) transcription.metrics?.finish("stopped");
       if (captureInterruptionMessage)
         recordingStatus.text = captureInterruptionMessage;
       void refreshMicrophones(false).catch(() => undefined);
@@ -1542,6 +1546,20 @@ export function initializeDictation(ports: {
       showHomeState();
     }),
   );
+
+  function showTimings() {
+    const metrics = transcription.metrics;
+    ui.control("processing-timings").hidden = metrics === null;
+    if (!metrics) return;
+    ui.control("timing-total-label").text = `${metrics.label} total`;
+    for (const stage of [...processingStages, "total"] as const) {
+      ui.control(`timing-${stage}`).text = metrics.display(stage);
+    }
+  }
+  const timingRefresh = setInterval(() => {
+    if (transcription.metrics?.running) showTimings();
+  }, 250);
+  cleanups.push(() => clearInterval(timingRefresh));
 
   showState();
   void refreshRestoreButton();

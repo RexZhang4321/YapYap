@@ -104,6 +104,95 @@ const sentPaste = (extra = {}) => ({ pasteAttempted: true, pasteSent: true,
   clipboardRestored: true, message: "Paste sent", ...extra });
 const destination = (insert) => ({ capture: async () => {}, insert, discard: async () => {} });
 
+test("processing timings separate preparation, API requests and insertion and exclude speaking time", async () => {
+  let clock = 50_000;
+  const session = new TranscriptionSession(async () => { clock += 2400; return "hello"; },
+    () => {}, () => {}, destination(async () => { clock += 300; return sentPaste(); }),
+    { clean: async () => { clock += 800; return "Hello."; } }, undefined, () => clock);
+  session.begin(true, true);
+  clock += 60_000; // Speaking time must not appear in finalization latency.
+  session.beginFinalization();
+  clock += 120; // Worklet drain and WAV preparation.
+  session.capture(recording());
+  await session.transcribe();
+  assert.equal(session.metrics.label, "After release");
+  assert.equal(session.metrics.display("preparation"), "0.12 s");
+  assert.equal(session.metrics.display("transcription"), "2.40 s");
+  assert.equal(session.metrics.display("cleanup"), "0.80 s");
+  assert.equal(session.metrics.display("insertion"), "0.30 s");
+  assert.equal(session.metrics.display("total"), "3.62 s");
+  clock += 10_000;
+  assert.equal(session.metrics.display("total"), "3.62 s");
+  session.begin();
+  assert.equal(session.metrics, null);
+});
+
+test("timings record cleanup failure and refused insertion, then retry without repeating APIs", async () => {
+  let clock = 0, calls = 0, insertions = 0;
+  const session = new TranscriptionSession(async () => { calls++; clock += 1000; return "hello"; },
+    () => {}, () => {}, destination(async () => { clock += 250; return ++insertions === 1
+      ? sentPaste({ pasteAttempted: false, pasteSent: false }) : sentPaste(); }),
+    { clean: async () => { calls++; clock += 500; throw "cleanup_network_failed"; } }, undefined, () => clock);
+  session.begin(true, true);
+  session.capture(recording());
+  await session.transcribe();
+  assert.equal(session.metrics.display("cleanup"), "0.50 s · failed");
+  assert.equal(session.outputText, "hello");
+  assert.equal(session.metrics.display("insertion"), "0.25 s · failed");
+  assert.equal(session.metrics.total.status, "failed");
+  assert.equal(session.canRetryInsertion, true);
+  await session.retryInsertion();
+  assert.equal(calls, 2);
+  assert.equal(session.metrics.label, "Insertion retry");
+  assert.equal(session.metrics.display("transcription"), "Skipped");
+  assert.equal(session.metrics.display("cleanup"), "Skipped");
+  assert.equal(session.metrics.display("total"), "0.25 s");
+});
+
+test("timings freeze on stop, reset on retry, and ignore the old request finishing", async () => {
+  let clock = 0, calls = 0;
+  const old = deferred(), next = deferred();
+  const session = new TranscriptionSession(() => ++calls === 1 ? old.promise : next.promise,
+    () => {}, () => {}, undefined, undefined, undefined, () => clock);
+  session.begin(false, false);
+  session.capture(recording());
+  const first = session.transcribe();
+  await new Promise(resolve => setImmediate(resolve));
+  clock = 1500;
+  assert.equal(session.metrics.display("transcription"), "1.50 s · running");
+  session.stopWaiting();
+  const stopped = session.metrics;
+  assert.equal(stopped.display("transcription"), "1.50 s · stopped");
+  clock = 2000;
+  const second = session.transcribe();
+  await new Promise(resolve => setImmediate(resolve));
+  const current = session.metrics;
+  old.resolve("Late old result");
+  await first;
+  assert.equal(session.metrics, current);
+  assert.equal(current.running, true);
+  clock = 2600;
+  next.resolve("New result");
+  await second;
+  assert.equal(current.display("transcription"), "0.60 s");
+  assert.equal(current.display("cleanup"), "Skipped");
+  assert.equal(current.display("insertion"), "Skipped");
+  assert.equal(stopped.display("total"), "1.50 s · stopped");
+  session.discard();
+  assert.equal(session.metrics, null);
+});
+
+test("failed transcription is timed and retains retry audio", async () => {
+  let clock = 0;
+  const session = new TranscriptionSession(async () => { clock += 750; throw "validation_timeout"; },
+    () => {}, () => {}, undefined, undefined, undefined, () => clock);
+  session.capture(recording());
+  await session.transcribe();
+  assert.equal(session.metrics.display("transcription"), "0.75 s · failed");
+  assert.equal(session.metrics.display("total"), "0.75 s · failed");
+  assert.ok(session.audio);
+});
+
 test("session captures destination before recording and inserts exact canonical text once", async () => {
   const text = "你好 😀\nhttps://example.com/a?q=2\nsrc/main.ts AS5047P user_id 12.50";
   const events = [], ids = [];

@@ -64,6 +64,14 @@ export const initialControls = {
   "recovery-heading": {
     text: "Current dictation",
   },
+  "processing-timings": { hidden: true },
+  "timing-preparation": {},
+  "timing-transcription": {},
+  "timing-cleanup": {},
+  "timing-destination": {},
+  "timing-insertion": {},
+  "timing-total": {},
+  "timing-total-label": {},
   "discard-transcription": {
     text: "Discard",
     disabled: true,
