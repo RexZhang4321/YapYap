@@ -9,6 +9,9 @@ instructions, `reasoning.effort: "none"`, output cap, WinHTTP transport,
 preservation guard, and canonical fallback are unchanged. Keep this change:
 fast processing reduced median latency for every tested transcript length.
 
+The experimental latency benchmark test has been removed. The production fast
+tier, payload regression assertion, and existing cleanup probe remain.
+
 Fast mode has higher token pricing. This is an API processing tier, independent
 of reasoning effort. See the official [Fast mode guide](https://developers.openai.com/api/docs/guides/fast-mode)
 and [Luna model documentation](https://developers.openai.com/api/docs/models/gpt-6-luna).
@@ -17,7 +20,7 @@ and [Luna model documentation](https://developers.openai.com/api/docs/models/gpt
 
 - Use the app's saved Windows credential and production native HTTPS transport.
 - Send three fixed synthetic English transcripts: short, medium, and long.
-  Fixtures are in `cleanup::tests::saved_key_cleanup_latency_benchmark`.
+  The exact fixture text is preserved below.
 - Make six paired rounds per fixture, alternating standard/fast request order.
   Each pair uses the same fixture and differs only in `service_tier`.
 - Pin the baseline to `default` (standard); the old production request omitted
@@ -59,29 +62,49 @@ reduce that total by roughly half a second if the other stages stay constant;
 the app's timing display must confirm this on actual dictations. Full Task 13
 corpus evaluation remains pending.
 
-## Reproduction
+## Repeating the approach
 
-From `desktop/src-tauri`, as the Windows user with the app credential:
+The experimental test harness has been removed. To repeat the comparison, create
+an isolated temporary harness that uses the production cleanup payload and native
+transport, changes only `service_tier` between `default` and `fast`, and follows
+the paired order and timing boundaries described above.
 
-```powershell
-cargo test --lib cleanup::tests::saved_key_cleanup_latency_benchmark -- --ignored --exact --nocapture
+This protocol makes 38 billable synthetic requests. Exclude warmups, group by
+fixture and requested tier, and compare pairs with the same fixture/round. Median
+is the midpoint average for even counts; p95 uses nearest rank `ceil(0.95 * n)`.
+Log only the timing, tier, token counts, fixed errors, and quality booleans listed
+in the method. The saved Windows credential is accessed without exporting it.
+
+The original run used the Windows user outside the sandbox because the sandbox
+could not see the saved credential (`key_missing`). The sandbox linker required
+TEMP/TMP redirected to the ignored workspace `target/benchmark-tmp` directory.
+
+## Synthetic fixtures
+
+**Short**
+
+```text
+um please send the draft tomorrow and do not delete it
 ```
 
-This explicitly opts into 38 billable synthetic requests; ordinary `cargo test`
-skips the benchmark. Filter lines beginning `CLEANUP_LATENCY_SAMPLE ` and parse
-the remainder as JSON. Exclude `warmup: true`, group by fixture and requested
-tier, and compare pairs with the same fixture/round. Median is the midpoint
-average for even counts; p95 uses nearest rank `ceil(0.95 * n)`.
+**Medium**
 
-The sandbox could not see the saved credential (`key_missing`), so the actual
-benchmark ran as the Windows user outside the sandbox. No credential was
-exported. The sandbox linker also required TEMP/TMP redirected to the ignored
-workspace `target/benchmark-tmp` directory.
+```text
+um please send the draft tomorrow and do not delete it the budget is 17.50 and the reference is user_id keep both values exactly as written uh we should review the changes before the release and confirm that the original words are still available
+```
+
+**Long**
+
+```text
+um please send the draft tomorrow and do not delete it we should review the changes before the release and confirm that the original words are still available the recording includes a short introduction followed by several details about the proposed schedule uh the first step is to collect a small set of examples the next step is to run the same examples through each configuration and compare the time required to finish we should include short messages longer paragraphs numbers and technical identifiers the budget is 17.50 and the reference is user_id keep both values exactly as written do not change the order of these steps and do not add any new information erm once the results are available please record the typical delay and the slowest observed requests we can then decide whether this change is useful before starting another experiment keep the original transcript available in case the cleanup fails and make sure that every substantive word remains in the final result
+```
 
 ## Verification
 
-- 26 regular native tests passed; eight opt-in probes were skipped.
+- During the experiment, 26 regular native tests passed; eight opt-in probes were skipped.
 - 29 focused frontend transcription/recovery and key-privacy tests passed.
 - Rust formatting and the native debug build passed.
 - The real benchmark completed 38 calls, including the two excluded warmups.
 - No new physical microphone/foreground paste verification is claimed.
+- After removing the benchmark test, 26 regular native tests passed (seven
+  opt-in probes skipped), along with Rust formatting and the native debug build.
