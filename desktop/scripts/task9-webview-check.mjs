@@ -90,9 +90,9 @@ try {
       transport.finish = async () => { window.__task9Receive({kind:'closed'}); };
       transport.cancel = async () => {};
       ` : ''}
-      window.__taskUi.control('hotkey-action').value = 'live';
-      window.__taskUi.control('live-enabled').checked = true;
-      window.__taskUi.control('cleanup-enabled').checked = false;
+      window.__taskUi.control('hotkey-action').value = 'live'; window.__taskUi.dispatch('hotkey-action', 'change', new Event('change'));
+      window.__taskUi.control('live-enabled').checked = true; window.__taskUi.dispatch('live-enabled', 'change', new Event('change'));
+      window.__taskUi.control('cleanup-enabled').checked = false; window.__taskUi.dispatch('cleanup-enabled', 'change', new Event('change'));
     })()`);
     console.log(JSON.stringify({ prepared: true, mode: liveRun ? 'live' : 'local' }));
   } else if (operation === 'check') {
@@ -140,7 +140,7 @@ try {
     if (!liveRun) {
       // Normal dictate mode still owns the destination. Pause final STT and
       // cancel before its result so this fixture never dispatches paste.
-      await main.evaluate(`window.__task8Mode = 'slow'; window.__taskUi.control('hotkey-action').value = 'record'; window.__task8Shortcut({state:'Pressed',shortcut:'Ctrl+Alt+F10'})`);
+      await main.evaluate(`window.__task8Mode = 'slow'; window.__taskUi.control('hotkey-action').value = 'record'; window.__taskUi.dispatch('hotkey-action', 'change', new Event('change')); window.__task8Shortcut({state:'Pressed',shortcut:'Ctrl+Alt+F10'})`);
       await waitFor(main, `document.querySelector('#live-status').textContent.startsWith('Receiving')`);
       await pause(300);
       await main.evaluate(`window.__task9Receive({kind:'delta',itemId:'processing',text:'Provisional words while finalizing.'}); window.__task8Shortcut({state:'Released',shortcut:'Ctrl+Alt+F10'})`);
@@ -152,10 +152,10 @@ try {
       await waitFor(overlay, `document.querySelector('#overlay').dataset.phase === 'hidden' && document.querySelector('#overlay-text').textContent === ''`);
       assert.ok(await main.evaluate(`!document.querySelector('#transcript').value`));
       // Disabling the preview for the next session cannot show the old words.
-      await main.evaluate(`window.__taskUi.control('hotkey-action').value = 'live'; window.__taskUi.control('live-enabled').checked = false; window.__task8Shortcut({state:'Pressed',shortcut:'Ctrl+Alt+F10'})`);
+      await main.evaluate(`window.__taskUi.control('hotkey-action').value = 'live'; window.__taskUi.dispatch('hotkey-action', 'change', new Event('change')); window.__taskUi.control('live-enabled').checked = false; window.__taskUi.dispatch('live-enabled', 'change', new Event('change')); window.__task8Shortcut({state:'Pressed',shortcut:'Ctrl+Alt+F10'})`);
       await waitFor(overlay, `document.querySelector('#overlay').dataset.phase === 'recording' && document.querySelector('#overlay-label').textContent === 'BYOK'`);
       assert.ok((await main.evaluate(snapshotExpression)).text === '');
-      await main.evaluate(`document.querySelector('#discard-transcription').click(); window.__taskUi.control('live-enabled').checked = true`);
+      await main.evaluate(`document.querySelector('#discard-transcription').click(); window.__taskUi.control('live-enabled').checked = true; window.__taskUi.dispatch('live-enabled', 'change', new Event('change'))`);
       await waitFor(main, `document.querySelector('#session-state').textContent === 'discarded' && document.querySelector('#recording-playback').hidden`);
       const rejected = await main.evaluate(`(async () => {
         const { invoke } = await import('/node_modules/.vite/deps/@tauri-apps_api_core.js');

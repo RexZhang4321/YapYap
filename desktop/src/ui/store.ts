@@ -1,4 +1,6 @@
 import { initialControls } from "./initialState.ts";
+import { application, ApplicationModel } from "../applicationModel.ts";
+import type { RetainedResult } from "../transcriptionSession.ts";
 
 export type ControlId = keyof typeof initialControls;
 export interface ControlState {
@@ -11,33 +13,24 @@ export interface ControlState {
   state: string;
   options: { value: string; label: string }[];
 }
-export interface RetainedResult {
-  sessionId: string;
-  transcript: string;
-  outputText: string;
-}
+export type { RetainedResult } from "../transcriptionSession.ts";
 type RetainedAction = "original" | "output" | "discard";
 type Handler = (event: Event) => unknown;
 
 // The session controller publishes view state, never HTML. Each control has a
 // cached immutable snapshot so React can subscribe without restarting recording.
-export function createUiStore() {
+export function createUiStore(model = new ApplicationModel()) {
   const listeners = new Set<() => void>();
   const actions = new Map<string, Handler[]>();
   const elements = new Map<ControlId, HTMLElement>();
   const snapshots = new Map<ControlId, ControlState>();
   const models = new Map<ControlId, ControlState>();
   let pending = false;
-  let active = false;
   let logs: readonly string[] = [];
   let retained: { results: readonly RetainedResult[]; locked: boolean } = {
     results: [],
     locked: false,
   };
-  const keyListeners = new Set<
-    (key: { state: string; busy: boolean }) => void
-  >();
-  let keyState = { state: "unknown", busy: false };
   let retainedHandler:
     ((action: RetainedAction, sessionId: string) => void) | undefined;
 
@@ -51,6 +44,7 @@ export function createUiStore() {
     pending = true;
     queueMicrotask(flush);
   }
+  model.subscribe(changed);
   for (const id of Object.keys(initialControls) as ControlId[]) {
     const initial: ControlState = {
       text: "",
@@ -115,25 +109,9 @@ export function createUiStore() {
     focus(id: ControlId) {
       elements.get(id)?.focus();
     },
-    active: () => active,
-    setActive(value: boolean) {
-      if (active !== value) {
-        active = value;
-        changed();
-      }
-    },
-    keyState: () => keyState,
-    setKeyState(value: typeof keyState) {
-      keyState = value;
-      for (const listener of keyListeners) listener(value);
-    },
-    onKeyState(listener: (value: typeof keyState) => void) {
-      keyListeners.add(listener);
-      listener(keyState);
-      return () => {
-        keyListeners.delete(listener);
-      };
-    },
+    // Compatibility accessors for view consumers; the application owns these.
+    active: () => model.active,
+    keyState: () => model.readiness.key,
     logs: () => logs,
     addLog(line: string) {
       logs = [line, ...logs];
@@ -157,4 +135,4 @@ export function createUiStore() {
   };
 }
 
-export const ui = createUiStore();
+export const ui = createUiStore(application);

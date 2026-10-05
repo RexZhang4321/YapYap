@@ -3,13 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { apiKeyErrorMessage, clearAndSubmitApiKey } from "../apiKey";
 import { ui } from "./store";
 import { useUi } from "./View";
+import { application } from "../applicationModel";
 
 export function ApiKeySettings() {
   const input = useRef<HTMLInputElement>(null);
   const running = useRef(false);
-  const [busy, setBusy] = useState(true);
   const [hasDraft, setHasDraft] = useState(false);
-  const [keyState, setKeyState] = useState("unknown");
+  const { state: keyState, busy } = useUi(() => application.readiness.key);
   const [storedStatus, setStoredStatus] = useState("Checking for a saved key…");
   const [status, setStatus] = useState("");
   const active = useUi(ui.active);
@@ -18,28 +18,26 @@ export function ApiKeySettings() {
   async function refresh() {
     try {
       const saved = await invoke<boolean>("has_api_key");
-      setKeyState(saved ? "saved" : "missing");
       setStoredStatus(
         saved ? "API key saved securely." : "Add a key to start dictating.",
       );
-      ui.setKeyState({
+      application.setKeyState({
         state: saved ? "saved" : "missing",
         busy: running.current,
       });
     } catch {
-      setKeyState("unknown");
       setStoredStatus(
         "Windows could not read your saved key. Save it again or remove it.",
       );
-      ui.setKeyState({ state: "unknown", busy: running.current });
+      application.setKeyState({ state: "unknown", busy: running.current });
     }
   }
   useEffect(() => {
     running.current = true;
+    application.setKeyState({ ...application.readiness.key, busy: true });
     void refresh().finally(() => {
       running.current = false;
-      setBusy(false);
-      ui.setKeyState({ ...ui.keyState(), busy: false });
+      application.setKeyState({ ...application.readiness.key, busy: false });
     });
     ui.attach("api-key", input.current);
     return () => {
@@ -54,9 +52,8 @@ export function ApiKeySettings() {
   ) {
     if (running.current || ui.active()) return;
     running.current = true;
-    setBusy(true);
     setStatus(pending);
-    ui.setKeyState({ ...ui.keyState(), busy: true });
+    application.setKeyState({ ...application.readiness.key, busy: true });
     try {
       await work();
       setStatus(success);
@@ -65,8 +62,7 @@ export function ApiKeySettings() {
     } finally {
       await refresh();
       running.current = false;
-      setBusy(false);
-      ui.setKeyState({ ...ui.keyState(), busy: false });
+      application.setKeyState({ ...application.readiness.key, busy: false });
     }
   }
 

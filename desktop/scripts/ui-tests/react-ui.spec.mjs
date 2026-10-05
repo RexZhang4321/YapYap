@@ -17,6 +17,47 @@ async function snapshot(page) {
   return page.evaluate(() => window.__recoveryFixture.snapshot());
 }
 
+test("dictation consumes application preferences even when presentation controls are changed directly", async ({ page }) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const { ui } = await import("/src/ui/store.ts");
+    const { application, recorder } = window.__recoveryFixture;
+    application.setPreferences({ cleanup: false, live: false });
+    application.updateReadiness({ selectedMicrophone: "chosen-input" });
+    // Only an input event can request a settings change. Stale/tampered view
+    // values must not alter the next session or its provider requests.
+    ui.control("cleanup-enabled").checked = true;
+    ui.control("live-enabled").checked = true;
+    ui.control("microphone").value = "wrong-input";
+    ui.control("hotkey-action").value = "live";
+    recorder.start = async deviceId => {
+      window.__chosenInput = deviceId;
+      recorder.active = true;
+      return "Fixture recording";
+    };
+    recorder.stop = async () => {
+      recorder.active = false;
+      return { samples: [new Float32Array(128)], sampleRate: 48000,
+        channelCount: 1, frameCount: 128, deviceId: "chosen-input", deviceLabel: "Fixture",
+        durationSeconds: 128 / 48000 };
+    };
+    window.__fixtureIPC.state.transcription = "immediate";
+    window.__recoveryFixture.shortcut("Pressed");
+    await Promise.resolve();
+    window.__recoveryFixture.shortcut("Released");
+  });
+  await expect(page.locator("#dictation-status")).toHaveText("Inserted");
+  const state = await snapshot(page);
+  expect(state.commands.filter(command => command === "cleanup_transcript")).toHaveLength(0);
+  expect(state.commands.filter(command => command === "start_live_stream")).toHaveLength(0);
+  expect(state.insertions).toHaveLength(1);
+  expect(state.insertions[0].text).toBe(original);
+  expect(await page.evaluate(() => window.__chosenInput)).toBe("chosen-input");
+  await page.locator("#open-settings").click();
+  await expect(page.locator("#cleanup-enabled")).not.toBeChecked();
+  await expect(page.locator("#live-enabled")).not.toBeChecked();
+});
+
 test("processing times update during requests, freeze on stop and clear on discard", async ({ page }) => {
   await ready(page);
   await expect(page.locator("#processing-timings")).toBeHidden();

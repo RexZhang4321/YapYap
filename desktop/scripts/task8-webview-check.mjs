@@ -68,10 +68,10 @@ try {
         };
       }
       window.__task8Mode = '${mode}'; window.__task8Prepared = true;
-      window.__taskUi.control('hotkey-action').value = 'record';
-      window.__taskUi.control('live-enabled').checked = false;
+      window.__taskUi.control('hotkey-action').value = 'record'; window.__taskUi.dispatch('hotkey-action', 'change', new Event('change'));
+      window.__taskUi.control('live-enabled').checked = false; window.__taskUi.dispatch('live-enabled', 'change', new Event('change'));
       // Keep this older fixture check local: cleanup is a separate provider stage.
-      window.__taskUi.control('cleanup-enabled').checked = false;
+      window.__taskUi.control('cleanup-enabled').checked = false; window.__taskUi.dispatch('cleanup-enabled', 'change', new Event('change'));
     })()`);
   } else if (operation === 'press' || operation === 'release') {
     await evaluate(`(() => {

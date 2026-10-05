@@ -29,7 +29,7 @@ import { shortcutFromKey, ShortcutBinding, ScopedShortcut } from "./shortcuts";
 import { confirmRecoveryCopy, type RecoveryCopyChoice } from "./recoveryCopy";
 import { processingStages } from "./processingTimings";
 
-type HotkeyAction = "record" | "live" | "insert" | "retry";
+import { application as app, preferencesKey } from "./applicationModel";
 
 let initialized = false;
 export function initializeDictation(ports: {
@@ -96,51 +96,19 @@ export function initializeDictation(ports: {
   const cancelButton = ui.control("cancel-dictation");
   const dictationStatus = ui.control("dictation-status");
   const bypassButton = ui.control("bypass-processing");
-  let recordingShortcut = false;
-  let shortcutBusy = false;
-  let escapeAvailable = true;
-  let apiKeyState = "unknown";
-  let microphoneAccess: "unknown" | "ready" | "blocked" = "unknown";
-  let microphoneIssue = "";
-  let attemptedMicrophoneAccess = false;
-  const preferencesKey = "byok-dictation-preferences";
-  function savedPreferences(): Record<string, unknown> {
-    try {
-      const value: unknown = JSON.parse(
-        localStorage.getItem(preferencesKey) ?? "{}",
-      );
-      return value && typeof value === "object" && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : {};
-    } catch {
-      return {};
-    }
+  try {
+    app.loadPreferences(localStorage.getItem(preferencesKey));
+  } catch {
+    app.loadPreferences(null);
   }
   function savePreferences() {
     try {
-      localStorage.setItem(
-        preferencesKey,
-        JSON.stringify({
-          shortcut: shortcutBinding.active,
-          microphone: preferredMicrophone,
-          cleanup: cleanupEnabled.checked,
-          live: liveEnabled.checked,
-        }),
-      );
+      localStorage.setItem(preferencesKey, app.serializePreferences());
     } catch {
       status.text =
         "Settings work for this session. Windows could not save them for next time.";
     }
   }
-  const preferences = savedPreferences();
-  let preferredMicrophone =
-    typeof preferences.microphone === "string" ? preferences.microphone : "";
-  if (typeof preferences.shortcut === "string")
-    shortcutInput.value = preferences.shortcut;
-  if (typeof preferences.cleanup === "boolean")
-    cleanupEnabled.checked = preferences.cleanup;
-  if (typeof preferences.live === "boolean")
-    liveEnabled.checked = preferences.live;
 
   const shortcutBinding = new ShortcutBinding(
     (next) =>
@@ -158,20 +126,13 @@ export function initializeDictation(ports: {
       }),
     () => unregister("Escape"),
     (available) => {
-      escapeAvailable = available;
+      app.updateReadiness({ escapeAvailable: available });
       showHomeState();
     },
   );
-  let held = false;
-  let heldAction: HotkeyAction | null = null;
   let insertionCapture: Promise<string> | null = null;
   let recordingStart: Promise<string> | null = null;
-  let operationBusy = false;
-  let dictationOperation = 0;
   let playbackUrl: string | null = null;
-  let captureInterruptionMessage: string | null = null;
-  let overlayCaptureReadySession = "";
-  let livePreviewSession = "";
   const overlay = new OverlayController(
     () => invoke<OverlaySnapshot>("claim_overlay"),
     (snapshot) => invoke<void>("update_overlay", { snapshot }),
@@ -190,7 +151,7 @@ export function initializeDictation(ports: {
 
   function showOverlay() {
     overlay.update(
-      transcription.sessionId !== overlayCaptureReadySession
+      transcription.sessionId !== app.recovery.overlayCaptureReadySession
         ? "hidden"
         : overlayPhase({
             state: transcription.state,
@@ -201,10 +162,12 @@ export function initializeDictation(ports: {
               : transcription.error,
             insertion: transcription.insertion,
             interrupted:
-              captureInterruptionMessage !== null && !transcription.transcript,
-            stopping: operationBusy && recordingStart !== null,
+              app.recovery.captureInterruptionMessage !== null &&
+              !transcription.transcript,
+            stopping: app.interaction.operationBusy && recordingStart !== null,
           }),
-      livePreviewSession === transcription.sessionId && liveEnabled.checked
+      app.recovery.livePreviewSession === transcription.sessionId &&
+        app.preferences.live
         ? live
         : undefined,
     );
@@ -213,11 +176,11 @@ export function initializeDictation(ports: {
   function provisionalRecoveryText(allowProcessing = false): string | null {
     return selectProvisionalText({
       sessionId: transcription.sessionId,
-      previewSessionId: livePreviewSession,
+      previewSessionId: app.recovery.livePreviewSession,
       sessionState: transcription.state,
       discarded: transcription.discarded,
-      held,
-      operationBusy,
+      held: app.interaction.held,
+      operationBusy: app.interaction.operationBusy,
       busy: transcription.busy,
       inserting: transcription.inserting,
       liveState: live.state,
@@ -232,26 +195,40 @@ export function initializeDictation(ports: {
     copyProvisionalWithoutBackupButton.disabled = unavailable;
   }
 
+  function showConfiguration() {
+    shortcutInput.value = app.interaction.shortcutDraft;
+    microphoneSelect.value = app.readiness.selectedMicrophone;
+    actionSelect.value = app.interaction.testMode;
+    cleanupEnabled.checked = app.preferences.cleanup;
+    liveEnabled.checked = app.preferences.live;
+  }
+
   function showState() {
     showTimings();
     showOverlay();
     showProvisionalRecovery();
     const cancellable = canCancelDictation();
     void escapeBinding.setActive(cancellable);
-    holdState.text = held ? "DOWN" : "UP";
-    const locked = held || operationBusy || transcription.busy;
-    ui.setActive(locked);
+    holdState.text = app.interaction.held ? "DOWN" : "UP";
+    const locked = app.active;
+    app.publish();
+    showConfiguration();
+    restoreButton.disabled = !app.canRestoreClipboard;
     liveEnabled.disabled = locked;
     cleanupEnabled.disabled = locked;
     liveReconnect.disabled = !recorder.isRecording || live.state !== "failed";
-    applyShortcutButton.disabled = locked || shortcutBusy || recordingShortcut;
-    shortcutRecordButton.disabled = locked || shortcutBusy;
-    shortcutInput.disabled = locked || shortcutBusy;
+    applyShortcutButton.disabled =
+      locked ||
+      app.interaction.shortcutBusy ||
+      app.interaction.recordingShortcut;
+    shortcutRecordButton.disabled = locked || app.interaction.shortcutBusy;
+    shortcutInput.disabled = locked || app.interaction.shortcutBusy;
     actionSelect.disabled = locked;
     microphoneSelect.disabled = locked;
     refreshDevicesButton.disabled = locked;
-    prepareMicrophoneButton.disabled = locked || microphoneAccess === "ready";
-    prepareMicrophoneButton.hidden = microphoneAccess === "ready";
+    prepareMicrophoneButton.disabled =
+      locked || app.readiness.microphoneAccess === "ready";
+    prepareMicrophoneButton.hidden = app.readiness.microphoneAccess === "ready";
     playRecordingButton.disabled =
       locked || !recorder.hasPlayableRecording || !ports.playback().paused;
     stopPlaybackButton.disabled = locked || ports.playback().paused;
@@ -263,9 +240,12 @@ export function initializeDictation(ports: {
       transcription.inserting ||
       transcription.state === "idle" ||
       transcription.state === "discarded";
-    if (operationBusy && !recordingStart) discardButton.disabled = true;
+    if (app.interaction.operationBusy && !recordingStart)
+      discardButton.disabled = true;
     discardButton.hidden =
-      held || transcription.busy || transcription.state === "recording";
+      app.interaction.held ||
+      transcription.busy ||
+      transcription.state === "recording";
     discardButton.text = "Discard this dictation";
     cancelButton.disabled = !cancellable;
     cancelButton.hidden = !cancellable;
@@ -274,9 +254,13 @@ export function initializeDictation(ports: {
       transcription.state === "recording" ||
       recordingStart !== null
         ? "Cancel dictation"
-        : "Discard dictation") + (escapeAvailable ? " · Esc" : "");
+        : "Discard dictation") +
+      (app.readiness.escapeAvailable ? " · Esc" : "");
     const processingRecovery =
-      transcription.busy && !transcription.inserting && !held && !operationBusy;
+      transcription.busy &&
+      !transcription.inserting &&
+      !app.interaction.held &&
+      !app.interaction.operationBusy;
     setHidden("processing-recovery", !processingRecovery);
     const recoverable =
       transcription.transcript || provisionalRecoveryText(true);
@@ -315,7 +299,7 @@ export function initializeDictation(ports: {
             ? transcription.usesCleanup
               ? "Light cleanup is on."
               : "Using your original words."
-            : cleanupEnabled.checked
+            : app.preferences.cleanup
               ? "Light cleanup is on for your next dictation."
               : "Your next dictation will use your original words.";
     if (transcription.discarded) {
@@ -325,14 +309,15 @@ export function initializeDictation(ports: {
     } else if (transcription.inserting) {
       transcriptionStatus.text = "Inserting text. Please wait for the result.";
     } else if (transcription.busy) {
-      transcriptionStatus.text = transcription.state === "failed" && transcription.transcript
-        ? "Capturing your chosen paste destination…"
-        : transcription.cleaning
-        ? "Tidying your words…"
-        : "Transcribing…";
+      transcriptionStatus.text =
+        transcription.state === "failed" && transcription.transcript
+          ? "Capturing your chosen paste destination…"
+          : transcription.cleaning
+            ? "Tidying your words…"
+            : "Transcribing…";
     } else if (transcription.state === "recording") {
       transcriptionStatus.text =
-        actionSelect.value === "live"
+        app.interaction.testMode === "live"
           ? "Listening. Release to save this test recording."
           : "Listening. Release to finish, or Esc to cancel.";
     } else if (transcription.insertion) {
@@ -343,10 +328,9 @@ export function initializeDictation(ports: {
           ? " Focus your intended text field, then press and release your shortcut to paste the saved text there. You can also copy the text."
           : " Your original words remain here until you discard them or quit.");
     } else if (transcription.transcript && transcription.error) {
-      transcriptionStatus.text =
-        transcription.canRetryInsertion
-          ? "The destination could not be captured. Focus your intended text field, then press and release your shortcut to paste the saved text there, or use Copy."
-          : "Check the destination before pasting again. Your text is safe here; use Copy if needed.";
+      transcriptionStatus.text = transcription.canRetryInsertion
+        ? "The destination could not be captured. Focus your intended text field, then press and release your shortcut to paste the saved text there, or use Copy."
+        : "Check the destination before pasting again. Your text is safe here; use Copy if needed.";
     } else if (transcription.error) {
       transcriptionStatus.text =
         transcriptionError(transcription.error) +
@@ -360,7 +344,7 @@ export function initializeDictation(ports: {
     } else {
       transcriptionStatus.text = transcription.audio
         ? "Recording saved. Choose Retry transcription to try again."
-        : actionSelect.value === "live"
+        : app.interaction.testMode === "live"
           ? "Hold your shortcut to preview live words."
           : "Hold your shortcut in any text field. Release to insert.";
     }
@@ -386,11 +370,8 @@ export function initializeDictation(ports: {
   }
 
   function showHomeState() {
-    const active = held || operationBusy || transcription.busy;
-    const ready =
-      apiKeyState === "saved" &&
-      microphoneAccess === "ready" &&
-      shortcutBinding.available;
+    const active = app.active;
+    const ready = app.isReady(shortcutBinding.available);
     const home = ui.control("home-panel");
     const clipboardIssue =
       transcription.insertion?.pasteSent &&
@@ -402,7 +383,7 @@ export function initializeDictation(ports: {
     if (home)
       home.state = needsAttention
         ? "error"
-        : held
+        : app.interaction.held
           ? "recording"
           : active
             ? "active"
@@ -414,34 +395,35 @@ export function initializeDictation(ports: {
     const setupMessage = ui.control("setup-message");
     if (setupMessage)
       setupMessage.text =
-        apiKeyState !== "saved"
+        app.readiness.key.state !== "saved"
           ? "Add your OpenAI API key in Settings to start dictating."
-          : microphoneAccess === "blocked"
-            ? microphoneIssue ||
+          : app.readiness.microphoneAccess === "blocked"
+            ? app.readiness.microphoneIssue ||
               "Allow microphone access in Windows settings, then retry in Settings."
-            : microphoneAccess === "unknown"
+            : app.readiness.microphoneAccess === "unknown"
               ? "Checking microphone access…"
               : "Choose an available dictation shortcut in Settings.";
     const accessHelp = ui.control("microphone-access-help");
     if (accessHelp)
       accessHelp.text =
-        microphoneAccess === "ready"
+        app.readiness.microphoneAccess === "ready"
           ? "Microphone ready. It opens only while you dictate."
-          : microphoneAccess === "blocked"
-            ? microphoneIssue || "Allow microphone access, then retry."
+          : app.readiness.microphoneAccess === "blocked"
+            ? app.readiness.microphoneIssue ||
+              "Allow microphone access, then retry."
             : "Microphone access is checked automatically after your key is saved. Allow access once when asked.";
     setHidden("setup-callout", ready || active);
     setHidden(
       "live-panel",
       !(
-        (active && liveEnabled.checked && live.text !== "") ||
+        (active && app.preferences.live && live.text !== "") ||
         (transcription.state === "failed" && provisionalRecoveryText() !== null)
       ),
     );
     setHidden(
       "recovery-panel",
-      held ||
-        (operationBusy && !transcription.hasResult) ||
+      app.interaction.held ||
+        (app.interaction.operationBusy && !transcription.hasResult) ||
         (!transcription.hasResult && transcription.state !== "failed"),
     );
     liveReconnect.hidden = liveReconnect.disabled;
@@ -449,7 +431,7 @@ export function initializeDictation(ports: {
     if (cancelHint) {
       cancelHint.hidden = !canCancelDictation() && (!ready || active);
       cancelHint.text = canCancelDictation()
-        ? escapeAvailable
+        ? app.readiness.escapeAvailable
           ? "Press Esc to cancel."
           : "Global Esc is unavailable. Use Cancel here."
         : "Press Esc while dictating to cancel.";
@@ -468,29 +450,30 @@ export function initializeDictation(ports: {
       transcription.state !== "failed" || provisionalRecoveryText() === null,
     );
     setHidden("retained-panel", transcription.retainedResults.length === 0);
-    setHidden("clipboard-recovery", restoreButton.disabled);
+    setHidden("clipboard-recovery", !app.canRestoreClipboard);
     dictationStatus.text = transcription.inserting
       ? "Inserting text…"
-      : transcription.discarded && (operationBusy || transcription.busy)
+      : transcription.discarded &&
+          (app.interaction.operationBusy || transcription.busy)
         ? "Cancelled"
-          : transcription.busy
+        : transcription.busy
           ? transcription.state === "failed" && transcription.transcript
             ? "Preparing to paste saved text…"
             : transcription.stalled
-            ? transcription.cleaning
-              ? "Cleanup is taking longer than expected"
-              : "Transcription is taking longer than expected"
-            : transcription.cleaning
-              ? "Tidying your words…"
-              : "Transcribing…"
-          : held
-            ? heldAction === "retry"
+              ? transcription.cleaning
+                ? "Cleanup is taking longer than expected"
+                : "Transcription is taking longer than expected"
+              : transcription.cleaning
+                ? "Tidying your words…"
+                : "Transcribing…"
+          : app.interaction.held
+            ? app.interaction.heldAction === "retry"
               ? "Release to paste saved text"
               : recorder.isRecording
-              ? "Listening"
-              : "Opening microphone…"
-            : operationBusy
-              ? microphoneAccess === "unknown"
+                ? "Listening"
+                : "Opening microphone…"
+            : app.interaction.operationBusy
+              ? app.readiness.microphoneAccess === "unknown"
                 ? "Checking microphone access…"
                 : "Finishing…"
               : clipboardIssue
@@ -507,7 +490,8 @@ export function initializeDictation(ports: {
     const detail = ui.control("dictation-detail");
     if (detail) {
       detail.text =
-        transcription.discarded && (operationBusy || transcription.busy)
+        transcription.discarded &&
+        (app.interaction.operationBusy || transcription.busy)
           ? "Stopping microphone capture. The pending transcription response will be ignored."
           : transcription.inserting
             ? "Please wait for the insertion result."
@@ -538,11 +522,11 @@ export function initializeDictation(ports: {
                 : transcription.canRetryInsertion
                   ? `Text was not pasted. ${transcription.insertion?.message ?? ""} Focus your intended text field, then press and release your shortcut to paste the saved text there. You can also copy your text below or discard this dictation.`
                   : "The paste outcome is uncertain. Check the destination before pasting again. Copy your saved text below if needed, or discard this dictation."
-              : captureInterruptionMessage ||
+              : app.recovery.captureInterruptionMessage ||
                 transcriptionError(
                   transcription.error ?? "transcription_audio_invalid",
                 )
-            : (captureInterruptionMessage ?? "");
+            : (app.recovery.captureInterruptionMessage ?? "");
     alert.hidden = !message;
     ui.control("dictation-alert-text").text = message;
   }
@@ -555,7 +539,13 @@ export function initializeDictation(ports: {
     const result = transcription.retainedResults.find(
       (result) => result.sessionId === sessionId,
     );
-    if (!result || held || operationBusy || transcription.busy) return;
+    if (
+      !result ||
+      app.interaction.held ||
+      app.interaction.operationBusy ||
+      transcription.busy
+    )
+      return;
     if (action === "discard") transcription.discardRetained(sessionId);
     else
       void copyRetained(
@@ -565,8 +555,13 @@ export function initializeDictation(ports: {
   });
 
   async function copyRetained(text: string, withoutBackup: boolean) {
-    if (held || operationBusy || transcription.busy) return;
-    operationBusy = true;
+    if (
+      app.interaction.held ||
+      app.interaction.operationBusy ||
+      transcription.busy
+    )
+      return;
+    app.updateInteraction({ operationBusy: true });
     showState();
     const resultStatus = ui.control("retained-copy-status");
     try {
@@ -578,7 +573,7 @@ export function initializeDictation(ports: {
       resultStatus.text =
         "Copy failed. Restore the previous clipboard, or select and copy the original text above.";
     } finally {
-      operationBusy = false;
+      app.updateInteraction({ operationBusy: false });
       await refreshRestoreButton();
       showState();
     }
@@ -612,12 +607,20 @@ export function initializeDictation(ports: {
   }
 
   const live = new LiveTranscription(nativeStreamingSTT, showLiveState);
-  ui.on("hotkey-action", "change", showState);
+  ui.on("hotkey-action", "change", () => {
+    const mode = actionSelect.value;
+    app.updateInteraction({
+      testMode: mode === "live" || mode === "insert" ? mode : "record",
+    });
+    showState();
+  });
   ui.on("cleanup-enabled", "change", () => {
+    app.setPreferences({ cleanup: cleanupEnabled.checked });
     savePreferences();
     showState();
   });
   ui.on("live-enabled", "change", () => {
+    app.setPreferences({ live: liveEnabled.checked });
     savePreferences();
     showState();
   });
@@ -627,15 +630,14 @@ export function initializeDictation(ports: {
 
   async function refreshRestoreButton() {
     try {
-      restoreButton.disabled =
-        !(await invoke<boolean>("has_clipboard_backup")) ||
-        held ||
-        operationBusy ||
-        transcription.busy;
+      app.updateRecovery({
+        clipboardBackupAvailable: await invoke<boolean>("has_clipboard_backup"),
+      });
     } catch {
-      restoreButton.disabled = true;
+      app.updateRecovery({ clipboardBackupAvailable: false });
     }
-    setHidden("clipboard-recovery", restoreButton.disabled);
+    restoreButton.disabled = !app.canRestoreClipboard;
+    setHidden("clipboard-recovery", !app.canRestoreClipboard);
   }
 
   function displayRecording(recording: CapturedPcm) {
@@ -653,7 +655,8 @@ export function initializeDictation(ports: {
         ? ` · diagnostics: AudioContext ${recording.audioContextState}, AudioWorklet callbacks ${recording.workletProcessCalls}, input channels ${recording.workletInputChannels}, microphone track ${recording.trackState}${recording.trackMuted ? " (muted)" : ""}`
         : "";
     recordingMetadata.text = `Duration: ${duration} s · sample rate: ${recording.sampleRate.toLocaleString()} Hz · channels: ${recording.channelCount} · input: ${device} · PCM retained in memory${captureDetails}`;
-    clearRecordingButton.disabled = operationBusy || held;
+    clearRecordingButton.disabled =
+      app.interaction.operationBusy || app.interaction.held;
 
     if (recording.frameCount > 0) {
       const wav = encodeWav(recording);
@@ -685,7 +688,7 @@ export function initializeDictation(ports: {
         releaseRecording();
         return;
       }
-      captureInterruptionMessage = message;
+      app.updateRecovery({ captureInterruptionMessage: message });
       displayRecording(recording);
       recordingStatus.text = message;
       log("microphone disconnected; partial audio retained in memory");
@@ -718,7 +721,7 @@ export function initializeDictation(ports: {
             transcription.sessionId === sessionId &&
             !transcription.discarded
           ) {
-            overlayCaptureReadySession = sessionId;
+            app.updateRecovery({ overlayCaptureReadySession: sessionId });
             showState();
           }
         }
@@ -731,6 +734,8 @@ export function initializeDictation(ports: {
     { clean: (text) => invoke<string>("cleanup_transcript", { text }) },
   );
 
+  app.connectSession(transcription, live);
+
   function releaseRecording() {
     // Recording cancellation stops the graph asynchronously before clearing it.
     if (recorder.isRecording || recorder.isStopping) return;
@@ -741,7 +746,7 @@ export function initializeDictation(ports: {
     if (playbackUrl) URL.revokeObjectURL(playbackUrl);
     playbackUrl = null;
     recorder.clear();
-    captureInterruptionMessage = null;
+    app.updateRecovery({ captureInterruptionMessage: null });
     inputLevelMeter.value = "0";
     inputLevelStatus.text = "Waiting for recording.";
     recordingMetadata.text = "No recording retained.";
@@ -755,7 +760,8 @@ export function initializeDictation(ports: {
       return;
     }
 
-    const previous = preferredMicrophone || microphoneSelect.value;
+    const previous =
+      app.preferences.microphone || app.readiness.selectedMicrophone;
     const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
       (device) => device.kind === "audioinput",
     );
@@ -775,9 +781,9 @@ export function initializeDictation(ports: {
         (option) => option.value === previous,
       )
     ) {
-      microphoneSelect.value = previous;
+      app.updateReadiness({ selectedMicrophone: previous });
     } else {
-      microphoneSelect.value = "";
+      app.updateReadiness({ selectedMicrophone: "" });
       if (previous)
         recordingStatus.text =
           "Your preferred microphone is disconnected. Using the system default until it returns.";
@@ -787,21 +793,26 @@ export function initializeDictation(ports: {
       recordingStatus.text =
         "No microphone is listed. The system default may still work; connect an input or check Windows microphone access.";
     }
+    showConfiguration();
   }
 
   async function prepareMicrophone() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      attemptedMicrophoneAccess = true;
-      microphoneAccess = "blocked";
-      microphoneIssue =
-        "Microphone capture is unavailable in this app environment.";
-      recordingStatus.text = microphoneIssue;
+      app.updateReadiness({
+        attemptedMicrophoneAccess: true,
+        microphoneAccess: "blocked",
+      });
+      app.updateReadiness({
+        microphoneIssue:
+          "Microphone capture is unavailable in this app environment.",
+      });
+      recordingStatus.text = app.readiness.microphoneIssue;
       showHomeState();
       return;
     }
 
-    operationBusy = true;
-    attemptedMicrophoneAccess = true;
+    app.updateInteraction({ operationBusy: true });
+    app.updateReadiness({ attemptedMicrophoneAccess: true });
     recordingStatus.text = "Requesting microphone access…";
     showState();
 
@@ -814,8 +825,8 @@ export function initializeDictation(ports: {
         noiseSuppression: false,
         autoGainControl: false,
       };
-      if (microphoneSelect.value)
-        audio.deviceId = { exact: microphoneSelect.value };
+      if (app.readiness.selectedMicrophone)
+        audio.deviceId = { exact: app.readiness.selectedMicrophone };
       stream = await navigator.mediaDevices.getUserMedia({ audio });
       const track = stream.getAudioTracks()[0];
       if (!track)
@@ -826,16 +837,15 @@ export function initializeDictation(ports: {
       for (const mediaTrack of stream.getTracks()) mediaTrack.stop();
       stream = null;
       await refreshMicrophones(false);
-      microphoneAccess = "ready";
-      microphoneIssue = "";
+      app.updateReadiness({ microphoneAccess: "ready", microphoneIssue: "" });
       recordingStatus.text = `Microphone ready: ${label}${sampleRate ? ` (${sampleRate.toLocaleString()} Hz)` : ""}.`;
       log("microphone permission prepared");
     } catch (error) {
       for (const track of stream?.getTracks() ?? []) track.stop();
-      microphoneAccess = "blocked";
+      app.updateReadiness({ microphoneAccess: "blocked" });
       recordingError(error);
     } finally {
-      operationBusy = false;
+      app.updateInteraction({ operationBusy: false });
       showState();
     }
   }
@@ -843,8 +853,10 @@ export function initializeDictation(ports: {
   function recordingError(error: unknown) {
     const message = microphoneErrorMessage(error);
     recordingStatus.text = message;
-    microphoneIssue = message;
-    microphoneAccess = "blocked";
+    app.updateReadiness({
+      microphoneIssue: message,
+      microphoneAccess: "blocked",
+    });
     log("microphone start failed: " + message);
   }
 
@@ -852,17 +864,17 @@ export function initializeDictation(ports: {
     started: Promise<string> | null,
     autoTranscribe = true,
   ) {
-    const owner = ++dictationOperation;
+    const owner = app.nextOperation();
     const sessionId = transcription.sessionId;
-    operationBusy = true;
+    app.updateInteraction({ operationBusy: true });
     if (autoTranscribe) transcription.beginFinalization();
     showState();
     try {
       await started;
-      if (owner !== dictationOperation || sessionId !== transcription.sessionId)
+      if (owner !== app.operation || sessionId !== transcription.sessionId)
         return;
       const recording = await recorder.stop();
-      if (owner !== dictationOperation || sessionId !== transcription.sessionId)
+      if (owner !== app.operation || sessionId !== transcription.sessionId)
         return;
       recordingStart = null;
       if (transcription.discarded) {
@@ -871,47 +883,35 @@ export function initializeDictation(ports: {
       }
       void live.finish();
       displayRecording(recording);
-      if (captureInterruptionMessage) transcription.metrics?.finish("stopped");
-      if (captureInterruptionMessage)
-        recordingStatus.text = captureInterruptionMessage;
+      if (app.recovery.captureInterruptionMessage)
+        transcription.metrics?.finish("stopped");
+      if (app.recovery.captureInterruptionMessage)
+        recordingStatus.text = app.recovery.captureInterruptionMessage;
       void refreshMicrophones(false).catch(() => undefined);
       // Disconnected microphones retain partial capture for an explicit retry.
-      if (!captureInterruptionMessage && autoTranscribe) {
-        operationBusy = false;
+      if (!app.recovery.captureInterruptionMessage && autoTranscribe) {
+        app.updateInteraction({ operationBusy: false });
         await transcription.transcribe();
       }
     } catch (error) {
-      if (owner !== dictationOperation || sessionId !== transcription.sessionId)
+      if (owner !== app.operation || sessionId !== transcription.sessionId)
         return;
       if (!recorder.isRecording) void live.finish();
       if (transcription.discarded) return;
       transcription.failRecording();
-      if (
-        recordingStatus.text.startsWith("Microphone access was denied") ||
-        recordingStatus.text.startsWith("No microphone input is available") ||
-        recordingStatus.text.startsWith("The microphone could not be opened") ||
-        recordingStatus.text.startsWith(
-          "The selected microphone is no longer available",
-        )
-      ) {
-        // The start handler already displayed the specific browser permission/device error.
-      } else {
-        recordingError(error);
-      }
+      // A startup handler already owns any permission/device failure.
+      if (app.readiness.microphoneAccess !== "blocked") recordingError(error);
     } finally {
-      if (
-        owner === dictationOperation &&
-        sessionId === transcription.sessionId
-      ) {
+      if (owner === app.operation && sessionId === transcription.sessionId) {
         recordingStart = null;
-        operationBusy = false;
+        app.updateInteraction({ operationBusy: false });
         showState();
       }
     }
   }
 
   function runInsertion(pendingCapture: Promise<string> | null) {
-    operationBusy = true;
+    app.updateInteraction({ operationBusy: true });
     showState();
     void (async () => {
       try {
@@ -925,7 +925,7 @@ export function initializeDictation(ports: {
         insertionStatus.text = String(error) + " Use Copy test text if needed.";
         log("insertion unavailable: " + String(error));
       } finally {
-        operationBusy = false;
+        app.updateInteraction({ operationBusy: false });
         await refreshRestoreButton();
         showState();
       }
@@ -933,24 +933,27 @@ export function initializeDictation(ports: {
   }
 
   function onShortcut(event: ShortcutEvent) {
-    if (recordingShortcut || shortcutBusy || ports.recoveryDialog().open)
+    if (
+      app.interaction.recordingShortcut ||
+      app.interaction.shortcutBusy ||
+      ports.recoveryDialog().open
+    )
       return;
     if (event.state === "Pressed") {
-      if (held) return;
-      if (operationBusy || transcription.busy) {
+      if (app.interaction.held) return;
+      if (app.interaction.operationBusy || transcription.busy) {
         recordingStatus.text =
           "A session is still finalizing or stopping. Wait, or cancel and discard it before recording again.";
         return;
       }
       const requestedAction =
-        actionSelect.value === "insert"
+        app.interaction.testMode === "insert"
           ? "insert"
-          : actionSelect.value === "live"
+          : app.interaction.testMode === "live"
             ? "live"
             : "record";
       if (requestedAction !== "insert" && transcription.canRetryInsertion) {
-        held = true;
-        heldAction = "retry";
+        app.updateInteraction({ held: true, heldAction: "retry" });
         showState();
         return;
       }
@@ -964,36 +967,40 @@ export function initializeDictation(ports: {
         showHomeState();
         return;
       }
-      if (requestedAction !== "insert" && apiKeyState !== "saved") {
+      if (requestedAction !== "insert" && app.readiness.key.state !== "saved") {
         dictationStatus.text =
           "Add your OpenAI API key in Settings before dictating.";
         setHidden("setup-callout", false);
         return;
       }
-      held = true;
-      heldAction = requestedAction;
+      app.updateInteraction({ held: true, heldAction: requestedAction });
       showState();
       log(event.shortcut + " key-down");
 
-      if (heldAction === "insert") {
+      if (app.interaction.heldAction === "insert") {
         insertionCapture = invoke<string>("capture_target");
         void insertionCapture.catch(() => undefined);
         insertionStatus.text = "Capturing the focused target…";
         return;
       }
 
-      dictationOperation += 1;
-      transcription.begin(heldAction !== "live", cleanupEnabled.checked);
+      app.nextOperation();
+      transcription.begin(
+        app.interaction.heldAction !== "live",
+        app.preferences.cleanup,
+      );
       const sessionId = transcription.sessionId;
       ui.control("recovery-copy-status").text = "";
       provisionalCopyStatus.text = "";
-      captureInterruptionMessage = null;
-      if (heldAction === "live") {
-        overlayCaptureReadySession = transcription.sessionId;
+      app.updateRecovery({ captureInterruptionMessage: null });
+      if (app.interaction.heldAction === "live") {
+        app.updateRecovery({
+          overlayCaptureReadySession: transcription.sessionId,
+        });
         showState();
       }
-      livePreviewSession = transcription.sessionId;
-      if (liveEnabled.checked) live.begin();
+      app.updateRecovery({ livePreviewSession: transcription.sessionId });
+      if (app.preferences.live) live.begin();
       else live.cancel();
 
       if (recorder.hasRecording) {
@@ -1005,15 +1012,17 @@ export function initializeDictation(ports: {
       } else {
         recordingStatus.text = "Requesting microphone access…";
         recordingStart = recorder
-          .start(microphoneSelect.value)
+          .start(app.readiness.selectedMicrophone)
           .then(async (message) => {
             if (
               transcription.discarded ||
               transcription.sessionId !== sessionId
             )
               return message;
-            microphoneAccess = "ready";
-            microphoneIssue = "";
+            app.updateReadiness({
+              microphoneAccess: "ready",
+              microphoneIssue: "",
+            });
             live.captureStarted();
             recordingStatus.text = "Listening… " + message;
             log("microphone recording started");
@@ -1038,11 +1047,11 @@ export function initializeDictation(ports: {
       }
       void recordingStart.catch(() => undefined);
     } else {
-      if (!held) return;
+      if (!app.interaction.held) return;
       log(event.shortcut + " key-up");
-      held = false;
-      const action = heldAction;
-      heldAction = null;
+      app.updateInteraction({ held: false });
+      const action = app.interaction.heldAction;
+      app.updateInteraction({ heldAction: null });
       showState();
 
       if (action === "insert") {
@@ -1059,7 +1068,12 @@ export function initializeDictation(ports: {
   }
 
   async function applyShortcut(shortcut: string) {
-    if (held || operationBusy || transcription.busy) return;
+    if (
+      app.interaction.held ||
+      app.interaction.operationBusy ||
+      transcription.busy
+    )
+      return;
     const next = shortcut.trim();
     if (!next) {
       status.text = "Choose Record shortcut, then press your keys.";
@@ -1074,19 +1088,22 @@ export function initializeDictation(ports: {
       status.text = "Use Ctrl, Alt, or Windows with another key.";
       return;
     }
-    shortcutBusy = true;
+    app.updateInteraction({ shortcutBusy: true });
     showState();
 
     try {
       if (!(await shortcutBinding.apply(next))) return;
-      held = false;
-      heldAction = null;
-      shortcutInput.value = next;
+      app.updateInteraction({
+        held: false,
+        heldAction: null,
+        shortcutDraft: next,
+      });
       status.text = "Shortcut saved: " + next;
+      app.setPreferences({ shortcut: next });
       savePreferences();
       log("registered " + next);
     } catch (error) {
-      shortcutInput.value = shortcutBinding.active ?? "";
+      app.updateInteraction({ shortcutDraft: shortcutBinding.active ?? "" });
       status.text =
         "That shortcut is unavailable. Try a different combination." +
         (shortcutBinding.available
@@ -1094,15 +1111,17 @@ export function initializeDictation(ports: {
           : " Choose Record shortcut to set an available combination.");
       log("shortcut registration unavailable");
     } finally {
-      shortcutBusy = false;
+      app.updateInteraction({ shortcutBusy: false });
       showState();
     }
   }
 
   async function stopShortcutRecording(message: string) {
-    recordingShortcut = false;
-    shortcutBusy = true;
-    shortcutInput.value = shortcutBinding.active ?? "";
+    app.updateInteraction({
+      recordingShortcut: false,
+      shortcutBusy: true,
+      shortcutDraft: shortcutBinding.active ?? "",
+    });
     shortcutRecordButton.text = "Record shortcut";
     try {
       await shortcutBinding.resume();
@@ -1111,41 +1130,39 @@ export function initializeDictation(ports: {
       status.text =
         "Could not restore the shortcut. Choose Record shortcut to set it again.";
     } finally {
-      shortcutBusy = false;
+      app.updateInteraction({ shortcutBusy: false });
     }
     showState();
   }
   ui.on("shortcut-record", "click", async () => {
-    if (recordingShortcut) {
+    if (app.interaction.recordingShortcut) {
       void stopShortcutRecording("Shortcut unchanged.");
       return;
     }
-    recordingShortcut = true;
-    shortcutBusy = true;
+    app.updateInteraction({ recordingShortcut: true, shortcutBusy: true });
     showState();
     try {
       await shortcutBinding.suspend();
     } catch {
-      recordingShortcut = false;
-      shortcutBusy = false;
+      app.updateInteraction({ recordingShortcut: false, shortcutBusy: false });
       status.text = "Could not pause the current shortcut. Try again.";
       showState();
       return;
     }
-    shortcutBusy = false;
+    app.updateInteraction({ shortcutBusy: false });
     shortcutRecordButton.text = "Cancel recording";
     status.text = "Press Ctrl, Alt, or Windows with another key. Esc cancels.";
-    shortcutInput.value = "Press your shortcut…";
+    app.updateInteraction({ shortcutDraft: "Press your shortcut…" });
     ui.focus("shortcut");
     showState();
   });
   onDocument(
     "keydown",
     (event) => {
-      if (recordingShortcut) {
+      if (app.interaction.recordingShortcut) {
         event.preventDefault();
         event.stopPropagation();
-        if (shortcutBusy) return;
+        if (app.interaction.shortcutBusy) return;
         if (event.key === "Escape") {
           void stopShortcutRecording("Shortcut unchanged.");
           return;
@@ -1157,7 +1174,8 @@ export function initializeDictation(ports: {
           return;
         }
         // Wait for all keys to be released before enabling the global callback.
-        shortcutInput.value = shortcut;
+        app.updateInteraction({ shortcutDraft: shortcut });
+        showConfiguration();
         status.text = "Release your keys to save the shortcut.";
         return;
       }
@@ -1171,31 +1189,33 @@ export function initializeDictation(ports: {
   onDocument(
     "keyup",
     (event) => {
-      if (!recordingShortcut) return;
+      if (!app.interaction.recordingShortcut) return;
       event.preventDefault();
-      if (shortcutBusy) return;
+      if (app.interaction.shortcutBusy) return;
       if (
         event.ctrlKey ||
         event.altKey ||
         event.shiftKey ||
         event.metaKey ||
-        shortcutInput.value === "Press your shortcut…"
+        app.interaction.shortcutDraft === "Press your shortcut…"
       )
         return;
-      const next = shortcutInput.value;
-      recordingShortcut = false;
+      const next = app.interaction.shortcutDraft;
+      app.updateInteraction({ recordingShortcut: false });
       shortcutRecordButton.text = "Record shortcut";
       void applyShortcut(next);
     },
     true,
   );
   ui.on("settings-dialog", "close", () => {
-    if (recordingShortcut) void stopShortcutRecording("Shortcut unchanged.");
+    if (app.interaction.recordingShortcut)
+      void stopShortcutRecording("Shortcut unchanged.");
   });
 
   ui.on("shortcut-form", "submit", (event) => {
     event.preventDefault();
-    void applyShortcut(shortcutInput.value);
+    app.updateInteraction({ shortcutDraft: shortcutInput.value });
+    void applyShortcut(app.interaction.shortcutDraft);
   });
 
   ui.on("clear-log", "click", () => {
@@ -1225,8 +1245,13 @@ export function initializeDictation(ports: {
   });
 
   ui.on("restore-clipboard", "click", async () => {
-    if (held || operationBusy || transcription.busy) return;
-    operationBusy = true;
+    if (
+      app.interaction.held ||
+      app.interaction.operationBusy ||
+      transcription.busy
+    )
+      return;
+    app.updateInteraction({ operationBusy: true });
     showState();
     try {
       insertionStatus.text = await invoke<string>("restore_previous_clipboard");
@@ -1235,7 +1260,7 @@ export function initializeDictation(ports: {
     } catch (error) {
       insertionStatus.text = "Restore failed: " + String(error);
     } finally {
-      operationBusy = false;
+      app.updateInteraction({ operationBusy: false });
       await refreshRestoreButton();
       showState();
     }
@@ -1248,7 +1273,8 @@ export function initializeDictation(ports: {
   });
 
   ui.on("play-recording", "click", () => {
-    void ports.playback()
+    void ports
+      .playback()
       .play()
       .then(() => {
         recordingStatus.text = "Playing the captured recording.";
@@ -1278,7 +1304,12 @@ export function initializeDictation(ports: {
   });
 
   ui.on("clear-recording", "click", () => {
-    if (held || operationBusy || transcription.busy) return;
+    if (
+      app.interaction.held ||
+      app.interaction.operationBusy ||
+      transcription.busy
+    )
+      return;
     try {
       transcription.discard();
       provisionalCopyStatus.text = "";
@@ -1291,20 +1322,24 @@ export function initializeDictation(ports: {
   });
 
   ui.on("transcribe-recording", "click", () => {
-    if (held || operationBusy || !ports.playback().paused) return;
+    if (
+      app.interaction.held ||
+      app.interaction.operationBusy ||
+      !ports.playback().paused
+    )
+      return;
     void transcription.transcribe();
   });
   function cancelDictation() {
     if (transcription.inserting) return;
     const stoppingCapture =
-      heldAction === "record" ||
-      heldAction === "live" ||
+      app.interaction.heldAction === "record" ||
+      app.interaction.heldAction === "live" ||
       recorder.isRecording ||
       recorder.isStopping;
     const started = recordingStart;
-    const owner = ++dictationOperation;
-    held = false;
-    heldAction = null;
+    const owner = app.nextOperation();
+    app.updateInteraction({ held: false, heldAction: null });
     if (!transcription.discard()) return;
     recorder.cancelStartup();
     provisionalCopyStatus.text = "";
@@ -1315,7 +1350,7 @@ export function initializeDictation(ports: {
       const needsDrain = recorder.isRecording || recorder.isStopping;
       const stopping = needsDrain ? recorder.stop() : Promise.resolve(null);
       recordingStart = null;
-      operationBusy = needsDrain;
+      app.updateInteraction({ operationBusy: needsDrain });
       showState();
       void (async () => {
         try {
@@ -1323,10 +1358,10 @@ export function initializeDictation(ports: {
         } catch {
           /* Nothing usable remains after explicit discard. */
         } finally {
-          if (owner === dictationOperation) {
+          if (owner === app.operation) {
             releaseRecording();
             recordingStart = null;
-            operationBusy = false;
+            app.updateInteraction({ operationBusy: false });
             showState();
           }
         }
@@ -1342,9 +1377,9 @@ export function initializeDictation(ports: {
 
   function stopProcessing() {
     if (!transcription.stopWaiting()) return false;
-    dictationOperation += 1;
+    app.nextOperation();
     recordingStart = null;
-    operationBusy = false;
+    app.updateInteraction({ operationBusy: false });
     showState();
     return true;
   }
@@ -1402,7 +1437,7 @@ export function initializeDictation(ports: {
           (!snapshot.stopWaiting || transcription.busy),
         stopWaiting: stopProcessing,
         copy: async (text) => {
-          operationBusy = true;
+          app.updateInteraction({ operationBusy: true });
           showState();
           try {
             await invoke<string>("copy_dictation_text", {
@@ -1413,7 +1448,7 @@ export function initializeDictation(ports: {
             provisionalCopyStatus.text = resultStatus.text;
             ui.control("copy-status").text = resultStatus.text;
           } finally {
-            operationBusy = false;
+            app.updateInteraction({ operationBusy: false });
             await refreshRestoreButton();
             showState();
           }
@@ -1432,7 +1467,12 @@ export function initializeDictation(ports: {
     }
   }
   ui.on("bypass-processing", "click", () => {
-    if (!transcription.busy || transcription.inserting || held || operationBusy)
+    if (
+      !transcription.busy ||
+      transcription.inserting ||
+      app.interaction.held ||
+      app.interaction.operationBusy
+    )
       return;
     const text = transcription.transcript || provisionalRecoveryText(true);
     if (text)
@@ -1448,7 +1488,12 @@ export function initializeDictation(ports: {
     withoutBackup: boolean,
     source: "output" | "original" | "provisional",
   ) {
-    if (held || operationBusy || transcription.busy || transcription.inserting)
+    if (
+      app.interaction.held ||
+      app.interaction.operationBusy ||
+      transcription.busy ||
+      transcription.inserting
+    )
       return;
     const text =
       source === "provisional"
@@ -1470,7 +1515,7 @@ export function initializeDictation(ports: {
       return;
     }
     const resultStatus = ui.control("copy-status");
-    operationBusy = true;
+    app.updateInteraction({ operationBusy: true });
     showState();
     try {
       const result = await invoke<string>("copy_dictation_text", {
@@ -1484,7 +1529,7 @@ export function initializeDictation(ports: {
       resultStatus.text =
         "Copy failed. Restore the previous clipboard, or open Clipboard options and choose Replace clipboard if you want to replace its contents.";
     } finally {
-      operationBusy = false;
+      app.updateInteraction({ operationBusy: false });
       await refreshRestoreButton();
       showState();
     }
@@ -1509,7 +1554,7 @@ export function initializeDictation(ports: {
   });
 
   ui.on("hotkey-action", "change", () => {
-    if (actionSelect.value === "insert") {
+    if (app.interaction.testMode === "insert") {
       insertionStatus.text = "Ready. The target will be captured on key-down.";
     } else {
       insertionStatus.text =
@@ -1529,17 +1574,17 @@ export function initializeDictation(ports: {
   );
 
   ui.on("microphone", "change", () => {
-    preferredMicrophone = microphoneSelect.value;
+    app.updateReadiness({ selectedMicrophone: microphoneSelect.value });
+    app.setPreferences({ microphone: microphoneSelect.value });
     savePreferences();
   });
   cleanups.push(
-    ui.onKeyState(({ state }) => {
-      apiKeyState = state;
+    app.onKeyState(() => {
       if (
-        apiKeyState === "saved" &&
-        !attemptedMicrophoneAccess &&
-        !held &&
-        !operationBusy &&
+        app.readiness.key.state === "saved" &&
+        !app.readiness.attemptedMicrophoneAccess &&
+        !app.interaction.held &&
+        !app.interaction.operationBusy &&
         !transcription.busy
       )
         void prepareMicrophone();
@@ -1566,7 +1611,7 @@ export function initializeDictation(ports: {
   void refreshMicrophones().catch((error: unknown) => {
     recordingStatus.text = "Could not list microphones: " + String(error);
   });
-  void applyShortcut(shortcutInput.value);
+  void applyShortcut(app.interaction.shortcutDraft);
 
   // Fixture hook insertion point
   const dispose = () => {

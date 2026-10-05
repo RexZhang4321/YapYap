@@ -153,10 +153,10 @@ try {
       transport.cancel = async () => {};
       ` : ''}
       window.__task10Prepared = '${real ? 'real' : 'local'}';
-      window.__taskUi.control('hotkey-action').value = 'record';
-      window.__taskUi.control('live-enabled').checked = true;
+      window.__taskUi.control('hotkey-action').value = 'record'; window.__taskUi.dispatch('hotkey-action', 'change', new Event('change'));
+      window.__taskUi.control('live-enabled').checked = true; window.__taskUi.dispatch('live-enabled', 'change', new Event('change'));
       // Task 10 asserts canonical insertion; Task 11 cleanup has separate coverage.
-      window.__taskUi.control('cleanup-enabled').checked = false;
+      window.__taskUi.control('cleanup-enabled').checked = false; window.__taskUi.dispatch('cleanup-enabled', 'change', new Event('change'));
     })()`);
     console.log(JSON.stringify({ prepared:true, mode:real ? 'real' : 'local' }));
   } else if (operation === 'check') {

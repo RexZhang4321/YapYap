@@ -164,12 +164,12 @@ const controls = `
 
 const appendedHooks = `
 Object.assign(window, { __recoveryFixture: {
-  transcription, live,
+  transcription, live, recorder, application: app,
   shortcut: state => onShortcut({ state, shortcut: shortcutBinding.active }),
-  setPreviewSession: sessionId => { livePreviewSession = sessionId; },
+  setPreviewSession: sessionId => { app.updateRecovery({ livePreviewSession: sessionId }); },
   reset() {
     if (transcription.busy || transcription.hasResult || transcription.state === "failed") transcription.discard();
-    live.cancel(); livePreviewSession = "";
+    live.cancel(); app.updateRecovery({ livePreviewSession: "" });
     window.__fixtureIPC.resetCalls();
     window.__fixtureIPC.state.cleanup = "pending";
   },
@@ -187,7 +187,7 @@ Object.assign(window, { __recoveryFixture: {
     window.__recoveryFixture.reset();
     window.__fixtureIPC.state.transcription = "pending";
     transcription.begin(false, false);
-    livePreviewSession = transcription.sessionId;
+    app.updateRecovery({ livePreviewSession: transcription.sessionId });
     live.state = "listening";
     live.text = ${JSON.stringify(provisionalText)};
     showLiveState();
