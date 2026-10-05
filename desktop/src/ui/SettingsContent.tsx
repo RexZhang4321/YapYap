@@ -63,9 +63,7 @@ export function SettingsContent() {
           <View as="input" id="live-enabled" type="checkbox" />
           <span>
             {"Show live words"}
-            <span className="hint">
-              {"A preview while speaking. The final transcript may differ."}
-            </span>
+            <View as="span" id="live-enabled-help" className="hint" />
           </span>
         </label>
         <label className="check-row">

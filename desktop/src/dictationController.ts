@@ -77,6 +77,8 @@ export function initializeDictation(ports: {
     "copy-original-without-backup",
   );
   const cleanupEnabled = ui.control("cleanup-enabled");
+  const mainCleanupEnabled = ui.control("main-cleanup-enabled");
+  const fullAudioEnabled = ui.control("full-audio-enabled");
   const cleanedTranscriptView = ui.control("cleaned-transcript");
   const cleanupStatus = ui.control("cleanup-status");
   const applyShortcutButton = ui.control("apply-shortcut");
@@ -167,7 +169,7 @@ export function initializeDictation(ports: {
             stopping: app.interaction.operationBusy && recordingStart !== null,
           }),
       app.recovery.livePreviewSession === transcription.sessionId &&
-        app.preferences.live
+        (app.preferences.live || !transcription.usesFullAudio)
         ? live
         : undefined,
     );
@@ -200,7 +202,12 @@ export function initializeDictation(ports: {
     microphoneSelect.value = app.readiness.selectedMicrophone;
     actionSelect.value = app.interaction.testMode;
     cleanupEnabled.checked = app.preferences.cleanup;
-    liveEnabled.checked = app.preferences.live;
+    mainCleanupEnabled.checked = app.preferences.cleanup;
+    fullAudioEnabled.checked = app.preferences.fullAudio;
+    liveEnabled.checked = app.preferences.live || !app.preferences.fullAudio;
+    ui.control("live-enabled-help").text = app.preferences.fullAudio
+      ? "A preview while speaking. The final transcript may differ."
+      : "Live transcription is required while full audio transcription is off.";
   }
 
   function showState() {
@@ -214,8 +221,10 @@ export function initializeDictation(ports: {
     app.publish();
     showConfiguration();
     restoreButton.disabled = !app.canRestoreClipboard;
-    liveEnabled.disabled = locked;
+    liveEnabled.disabled = locked || !app.preferences.fullAudio;
     cleanupEnabled.disabled = locked;
+    mainCleanupEnabled.disabled = locked;
+    fullAudioEnabled.disabled = locked;
     liveReconnect.disabled = !recorder.isRecording || live.state !== "failed";
     applyShortcutButton.disabled =
       locked ||
@@ -235,7 +244,9 @@ export function initializeDictation(ports: {
     clearRecordingButton.disabled = locked || !recorder.hasRecording;
     transcribeButton.disabled =
       locked || !transcription.audio || !ports.playback().paused;
-    transcribeButton.text = "Retry transcription";
+    transcribeButton.text = app.preferences.fullAudio
+      ? "Retry transcription"
+      : "Retry full audio transcription";
     discardButton.disabled =
       transcription.inserting ||
       transcription.state === "idle" ||
@@ -270,7 +281,9 @@ export function initializeDictation(ports: {
       : "Use live words · review…";
     ui.control("processing-recovery-hint").text = transcription.transcript
       ? "You can stop cleanup and copy your original transcript for manual pasting."
-      : "Final transcription uses your full recording for accuracy. You can stop waiting and review the provisional live words, or keep the recording for retry.";
+      : transcription.usesFullAudio
+        ? "Final transcription uses your full recording for accuracy. You can stop waiting and review the provisional live words, or keep the recording for retry."
+        : "Waiting for the completed live words. You can stop waiting and review available words, or keep the recording for a full audio retry.";
     copyTranscriptButton.disabled = locked || !transcription.transcript;
     copyTranscriptWithoutBackupButton.disabled =
       locked || !transcription.transcript;
@@ -314,7 +327,9 @@ export function initializeDictation(ports: {
           ? "Capturing your chosen paste destination…"
           : transcription.cleaning
             ? "Tidying your words…"
-            : "Transcribing…";
+            : transcription.usesFullAudio
+              ? "Transcribing…"
+              : "Finishing live transcription…";
     } else if (transcription.state === "recording") {
       transcriptionStatus.text =
         app.interaction.testMode === "live"
@@ -416,7 +431,9 @@ export function initializeDictation(ports: {
     setHidden(
       "live-panel",
       !(
-        (active && app.preferences.live && live.text !== "") ||
+        (active &&
+          (app.preferences.live || !transcription.usesFullAudio) &&
+          live.text !== "") ||
         (transcription.state === "failed" && provisionalRecoveryText() !== null)
       ),
     );
@@ -465,7 +482,9 @@ export function initializeDictation(ports: {
                 : "Transcription is taking longer than expected"
               : transcription.cleaning
                 ? "Tidying your words…"
-                : "Transcribing…"
+                : transcription.usesFullAudio
+                  ? "Transcribing…"
+                  : "Finishing live transcription…"
           : app.interaction.held
             ? app.interaction.heldAction === "retry"
               ? "Release to paste saved text"
@@ -591,9 +610,12 @@ export function initializeDictation(ports: {
       idle: "Live preview ready.",
       connecting: "Connecting live preview…",
       listening: "Receiving provisional words while you speak.",
-      finishing:
-        "Finishing live preview. Canonical transcription proceeds independently.",
-      completed: "Live preview complete; this text remains provisional.",
+      finishing: transcription.usesFullAudio
+        ? "Finishing live preview. Canonical transcription proceeds independently."
+        : "Finishing live transcription for your final words.",
+      completed: transcription.usesFullAudio
+        ? "Live preview complete; this text remains provisional."
+        : "Live transcription complete. Full audio transcription is off.",
       failed: `${live.error} Local capture and final transcription remain available.`,
       discarded: "Live preview cleared.",
     };
@@ -616,6 +638,16 @@ export function initializeDictation(ports: {
   });
   ui.on("cleanup-enabled", "change", () => {
     app.setPreferences({ cleanup: cleanupEnabled.checked });
+    savePreferences();
+    showState();
+  });
+  ui.on("main-cleanup-enabled", "change", () => {
+    app.setPreferences({ cleanup: mainCleanupEnabled.checked });
+    savePreferences();
+    showState();
+  });
+  ui.on("full-audio-enabled", "change", () => {
+    app.setPreferences({ fullAudio: fullAudioEnabled.checked });
     savePreferences();
     showState();
   });
@@ -891,7 +923,14 @@ export function initializeDictation(ports: {
       // Disconnected microphones retain partial capture for an explicit retry.
       if (!app.recovery.captureInterruptionMessage && autoTranscribe) {
         app.updateInteraction({ operationBusy: false });
-        await transcription.transcribe();
+        await transcription.transcribe(
+          transcription.usesFullAudio
+            ? undefined
+            : () =>
+                app.recovery.livePreviewSession === sessionId
+                  ? live.finishTranscript()
+                  : Promise.reject("transcription_live_unavailable"),
+        );
       }
     } catch (error) {
       if (owner !== app.operation || sessionId !== transcription.sessionId)
@@ -988,6 +1027,7 @@ export function initializeDictation(ports: {
       transcription.begin(
         app.interaction.heldAction !== "live",
         app.preferences.cleanup,
+        app.preferences.fullAudio,
       );
       const sessionId = transcription.sessionId;
       ui.control("recovery-copy-status").text = "";
@@ -1000,7 +1040,7 @@ export function initializeDictation(ports: {
         showState();
       }
       app.updateRecovery({ livePreviewSession: transcription.sessionId });
-      if (app.preferences.live) live.begin();
+      if (app.preferences.live || !app.preferences.fullAudio) live.begin();
       else live.cancel();
 
       if (recorder.hasRecording) {

@@ -1,4 +1,5 @@
 const messages: Record<string, string> = {
+  transcription_live_unavailable: "The live transcript could not be completed without gaps. Your recording is kept. Retry full audio transcription below, copy available live words, or discard this dictation.",
   key_missing: "No API key is saved. Save a key above, then retry.",
   key_format: "The saved key is invalid. Save a replacement key, then retry.",
   credential_read_failed: "Windows could not read the saved key. Check Credential Manager, then retry.",

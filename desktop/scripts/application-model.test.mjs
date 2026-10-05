@@ -12,15 +12,21 @@ test("existing preferences load without persisting readiness, recovery, or unkno
   model.setKeyState({ state: "saved", busy: false });
   model.updateRecovery({ livePreviewSession: "session-id", captureInterruptionMessage: "device issue" });
   assert.deepEqual(JSON.parse(model.serializePreferences()), {
-    shortcut: "Alt+F9", microphone: "chosen-device", cleanup: false, live: false,
+    shortcut: "Alt+F9", microphone: "chosen-device", cleanup: false, fullAudio: true, live: false,
   });
   assert.equal(model.readiness.selectedMicrophone, "chosen-device");
   assert.equal(model.interaction.shortcutDraft, "Alt+F9");
   for (const invalid of [null, "not json", "[]", "null", "42"]) {
-    assert.deepEqual(parsePreferences(invalid), { shortcut: "Ctrl+Alt+F8", microphone: "", cleanup: true, live: true });
+    assert.deepEqual(parsePreferences(invalid), { shortcut: "Ctrl+Alt+F8", microphone: "", cleanup: true, fullAudio: true, live: true });
   }
   assert.equal(parsePreferences('{"cleanup":false,"live":"false","microphone":42}').cleanup, false);
   assert.equal(parsePreferences('{"live":"false"}').live, true);
+  assert.equal(parsePreferences('{"fullAudio":"false"}').fullAudio, true);
+  model.setPreferences({ fullAudio: false });
+  const restored = new ApplicationModel();
+  restored.loadPreferences(model.serializePreferences());
+  assert.equal(restored.preferences.fullAudio, false);
+  assert.equal(restored.preferences.cleanup, false);
 });
 
 test("UI control changes alone cannot change the configuration consumed by dictation", () => {

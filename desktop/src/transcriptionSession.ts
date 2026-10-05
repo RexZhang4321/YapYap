@@ -63,6 +63,7 @@ export class TranscriptionSession {
   private targetReady: Promise<boolean> = Promise.resolve(false);
   private automaticInsertion = true;
   private cleanupEnabled = false;
+  private fullAudioEnabled = true;
   private readonly pendingWaits = new Set<() => void>();
   private readonly provider: (audio: Uint8Array) => Promise<string>;
   private readonly changed: () => void;
@@ -80,6 +81,7 @@ export class TranscriptionSession {
   get hasResult(): boolean { return this.audio !== null || this.transcript !== ""; }
   get outputText(): string { return this.cleanedTranscript ?? this.transcript; }
   get usesCleanup(): boolean { return this.cleanupEnabled; }
+  get usesFullAudio(): boolean { return this.fullAudioEnabled; }
   get canStart(): boolean {
     return !this.busy && (this.state === "idle" || this.state === "discarded");
   }
@@ -200,7 +202,7 @@ export class TranscriptionSession {
     } }
   }
 
-  begin(captureTarget = true, cleanupEnabled = true) {
+  begin(captureTarget = true, cleanupEnabled = true, fullAudioEnabled = true) {
     if (!this.canStart && !this.canBeginNext) throw new Error("Resolve or discard the previous session first.");
     if (this.canBeginNext) {
       this.retainedResults.unshift({ sessionId: this.sessionId, transcript: this.transcript, outputText: this.outputText });
@@ -220,6 +222,7 @@ export class TranscriptionSession {
     this.state = "recording";
     this.automaticInsertion = captureTarget;
     this.cleanupEnabled = cleanupEnabled && this.cleanup !== undefined;
+    this.fullAudioEnabled = fullAudioEnabled;
     // Capture before microphone startup. An unavailable destination uses Copy.
     try {
       this.targetReady = this.destination && captureTarget
@@ -274,18 +277,22 @@ export class TranscriptionSession {
     this.changed();
   }
 
-  async transcribe() {
+  async transcribe(liveTranscript?: () => Promise<string>) {
     if (this.busy || !this.audio) return;
+    // An explicit recording retry uses full audio even if the next-session
+    // preference is off. Automatic finalization supplies the live source.
+    this.fullAudioEnabled = liveTranscript === undefined;
     if (!this.metrics?.running) {
       this.metrics = new ProcessingTimings("Transcription attempt", this.now);
       this.metrics.start("preparation");
     }
     if (!this.cleanupEnabled) this.metrics.skip("cleanup");
+    if (liveTranscript) this.metrics.skip("transcription");
     if (!this.destination || !this.automaticInsertion) {
       this.metrics.skip("destination");
       this.metrics.skip("insertion");
     }
-    if (this.audio.size <= 44 || this.audio.size > MAX_AUDIO_BYTES) {
+    if (!liveTranscript && (this.audio.size <= 44 || this.audio.size > MAX_AUDIO_BYTES)) {
       this.metrics.finish("failed");
       this.error = this.audio.size > MAX_AUDIO_BYTES ? "transcription_audio_too_large" : "transcription_audio_invalid";
       this.state = "failed";
@@ -299,15 +306,23 @@ export class TranscriptionSession {
     this.error = null;
     this.changed();
     try {
-      let bytes: Uint8Array | null = new Uint8Array(await this.waitFor(audio.arrayBuffer(), generation,
-        this.timing.targetMs, "transcription_audio_invalid"));
-      audio = null;
-      if (generation !== this.generation) return;
-      this.metrics.end("preparation");
-      this.metrics.start("transcription");
-      const pending = this.provider(bytes);
-      bytes = null;
-      const transcript = await this.waitFor(pending, generation, this.timing.transcriptionMs, "validation_timeout");
+      let transcript: string;
+      if (liveTranscript) {
+        transcript = await this.waitFor(liveTranscript(), generation,
+          this.timing.transcriptionMs, "transcription_live_unavailable");
+        if (generation !== this.generation) return;
+        this.metrics.end("preparation");
+      } else {
+        let bytes: Uint8Array | null = new Uint8Array(await this.waitFor(audio.arrayBuffer(), generation,
+          this.timing.targetMs, "transcription_audio_invalid"));
+        audio = null;
+        if (generation !== this.generation) return;
+        this.metrics.end("preparation");
+        this.metrics.start("transcription");
+        const pending = this.provider(bytes);
+        bytes = null;
+        transcript = await this.waitFor(pending, generation, this.timing.transcriptionMs, "validation_timeout");
+      }
       if (generation !== this.generation) return;
       // A canonical result must remain usable by native insertion/Copy before
       // releasing the only retry audio. Provider interfaces are runtime seams.

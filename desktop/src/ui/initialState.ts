@@ -240,6 +240,11 @@ export const initialControls = {
   "cleanup-enabled": {
     checked: true,
   },
+  "main-cleanup-enabled": { checked: true },
+  "full-audio-enabled": { checked: true },
+  "live-enabled-help": {
+    text: "A preview while speaking. The final transcript may differ.",
+  },
   diagnostics: {},
   "hotkey-action": {
     value: "record",

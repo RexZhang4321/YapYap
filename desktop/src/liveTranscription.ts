@@ -102,6 +102,9 @@ export class LiveTranscription {
   private connection: Promise<void> = Promise.resolve();
   private draining: Promise<void> | null = null;
   private cancellation: Promise<void> = Promise.resolve();
+  private completion: Promise<void> = Promise.resolve();
+  private complete = () => {};
+  private rejectCompletion: (code: string) => void = () => {};
 
   constructor(private readonly provider: StreamingSTT, private readonly changed: () => void,
     private readonly now = () => performance.now(), private readonly newId = () => crypto.randomUUID()) {}
@@ -121,6 +124,13 @@ export class LiveTranscription {
   }
 
   private connect(): void {
+    this.rejectCompletion("transcription_live_unavailable");
+    this.completion = new Promise<void>((resolve, reject) => {
+      this.complete = resolve;
+      this.rejectCompletion = reject;
+    });
+    // Preview-only sessions do not consume the completion promise.
+    void this.completion.catch(() => undefined);
     const generation = ++this.generation;
     const id = this.newId();
     this.streamId = id; this.accepting = true; this.queue = []; this.queuedBytes = 0;
@@ -180,7 +190,21 @@ export class LiveTranscription {
     catch (error) { this.fail(error, generation); }
   }
 
+  async finishTranscript(): Promise<string> {
+    const generation = this.generation;
+    const completion = this.completion;
+    if (["idle", "discarded", "failed"].includes(this.state) || this.hasGap)
+      throw "transcription_live_unavailable";
+    await this.finish();
+    await completion;
+    if (generation !== this.generation || this.state !== "completed" || this.hasGap
+      || !this.items.size || [...this.items.values()].some(item => !item.completed))
+      throw "transcription_live_unavailable";
+    return this.text;
+  }
+
   cancel(): void {
+    this.rejectCompletion("transcription_live_unavailable");
     const id = this.streamId;
     this.generation += 1; this.accepting = false; this.queue = []; this.queuedBytes = 0;
     this.resampler = null; this.draining = null; this.items.clear(); this.prefix = "";
@@ -200,6 +224,7 @@ export class LiveTranscription {
 
   private fail(error: unknown, generation: number): void {
     if (generation !== this.generation) return;
+    this.rejectCompletion("transcription_live_unavailable");
     this.generation += 1; this.accepting = false; this.queue = []; this.queuedBytes = 0;
     this.resampler = null; this.draining = null;
     this.error = liveErrorMessage(error); this.state = "failed";
@@ -211,7 +236,7 @@ export class LiveTranscription {
     if (generation !== this.generation || event.streamId !== this.streamId) return;
     if (event.kind === "error") { this.fail(event.code, generation); return; }
     if (event.kind === "ready") { if (this.state === "connecting") this.state = "listening"; }
-    else if (event.kind === "closed") { this.state = "completed"; }
+    else if (event.kind === "closed") { this.state = "completed"; this.complete(); }
     else if (event.itemId && typeof event.text === "string") {
       const item = this.items.get(event.itemId) ?? { text: "", completed: false };
       if (item.completed) return;

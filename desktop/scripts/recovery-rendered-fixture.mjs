@@ -45,6 +45,11 @@ const bridge = `
     resetCalls() { state.copies.length = 0; state.insertions.length = 0; state.calls.length = 0; state.lastPendingName = ""; gates.clear(); },
     resolve(name, value) { gate(name).resolve(value); },
     reject(name, error) { gate(name).reject(error); },
+    emitLive(event) {
+      const start = state.calls.findLast(call => call.command === "start_live_stream");
+      if (!start) throw new Error("No live stream started.");
+      start.args.events.onmessage({ streamId: start.args.streamId, ...event });
+    },
     snapshot() {
       const session = window.__recoveryFixture?.transcription;
       return {
@@ -104,6 +109,12 @@ const bridge = `
         return Promise.resolve(state.insertion ?? { pasteAttempted: true, pasteSent: true, clipboardRestored: true, message: "Fixture insertion" });
       }
       if (command === "list_audio_inputs") return Promise.resolve([]);
+      if (command === "finish_live_stream" && state.live === "immediate") {
+        setTimeout(() => {
+          window.__fixtureIPC.emitLive({ kind: "completed", itemId: "fixture-item", text: ${JSON.stringify(provisionalText)} });
+          window.__fixtureIPC.emitLive({ kind: "closed" });
+        }, 0);
+      }
       if (command === "start_live_stream" || command === "append_live_audio" || command === "finish_live_stream" || command === "cancel_live_stream") return Promise.resolve();
       return Promise.resolve();
     },

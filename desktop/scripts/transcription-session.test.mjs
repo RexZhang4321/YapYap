@@ -11,6 +11,73 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
+for (const fullAudio of [true, false]) {
+  for (const cleanup of [true, false]) {
+    test(`phases are independent: full audio ${fullAudio}, cleanup ${cleanup}`, async () => {
+      let uploads = 0, cleans = 0, releases = 0;
+      const inserted = [];
+      const session = new TranscriptionSession(async () => { uploads++; return "Full audio words"; },
+        () => {}, () => { releases++; }, {
+          capture: async () => {}, discard: async () => {},
+          insert: async (_id, text) => {
+            inserted.push(text);
+            return { pasteAttempted: true, pasteSent: true, clipboardRestored: true, message: "Inserted" };
+          },
+        }, { clean: async text => { cleans++; return text + "."; } });
+      session.begin(true, cleanup, fullAudio);
+      session.capture(recording());
+      await session.transcribe(fullAudio ? undefined : async () => "Live words");
+      const original = fullAudio ? "Full audio words" : "Live words";
+      assert.equal(uploads, Number(fullAudio));
+      assert.equal(cleans, Number(cleanup));
+      assert.equal(session.transcript, original);
+      assert.deepEqual(inserted, [original + (cleanup ? "." : "")]);
+      assert.equal(session.state, "inserted");
+      assert.equal(session.audio, null);
+      assert.equal(releases, 1);
+      assert.equal(session.usesFullAudio, fullAudio);
+      if (!fullAudio) assert.equal(session.metrics.display("transcription"), "Skipped");
+      if (!cleanup) assert.equal(session.metrics.display("cleanup"), "Skipped");
+    });
+  }
+}
+
+test("live failure keeps audio without uploading until an explicit full audio retry", async () => {
+  let uploads = 0;
+  const session = new TranscriptionSession(async () => { uploads++; return "Recovered words"; }, () => {}, () => {});
+  session.begin(false, false, false);
+  const audio = recording();
+  session.capture(audio);
+  await session.transcribe(async () => { throw "transcription_live_unavailable"; });
+  assert.equal(session.audio, audio);
+  assert.equal(session.state, "failed");
+  assert.equal(uploads, 0);
+  await session.transcribe();
+  assert.equal(uploads, 1);
+  assert.equal(session.transcript, "Recovered words");
+});
+
+test("stopping live finalization suppresses late words, cleanup and insertion", async () => {
+  const live = deferred();
+  let cleans = 0, inserts = 0;
+  const session = new TranscriptionSession(async () => assert.fail("No upload"), () => {}, () => {}, {
+    capture: async () => {}, discard: async () => {},
+    insert: async () => { inserts++; },
+  }, { clean: async () => { cleans++; return "Cleaned words"; } });
+  session.begin(true, true, false);
+  const audio = recording();
+  session.capture(audio);
+  const pending = session.transcribe(() => live.promise);
+  assert.equal(session.stopWaiting(), true);
+  await pending;
+  live.resolve("Late live words");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(session.audio, audio);
+  assert.equal(session.transcript, "");
+  assert.equal(cleans, 0);
+  assert.equal(inserts, 0);
+});
+
 test("failure keeps original audio for retry; success releases audio and preserves exact text", async () => {
   let attempts = 0, releases = 0;
   const sent = [];

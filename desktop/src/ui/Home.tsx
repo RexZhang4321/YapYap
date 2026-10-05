@@ -83,6 +83,39 @@ export function SetupCallout() {
   );
 }
 
+export function ProcessingOptions() {
+  return (
+    <section
+      className="session-panel"
+      aria-labelledby="processing-options-heading"
+    >
+      <h2 id="processing-options-heading">{"Processing phases"}</h2>
+      <label className="check-row">
+        <View as="input" id="full-audio-enabled" type="checkbox" />
+        <span>
+          {"Full audio transcription"}
+          <span className="hint">
+            {
+              "Transcribe the complete recording for accuracy. Turn off to use the completed live words."
+            }
+          </span>
+        </span>
+      </label>
+      <label className="check-row">
+        <View as="input" id="main-cleanup-enabled" type="checkbox" />
+        <span>
+          {"gpt-6-luna cleanup"}
+          <span className="hint">
+            {
+              "Tidy punctuation and spoken fillers. Turn off to insert the transcript as received."
+            }
+          </span>
+        </span>
+      </label>
+    </section>
+  );
+}
+
 export function AppFooter() {
   return (
     <footer className="app-footer">

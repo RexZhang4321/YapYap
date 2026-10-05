@@ -17,6 +17,95 @@ async function snapshot(page) {
   return page.evaluate(() => window.__recoveryFixture.snapshot());
 }
 
+async function dictate(page, live = "immediate") {
+  await page.evaluate(async live => {
+    const { recorder } = window.__recoveryFixture;
+    recorder.start = async () => {
+      recorder.active = true;
+      return "Fixture recording";
+    };
+    recorder.stop = async () => {
+      recorder.active = false;
+      return { samples: [new Float32Array(128)], sampleRate: 48000,
+        channelCount: 1, frameCount: 128, deviceId: "fixture-mic", deviceLabel: "Fixture",
+        durationSeconds: 128 / 48000 };
+    };
+    window.__fixtureIPC.state.cleanup = "immediate";
+    window.__fixtureIPC.state.live = live;
+    window.__recoveryFixture.shortcut("Pressed");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    window.__recoveryFixture.shortcut("Released");
+  }, live);
+}
+
+for (const fullAudio of [true, false]) {
+  for (const cleanup of [true, false]) {
+    test(`main app controls skip selected requests: full audio ${fullAudio}, cleanup ${cleanup}`, async ({ page }) => {
+      await ready(page);
+      await page.locator("#open-settings").click();
+      await page.locator("#live-enabled").uncheck();
+      await page.locator("#settings-close").click();
+      await page.locator("#full-audio-enabled").setChecked(fullAudio);
+      await page.locator("#main-cleanup-enabled").setChecked(cleanup);
+      await dictate(page);
+      await expect(page.locator("#dictation-status")).toHaveText("Inserted");
+      const state = await snapshot(page);
+      expect(state.commands.filter(command => command === "transcribe_recording")).toHaveLength(Number(fullAudio));
+      expect(state.commands.filter(command => command === "cleanup_transcript")).toHaveLength(Number(cleanup));
+      expect(state.commands.filter(command => command === "start_live_stream")).toHaveLength(Number(!fullAudio));
+      expect(state.session.transcript).toBe(fullAudio ? original : provisional);
+      expect(state.insertions).toHaveLength(1);
+      expect(state.insertions[0].text).toBe(cleanup
+        ? "Send 42 to user_id.\n你好 😀 https://example.test/a?q=2"
+        : fullAudio ? original : provisional);
+      if (cleanup) {
+        expect(await page.evaluate(() => window.__fixtureIPC.state.calls
+          .find(call => call.command === "cleanup_transcript").args.text)).toBe(fullAudio ? original : provisional);
+      }
+      if (!fullAudio) await expect(page.locator("#timing-transcription")).toHaveText("Skipped");
+      if (!cleanup) await expect(page.locator("#timing-cleanup")).toHaveText("Skipped");
+    });
+  }
+}
+
+test("main phase controls persist and cleanup stays synchronized with settings", async ({ page }) => {
+  await ready(page);
+  await page.locator("#full-audio-enabled").uncheck();
+  await page.locator("#main-cleanup-enabled").uncheck();
+  await page.reload();
+  await expect(page.locator("#full-audio-enabled")).not.toBeChecked();
+  await expect(page.locator("#main-cleanup-enabled")).not.toBeChecked();
+  await page.locator("#open-settings").click();
+  await expect(page.locator("#cleanup-enabled")).not.toBeChecked();
+  await expect(page.locator("#live-enabled")).toBeChecked();
+  await expect(page.locator("#live-enabled")).toBeDisabled();
+  await expect(page.locator("#live-enabled-help")).toContainText("required");
+  await page.locator("#cleanup-enabled").check();
+  await page.locator("#settings-close").click();
+  await expect(page.locator("#main-cleanup-enabled")).toBeChecked();
+});
+
+test("live-only dictation waits for completion and retains recording on failure without an automatic upload", async ({ page }) => {
+  await ready(page);
+  await page.locator("#full-audio-enabled").uncheck();
+  await page.locator("#main-cleanup-enabled").uncheck();
+  await dictate(page, "pending");
+  await expect(page.locator("#dictation-status")).toHaveText("Finishing live transcription…");
+  await expect(page.locator("#full-audio-enabled")).toBeDisabled();
+  await expect(page.locator("#main-cleanup-enabled")).toBeDisabled();
+  await page.evaluate(() => window.__fixtureIPC.emitLive({ kind: "delta", itemId: "fixture-item", text: "Partial" }));
+  expect((await snapshot(page)).insertions).toHaveLength(0);
+  await page.evaluate(() => window.__fixtureIPC.emitLive({ kind: "error", code: "live_disconnected" }));
+  await expect(page.locator("#dictation-alert-text")).toContainText("recording is kept");
+  const failed = await snapshot(page);
+  expect(failed.session.audioRetained).toBe(true);
+  expect(failed.commands).not.toContain("transcribe_recording");
+  expect(failed.insertions).toHaveLength(0);
+  await page.locator("#transcribe-recording").click();
+  await expect(page.locator("#dictation-status")).toHaveText("Inserted");
+  expect((await snapshot(page)).commands.filter(command => command === "transcribe_recording")).toHaveLength(1);
+});
+
 test("dictation consumes application preferences even when presentation controls are changed directly", async ({ page }) => {
   await ready(page);
   await page.evaluate(async () => {

@@ -4,7 +4,13 @@ import { ui } from "./store";
 import { View } from "./View";
 import { SettingsContent } from "./SettingsContent";
 import { ProcessingTimes } from "./ProcessingTimes";
-import { AppHeader, Readiness, SetupCallout, AppFooter } from "./Home";
+import {
+  AppHeader,
+  Readiness,
+  SetupCallout,
+  ProcessingOptions,
+  AppFooter,
+} from "./Home";
 import {
   LivePreview,
   SessionRecovery,
@@ -46,6 +52,7 @@ export function App() {
         <AppHeader />
         <Readiness />
         <SetupCallout />
+        <ProcessingOptions />
         <ProcessingTimes />
         <LivePreview />
         <SessionRecovery />

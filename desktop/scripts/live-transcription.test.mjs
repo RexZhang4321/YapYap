@@ -24,6 +24,41 @@ function fixture(overrides = {}) {
     event: (id, event) => listeners.get(id)({ streamId: id, ...event }) };
 }
 
+test("live finalization waits for completed words and closed stream rather than deltas", async () => {
+  const f = fixture(); f.live.begin(); await tick();
+  f.event("stream-1", { kind: "delta", itemId: "item", text: "Partial" });
+  let settled = false;
+  const pending = f.live.finishTranscript().then(text => { settled = true; return text; });
+  await tick();
+  assert.equal(settled, false);
+  f.event("stream-1", { kind: "completed", itemId: "item", text: "Complete words." });
+  await tick();
+  assert.equal(settled, false);
+  f.event("stream-1", { kind: "closed" });
+  assert.equal(await pending, "Complete words.");
+  assert.equal(f.calls.filter(call => call[0] === "finish").length, 1);
+});
+
+test("live finalization rejects failed, cancelled, incomplete and gapped streams", async () => {
+  for (const outcome of ["failed", "cancelled", "incomplete", "gap"]) {
+    const f = fixture(); f.live.begin(); await tick();
+    f.event("stream-1", { kind: "delta", itemId: "item", text: "Partial" });
+    const pending = f.live.finishTranscript();
+    const rejection = assert.rejects(pending, code => code === "transcription_live_unavailable");
+    await tick();
+    if (outcome === "failed" || outcome === "gap") {
+      f.event("stream-1", { kind: "error", code: "live_disconnected" });
+      if (outcome === "gap") {
+        f.live.reconnect();
+        await assert.rejects(f.live.finishTranscript(), code => code === "transcription_live_unavailable");
+      }
+    } else if (outcome === "cancelled") f.live.cancel();
+    else f.event("stream-1", { kind: "closed" });
+    await rejection;
+    f.live.cancel();
+  }
+});
+
 test("24 kHz PCM16 conversion clips, preserves input, and averages 48 kHz samples", () => {
   const input = new Float32Array([-2, -1, 0, 1, 2, NaN]);
   const bytes = new Pcm16Resampler(24_000).push(input);

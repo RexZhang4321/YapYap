@@ -6,6 +6,8 @@ To launch the native client from the repository root, run `cd desktop`, then `np
 
 Keep one native client instance running; closing its main window leaves it active in the tray. Use the tray's **Quit** command before starting a replacement. The browser recovery fixture has a separate Vite dependency cache, so its tests can run alongside the native development client without invalidating the floating overlay's modules.
 
+The main window's **Processing phases** controls independently enable **Full audio transcription** and **gpt-6-luna cleanup**. Both default to on and your choices persist. Turning full audio transcription off uses the completed live transcript, enables live transcription for that mode, and skips the full-recording upload. Cleanup can tidy either transcript; turning it off inserts the received words directly. A failed or gapped live stream keeps the recording for **Retry full audio transcription**, which explicitly runs the full-recording pass. Unfinished live words are never inserted automatically.
+
 ## Frontend development
 
 Both windows use React 19 and TypeScript, built with Vite. `index.html` and `overlay.html` mount separate React roots; their existing CSS and native Tauri capabilities remain in place.

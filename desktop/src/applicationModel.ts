@@ -7,6 +7,7 @@ export interface Preferences {
   shortcut: string;
   microphone: string;
   cleanup: boolean;
+  fullAudio: boolean;
   live: boolean;
 }
 export interface Readiness {
@@ -38,6 +39,7 @@ const defaults: Readonly<Preferences> = Object.freeze({
   shortcut: "Ctrl+Alt+F8",
   microphone: "",
   cleanup: true,
+  fullAudio: true,
   live: true,
 });
 
@@ -58,6 +60,8 @@ export function parsePreferences(raw: string | null): Preferences {
           : defaults.microphone,
       cleanup:
         typeof saved.cleanup === "boolean" ? saved.cleanup : defaults.cleanup,
+      fullAudio:
+        typeof saved.fullAudio === "boolean" ? saved.fullAudio : defaults.fullAudio,
       live: typeof saved.live === "boolean" ? saved.live : defaults.live,
     };
   } catch {
@@ -152,8 +156,8 @@ export class ApplicationModel {
     this.publish();
   }
   serializePreferences() {
-    const { shortcut, microphone, cleanup, live } = this.preferences;
-    return JSON.stringify({ shortcut, microphone, cleanup, live });
+    const { shortcut, microphone, cleanup, fullAudio, live } = this.preferences;
+    return JSON.stringify({ shortcut, microphone, cleanup, fullAudio, live });
   }
   updateReadiness(patch: Partial<Omit<Readiness, "key">>) {
     this.readinessValue = Object.freeze({ ...this.readiness, ...patch });
