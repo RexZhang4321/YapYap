@@ -4,14 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BYOK Dictation — Overlay</title>
-    <link rel="stylesheet" href="/src/overlay.css" />
-    <script type="module" src="/src/overlay.ts"></script>
+    <script type="module" src="/src/overlay.tsx"></script>
   </head>
   <body>
-    <main id="overlay" data-phase="hidden" role="status" aria-live="polite">
-      <header><span class="signal" aria-hidden="true"></span><h1 id="overlay-title">Ready to dictate</h1><span class="brand" id="overlay-label">BYOK</span></header>
-      <p id="overlay-text"></p>
-      <p id="overlay-hint"></p>
-    </main>
+    <div id="root"></div>
   </body>
 </html>

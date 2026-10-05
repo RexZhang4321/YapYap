@@ -162,21 +162,70 @@ test("failed destination capture keeps usable text and frees audio for Copy", as
   assert.equal(session.transcript, "recover me");
   assert.equal(session.audio, null);
   assert.equal(released, 1);
-  assert.equal(session.canRetryInsertion, false);
+  assert.equal(session.canRetryInsertion, true);
 });
 
 test("only a confirmed refusal before paste permits insertion retry, without retranscription", async () => {
-  let requests = 0, insertions = 0;
+  let requests = 0, insertions = 0, focus = "original";
+  const captures = [], targets = [];
   const session = new TranscriptionSession(async () => { requests++; return "keep text"; }, () => {}, () => {},
-    destination(async () => ++insertions === 1
-      ? sentPaste({ pasteAttempted: false, pasteSent: false, message: "Target changed" }) : sentPaste()));
+    { ...destination(async () => {
+      targets.push(captures.at(-1));
+      return ++insertions === 1
+        ? sentPaste({ pasteAttempted: false, pasteSent: false, message: "Target changed" }) : sentPaste();
+    }), capture: async () => { captures.push(focus); } });
   session.begin(); session.capture(recording()); await session.transcribe();
   assert.equal(session.state, "failed");
   assert.equal(session.canRetryInsertion, true);
+  focus = "chosen input";
   await session.retryInsertion(); await session.retryInsertion();
   assert.equal(session.state, "inserted");
   assert.equal(requests, 1);
   assert.equal(insertions, 2);
+  assert.deepEqual(captures, ["original", "chosen input"]);
+  assert.deepEqual(targets, ["original", "chosen input"]);
+});
+
+test("retry capture failure, timeout, and cancellation preserve text without dispatching paste", async () => {
+  for (const outcome of ["failure", "timeout", "cancel"]) {
+    let captures = 0, inserts = 0;
+    const pending = deferred();
+    const session = new TranscriptionSession(async () => "saved words", () => {}, () => {}, {
+      ...destination(async () => { inserts++; return sentPaste({ pasteAttempted: false, pasteSent: false }); }),
+      capture: async () => {
+        if (++captures === 1) return;
+        if (outcome === "failure") throw Error("Private capture detail");
+        return pending.promise;
+      },
+    }, undefined, { stalledMs: 5, targetMs: 20, insertionMs: 100, transcriptionMs: 100, cleanupMs: 100 });
+    session.begin(); session.capture(recording()); await session.transcribe();
+    const retry = session.retryInsertion();
+    assert.equal(session.busy, true);
+    await session.retryInsertion();
+    assert.equal(captures, 2);
+    if (outcome === "cancel") session.discard();
+    await retry;
+    pending.resolve();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(inserts, 1);
+    assert.equal(session.busy, false);
+    assert.equal(session.transcript, outcome === "cancel" ? "" : "saved words");
+    assert.equal(session.canRetryInsertion, outcome !== "cancel");
+    if (outcome !== "cancel") assert.equal(session.error, "insertion_target_unavailable");
+  }
+});
+
+test("initial capture failure permits an explicit shortcut retry at a new destination", async () => {
+  let captures = 0, inserts = 0, requests = 0;
+  const session = new TranscriptionSession(async () => { requests++; return "saved words"; }, () => {}, () => {}, {
+    ...destination(async (_, text) => { inserts++; assert.equal(text, "saved words"); return sentPaste(); }),
+    capture: async () => { if (++captures === 1) throw Error("Unavailable"); },
+  });
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.equal(session.canRetryInsertion, true);
+  await session.retryInsertion();
+  assert.equal(session.state, "inserted");
+  assert.equal(captures, 2); assert.equal(inserts, 1); assert.equal(requests, 1);
 });
 
 test("partial paste, restore failure, and unknown IPC outcome never permit automatic retry", async () => {

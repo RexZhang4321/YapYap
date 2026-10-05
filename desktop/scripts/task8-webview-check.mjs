@@ -29,13 +29,14 @@ try {
   if (operation === 'prepare') {
     if (!['success', 'failure', 'slow'].includes(mode)) throw Error('Unknown fixture mode');
     await evaluate(`(async () => {
+      window.__taskUi = (await import('/src/ui/store.ts')).ui;
       const inputs = await navigator.mediaDevices.enumerateDevices();
       if (!inputs.some(d => d.kind === 'audioinput' && d.label.startsWith('Fake '))) throw Error('Synthetic microphone required');
       if (!['idle','discarded'].includes(document.querySelector('#session-state').textContent)) throw Error('Discard the previous session first');
       if (!window.__task8Shortcut) {
         // Import the exact module URL used by main, including Vite's cache key.
         // A second core module has a different Channel prototype.
-        const source = await (await fetch('/src/main.ts')).text();
+        const source = await (await fetch('/src/dictationController.ts')).text();
         const url = source.match(/from "([^"]*@tauri-apps_api_core[^\"]*)"/)[1];
         const core = await import(url);
         const descriptor = Object.getOwnPropertyDescriptor(core.Channel.prototype, 'onmessage');
@@ -43,7 +44,7 @@ try {
           window.__task8Shortcut = handler; descriptor.set.call(this, handler);
         }});
         try {
-          document.querySelector('#shortcut').value = 'Ctrl+Alt+F10';
+          window.__taskUi.control('shortcut').value = 'Ctrl+Alt+F10';
           document.querySelector('#shortcut-form').requestSubmit();
           const deadline = Date.now() + 5000;
           while (!window.__task8Shortcut && Date.now() < deadline) await new Promise(r => setTimeout(r, 50));
@@ -67,10 +68,10 @@ try {
         };
       }
       window.__task8Mode = '${mode}'; window.__task8Prepared = true;
-      document.querySelector('#hotkey-action').value = 'record';
-      document.querySelector('#live-enabled').checked = false;
+      window.__taskUi.control('hotkey-action').value = 'record';
+      window.__taskUi.control('live-enabled').checked = false;
       // Keep this older fixture check local: cleanup is a separate provider stage.
-      document.querySelector('#cleanup-enabled').checked = false;
+      window.__taskUi.control('cleanup-enabled').checked = false;
     })()`);
   } else if (operation === 'press' || operation === 'release') {
     await evaluate(`(() => {

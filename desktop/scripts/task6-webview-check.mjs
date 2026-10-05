@@ -47,6 +47,7 @@ const statusExpression = `(() => ({
 try {
   if (operation === "prepare") {
     await evaluate(`(async () => {
+      window.__taskUi = (await import('/src/ui/store.ts')).ui;
       const inputs = await navigator.mediaDevices.enumerateDevices();
       if (!inputs.some(d => d.kind === 'audioinput' && d.label.startsWith('Fake '))) throw new Error('Fake microphone required');
       if (!['idle','discarded'].includes(document.querySelector('#session-state').textContent)) throw new Error('Discard the current session first');
@@ -59,7 +60,7 @@ try {
         try { await core.invoke('plugin:global-shortcut|unregister', {shortcuts:[shortcut]}); }
         catch { /* A binding may already have been removed during a dev reload. */ }
       }
-      document.querySelector('#shortcut').value = 'Ctrl+Alt+F9';
+      window.__taskUi.control('shortcut').value = 'Ctrl+Alt+F9';
       document.querySelector('#shortcut-form').requestSubmit();
       document.querySelector('#prepare-microphone').click();
       const deadline = Date.now()+10000;

@@ -6,16 +6,25 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "node --experimental-transform-types --test scripts/transcription-session.test.mjs scripts/live-transcription.test.mjs scripts/api-key-privacy.test.mjs scripts/overlay.test.mjs scripts/recovery-audit.test.mjs scripts/provisional-recovery.test.mjs scripts/ux-behavior.test.mjs scripts/actionable-recovery.test.mjs",
+    "test": "node --experimental-transform-types --test scripts/transcription-session.test.mjs scripts/live-transcription.test.mjs scripts/api-key-privacy.test.mjs scripts/overlay.test.mjs scripts/recovery-audit.test.mjs scripts/provisional-recovery.test.mjs scripts/ux-behavior.test.mjs scripts/actionable-recovery.test.mjs scripts/ui-store.test.mjs scripts/vite-cache.test.mjs",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:ui": "playwright test",
+    "format:ui": "prettier --write src/ui src/main.tsx src/overlay.tsx"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-global-shortcut": "^2.3.2"
+    "@tauri-apps/plugin-global-shortcut": "^2.3.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tauri-apps/cli": "^2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "^3.9.9",
     "typescript": "~6.0.3",
     "vite": "^8.0.16"
   }

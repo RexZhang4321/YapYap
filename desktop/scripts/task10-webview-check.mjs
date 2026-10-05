@@ -94,17 +94,18 @@ async function completed() {
   await waitFor(overlay, `document.querySelector('#overlay').dataset.phase === 'hidden' && document.querySelector('#overlay-text').textContent === ''`);
   // Only synthetic output remains in process memory for exact native input checking.
   expectedInput += await main.evaluate(`document.querySelector('#transcript').value`);
-  if (!real) assert.ok(await main.evaluate(`document.querySelector('#transcript').value === 'Task 10 canonical result. 你好 😀' && document.querySelector('#live-transcript').value !== document.querySelector('#transcript').value`));
+  if (!real) assert.ok(await main.evaluate(`window.__taskUi.control('transcript').value === 'Task 10 canonical result. 你好 😀' && document.querySelector('#live-transcript').value !== document.querySelector('#transcript').value`));
   await stage('completed');
 }
 try {
   if (operation === 'prepare') {
     await main.evaluate(`(async () => {
       if (window.__task8Prepared || window.__task9Mode || window.__task10Prepared) throw Error('Restart before preparing this check');
+      window.__taskUi = (await import('/src/ui/store.ts')).ui;
       const inputs = await navigator.mediaDevices.enumerateDevices();
       if (!inputs.some(d => d.kind === 'audioinput' && d.label.startsWith('Fake '))) throw Error('Synthetic microphone required');
       if (!['idle','discarded'].includes(document.querySelector('#session-state').textContent)) throw Error('Discard first');
-      const source = await (await fetch('/src/main.ts')).text();
+      const source = await (await fetch('/src/dictationController.ts')).text();
       const url = source.match(/from "([^\"]*@tauri-apps_api_core[^\"]*)"/)[1];
       const core = await import(url);
       const descriptor = Object.getOwnPropertyDescriptor(core.Channel.prototype, 'onmessage');
@@ -112,7 +113,7 @@ try {
         window.__task10Shortcut = handler; descriptor.set.call(this, handler);
       }});
       try {
-        document.querySelector('#shortcut').value = 'Ctrl+Alt+F10';
+        window.__taskUi.control('shortcut').value = 'Ctrl+Alt+F10';
         document.querySelector('#shortcut-form').requestSubmit();
         const deadline = Date.now() + 5000;
         while (!window.__task10Shortcut && Date.now() < deadline) await new Promise(r => setTimeout(r, 50));
@@ -152,10 +153,10 @@ try {
       transport.cancel = async () => {};
       ` : ''}
       window.__task10Prepared = '${real ? 'real' : 'local'}';
-      document.querySelector('#hotkey-action').value = 'record';
-      document.querySelector('#live-enabled').checked = true;
+      window.__taskUi.control('hotkey-action').value = 'record';
+      window.__taskUi.control('live-enabled').checked = true;
       // Task 10 asserts canonical insertion; Task 11 cleanup has separate coverage.
-      document.querySelector('#cleanup-enabled').checked = false;
+      window.__taskUi.control('cleanup-enabled').checked = false;
     })()`);
     console.log(JSON.stringify({ prepared:true, mode:real ? 'real' : 'local' }));
   } else if (operation === 'check') {

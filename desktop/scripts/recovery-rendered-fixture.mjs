@@ -16,7 +16,7 @@ const bridge = `
   let callbackId = 0;
   const handlers = new Map();
   const gates = new Map();
-  const state = { transcription: "immediate", cleanup: "pending", lastPendingName: "", copies: [], insertions: [], calls: [] };
+  const state = { hasKey: new URLSearchParams(location.search).get("key") !== "missing", transcription: "immediate", cleanup: "pending", lastPendingName: "", copies: [], insertions: [], calls: [] };
   const renderSnapshot = () => {
     const target = document.querySelector("#fixture-snapshot");
     const session = window.__recoveryFixture?.transcription;
@@ -70,7 +70,7 @@ const bridge = `
     },
     unregisterCallback(id) { callbacks.delete(String(id)); },
     invoke(command, args = {}) {
-      state.calls.push({ command, args });
+      state.calls.push({ command, args: command === "save_api_key" ? {} : args });
       if (command === "plugin:global-shortcut|register") {
         for (const shortcut of args.shortcuts ?? []) handlers.set(shortcut, args.handler);
         return Promise.resolve();
@@ -79,7 +79,9 @@ const bridge = `
         for (const shortcut of args.shortcuts ?? []) handlers.delete(shortcut);
         return Promise.resolve();
       }
-      if (command === "has_api_key") return Promise.resolve(true);
+      if (command === "has_api_key") return Promise.resolve(state.hasKey);
+      if (command === "save_api_key") { state.hasKey = true; return Promise.resolve(); }
+      if (command === "delete_api_key") { state.hasKey = false; return Promise.resolve(); }
       if (command === "has_clipboard_backup") return Promise.resolve(false);
       if (command === "claim_overlay") return Promise.resolve({ epoch: 1, revision: 0 });
       if (command === "update_overlay" || command === "discard_dictation_target") return Promise.resolve();
@@ -99,7 +101,7 @@ const bridge = `
       }
       if (command === "insert_dictation_text") {
         state.insertions.push({ sessionId: args.sessionId, text: args.text });
-        return Promise.resolve({ pasteAttempted: true, pasteSent: true, clipboardRestored: true, message: "Fixture insertion" });
+        return Promise.resolve(state.insertion ?? { pasteAttempted: true, pasteSent: true, clipboardRestored: true, message: "Fixture insertion" });
       }
       if (command === "list_audio_inputs") return Promise.resolve([]);
       if (command === "start_live_stream" || command === "append_live_audio" || command === "finish_live_stream" || command === "cancel_live_stream") return Promise.resolve();
@@ -163,6 +165,7 @@ const controls = `
 const appendedHooks = `
 Object.assign(window, { __recoveryFixture: {
   transcription, live,
+  shortcut: state => onShortcut({ state, shortcut: shortcutBinding.active }),
   setPreviewSession: sessionId => { livePreviewSession = sessionId; },
   reset() {
     if (transcription.busy || transcription.hasResult || transcription.state === "failed") transcription.discard();
@@ -201,6 +204,13 @@ Object.assign(window, { __recoveryFixture: {
     void transcription.transcribe();
     return true;
   },
+  startSuccessful() {
+    window.__fixtureIPC.state.transcription = "immediate";
+    window.__fixtureIPC.state.cleanup = "immediate";
+    transcription.begin(true, true);
+    transcription.capture(new Blob([new Uint8Array(128)]));
+    return transcription.transcribe();
+  },
   snapshot: () => window.__fixtureIPC.snapshot(),
 } });
 document.dispatchEvent(new CustomEvent("recovery-fixture-ready"));
@@ -211,7 +221,7 @@ const plugin = {
   enforce: "post",
   transform(code, id) {
     const source = id.split("?")[0].replaceAll("\\", "/");
-    if (source.endsWith("/src/main.ts")) return `${code}\n${appendedHooks}`;
+    if (source.endsWith("/src/dictationController.ts")) return code.replace("// Fixture hook insertion point", appendedHooks);
     if (source.endsWith("/src/transcriptionSession.ts")) return code.replace(
       "stalledMs: 12_000, transcriptionMs: 100_000, cleanupMs: 30_000, targetMs: 5_000, insertionMs: 15_000,",
       "stalledMs: 250, transcriptionMs: 60_000, cleanupMs: 60_000, targetMs: 5_000, insertionMs: 15_000,",
@@ -223,8 +233,8 @@ const plugin = {
       try {
         let html = await readFile(indexPath, "utf8");
         html = html.replace(
-          '<script type="module" src="/src/main.ts" defer></script>',
-          `${bridge}<script type="module" src="/src/main.ts?recoveryFixture"></script>`,
+          '<script type="module" src="/src/main.tsx"></script>',
+          `${bridge}<script type="module" src="/src/main.tsx?recoveryFixture"></script>`,
         );
         html = html.replace("<body>", `<body>${controls}`);
         response.statusCode = 200;
@@ -235,14 +245,23 @@ const plugin = {
   },
 };
 
-const server = await createServer({
+export function createRecoveryFixtureServer(port = Number(process.env.UI_FIXTURE_PORT ?? 1422)) {
+  return createServer({
   configFile: false,
   root,
+  // The native dev server may be running concurrently. Different optimizer
+  // configs must not replace its cached modules and strand a hidden WebView.
+  cacheDir: resolve(root, "node_modules/.vite-recovery-fixture"),
   plugins: [plugin],
-  server: { host: "127.0.0.1", port: 1422, strictPort: true },
-});
-await server.listen();
-console.log("Rendered recovery fixture: http://localhost:1422/recovery-fixture.html");
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, async () => { await server.close(); process.exit(0); });
+  server: { host: "127.0.0.1", port, strictPort: true },
+  });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const server = await createRecoveryFixtureServer();
+  await server.listen();
+  console.log(`Rendered recovery fixture: http://localhost:${server.config.server.port}/recovery-fixture.html`);
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, async () => { await server.close(); process.exit(0); });
+  }
 }

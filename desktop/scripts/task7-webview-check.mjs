@@ -56,8 +56,8 @@ try {
       }
       window.__task7Metrics = {deltas:0,completions:0,wordsBeforeRelease:false};
       window.__task7Prepared = true;
-      document.querySelector('#hotkey-action').value = 'live';
-      document.querySelector('#live-enabled').checked = true;
+      window.__taskUi.control('hotkey-action').value = 'live';
+      window.__taskUi.control('live-enabled').checked = true;
     })()`);
   } else if (['record', 'interrupt', 'reconnect', 'cancel'].includes(operation)) {
     await evaluate(`(async () => {
@@ -65,7 +65,7 @@ try {
       if (!['idle','discarded'].includes(document.querySelector('#session-state').textContent)) throw new Error('Discard previous session first');
       window.__task7Metrics = {deltas:0,completions:0,wordsBeforeRelease:false};
       window.__task7Released = false;
-      document.querySelector('#hotkey-action').value = 'live';
+      window.__taskUi.control('hotkey-action').value = 'live';
       const pause = ms => new Promise(r => setTimeout(r, ms));
       window.__task6Shortcut({state:'Pressed',shortcut:'Ctrl+Alt+F9'});
       await pause(${operation === 'cancel' ? (flags.includes('--after-words') ? 3500 : 300) : operation === 'record' ? 8000 : 3500});

@@ -91,7 +91,8 @@ export class TranscriptionSession {
   }
   get canRetryInsertion(): boolean {
     return !this.busy && this.state === "failed" && this.transcript !== ""
-      && this.insertion !== null && !this.insertion.pasteAttempted;
+      && (this.insertion !== null ? !this.insertion.pasteAttempted
+        : this.error === "insertion_target_unavailable");
   }
 
   private invalidate() {
@@ -164,7 +165,21 @@ export class TranscriptionSession {
     if (!this.canRetryInsertion || !this.destination) return;
     this.busy = true;
     const generation = this.generation;
-    try { await this.insert(); }
+    this.changed();
+    try {
+      // A new shortcut press explicitly chooses the currently focused input.
+      // The native preflight still checks it immediately before dispatching paste.
+      await this.waitFor(this.destination.capture(this.sessionId), generation,
+        this.timing.targetMs, "insertion_target_unavailable");
+      if (generation !== this.generation) return;
+      await this.insert();
+    } catch {
+      if (generation === this.generation) {
+        this.insertion = null; // No insertion command was sent during this retry.
+        this.error = "insertion_target_unavailable";
+        this.state = "failed";
+      }
+    }
     finally { if (generation === this.generation) { this.busy = false; this.changed(); } }
   }
 

@@ -2,6 +2,24 @@
 
 Run `npm install` and `npm run tauri dev` from this directory. The initial release targets Windows. The normal flow is **hold shortcut → speak → release → insert**; the app stays available in the system tray when its window closes.
 
+To launch the native client from the repository root, run `cd desktop`, then `npm run tauri -- dev`. Tauri starts Vite automatically; do not start a separate `npm run dev` first. If startup reports **Port 1420 is already in use**, stop the earlier Vite/Tauri terminal with Ctrl+C and retry. `npm run dev` alone is only the browser frontend and does not provide native dictation capabilities.
+
+Keep one native client instance running; closing its main window leaves it active in the tray. Use the tray's **Quit** command before starting a replacement. The browser recovery fixture has a separate Vite dependency cache, so its tests can run alongside the native development client without invalidating the floating overlay's modules.
+
+## Frontend development
+
+Both windows use React 19 and TypeScript, built with Vite. `index.html` and `overlay.html` mount separate React roots; their existing CSS and native Tauri capabilities remain in place.
+
+- `src/ui/App.tsx` composes the main window and owns Settings navigation and native dialog refs.
+- `src/ui/Home.tsx`, `SettingsContent.tsx`, `ApiKeySettings.tsx`, `SessionRecovery.tsx`, and `RetainedList.tsx` contain the feature components. Retained rows use session IDs as React keys to preserve expansion and focus during updates.
+- `src/ui/store.ts` exposes cached view snapshots through React's `useSyncExternalStore`; `View.tsx` binds typed HTML props, controlled inputs, status text, and controller actions. Initial display values live in `initialState.ts`. Add new UI features in these components, using local React state for presentation and extending the store only when session logic needs to publish a value.
+- `src/dictationController.ts` owns the application session for the lifetime of the WebView. React renders its state; component renders and refreshes do not register another global shortcut or start another recorder. Native refs are used for playback, modal dialogs, and focus. The recording, transport, transcription, and recovery modules retain their existing responsibilities.
+- `src/overlay.tsx` renders the passive overlay and disposes its event subscription on unmount. Revision checks, provisional-text separation, and scrolling to the latest words remain in place.
+
+API-key drafts stay in an uncontrolled password input and are cleared synchronously before IPC. They never enter shared view snapshots or persisted preferences.
+
+Use `npm run dev` for browser development, `npm run build` for TypeScript checking and both production entry points, and `npm test` for the session and view-store regressions. `npm run test:ui` runs ten rendered React checks using installed Microsoft Edge and a local fixture server on port 1424. These checks stub credentials, microphone, provider, clipboard, shortcuts, and insertion; they make no provider requests or native paste operations. Windows tray, physical-microphone, focus preservation, and real insertion acceptance still require the native checks below. `npm run format:ui` formats the React UI sources.
+
 ## Set up once
 
 1. Open **Settings** or choose **Set up dictation** from the readiness screen.
@@ -19,7 +37,7 @@ Press **Esc** while recording or finalizing to cancel before insertion is dispat
 
 ## Recover your words
 
-The main window shows the specific issue and recovery actions while processing, after failure, and when clipboard restoration fails. Failed transcription retains audio for **Retry transcription** and playback. A changed or uncertain destination retains text for Copy; only a confirmed refusal before paste permits shortcut insertion retry. Check the destination before pasting after an uncertain result. **Discard dictation** clears the current sources and dismisses its floating alert; it cannot retract an existing paste.
+The main window shows the specific issue and recovery actions while processing, after failure, and when clipboard restoration fails. Failed transcription retains audio for **Retry transcription** and playback. If insertion is refused before any paste, or destination capture fails, focus your intended text field and press and release your shortcut again. This explicitly chooses that input and pastes the saved output without recording, retranscribing, or repeating cleanup. The input must remain unchanged during this retry's native checks. The alert includes the native refusal reason. An uncertain or partially dispatched paste cannot be retried with the shortcut; check the destination and use Copy for manual recovery. **Discard dictation** clears the current sources and dismisses its floating alert; it cannot retract an existing paste.
 
 While processing, **Stop waiting · keep recovery** immediately unlocks the local session and preserves the recording or original transcript. **Skip cleanup · review original…** shows the exact canonical original with an unpolished-text warning. **Use live words · review…** shows the exact provisional snapshot and warns that it may be incomplete, contain gaps or recognition errors, and is not the final transcript. **Confirm and copy** stops waiting and copies only the displayed text. Return to the intended field and press Ctrl+V to paste manually. Dismissing the dialog keeps waiting and does not copy or cancel anything. Provisional text is never promoted to canonical text or passed to automatic insertion. **Copy live words** after failure uses the same confirmation.
 
