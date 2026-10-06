@@ -1,5 +1,7 @@
 # BYOK Dictation for Windows
 
+For the Windows installer, required permissions, release checks and signing workflow, see [Windows release guide](RELEASE.md). Run `npm.cmd run release:windows` for an unsigned local test installer; installed-app acceptance and trusted signing remain separate release gates.
+
 Run `npm install` and `npm run tauri dev` from this directory. The initial release targets Windows. The normal flow is **hold shortcut → speak → release → insert**; the app stays available in the system tray when its window closes.
 
 To launch the native client from the repository root, run `cd desktop`, then `npm run tauri -- dev`. Tauri starts Vite automatically; do not start a separate `npm run dev` first. If startup reports **Port 1420 is already in use**, stop the earlier Vite/Tauri terminal with Ctrl+C and retry. `npm run dev` alone is only the browser frontend and does not provide native dictation capabilities.
@@ -174,7 +176,8 @@ This development check uses local Windows speech synthesis instead of paid TTS. 
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-task6-speech.ps1
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream --use-file-for-fake-audio-capture=src-tauri/target/task6/speech.wav --remote-debugging-port=9223'
+$fixtureWav = (Resolve-Path 'src-tauri/target/task6/speech.wav').Path
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--use-fake-device-for-media-stream --use-file-for-fake-audio-capture=`"$fixtureWav`" --remote-debugging-port=9223"
 Start-Process -FilePath 'src-tauri/target/debug/desktop.exe' -WindowStyle Hidden
 node scripts/task6-webview-check.mjs prepare
 ```

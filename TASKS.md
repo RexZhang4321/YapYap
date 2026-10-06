@@ -227,10 +227,10 @@ Done when: the default lifecycle matches the project’s local-first privacy req
 
 ### 17. Packaging and release checks
 
-- [ ] Build a Windows installer.
-- [ ] Document required Windows permissions.
+- [x] Build a Windows installer. Per-user Windows x64 NSIS package generated; see [Task 17 verification](desktop/scripts/task17-verification.md).
+- [x] Document required Windows permissions. See [Windows release guide](desktop/RELEASE.md).
 - [ ] Test startup, restart, suspend/resume, and microphone changes.
-- [ ] Add Windows signing workflow before external distribution.
+- [-] Add Windows signing workflow before external distribution. The release script supports a local signing config and checks the installer signature; a separate gate checks timestamped signatures on the installer and actual installed payload. Real certificate/service verification remains pending.
 
 Done when: the P0 flow is installable and manually verified on Windows.
 

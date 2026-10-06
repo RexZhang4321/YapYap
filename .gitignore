@@ -7,6 +7,7 @@
 *.key
 *.p12
 *.pfx
+tauri.signing.local.json
 
 # Local Python tooling caches.
 __pycache__/
