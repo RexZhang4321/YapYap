@@ -153,7 +153,7 @@ try {
       assert.ok(await main.evaluate(`!document.querySelector('#transcript').value`));
       // Disabling the preview for the next session cannot show the old words.
       await main.evaluate(`window.__taskUi.control('hotkey-action').value = 'live'; window.__taskUi.dispatch('hotkey-action', 'change', new Event('change')); window.__taskUi.control('live-enabled').checked = false; window.__taskUi.dispatch('live-enabled', 'change', new Event('change')); window.__task8Shortcut({state:'Pressed',shortcut:'Ctrl+Alt+F10'})`);
-      await waitFor(overlay, `document.querySelector('#overlay').dataset.phase === 'recording' && document.querySelector('#overlay-label').textContent === 'BYOK'`);
+      await waitFor(overlay, `document.querySelector('#overlay').dataset.phase === 'recording' && document.querySelector('#overlay-label').textContent === 'YapYap'`);
       assert.ok((await main.evaluate(snapshotExpression)).text === '');
       await main.evaluate(`document.querySelector('#discard-transcription').click(); window.__taskUi.control('live-enabled').checked = true; window.__taskUi.dispatch('live-enabled', 'change', new Event('change'))`);
       await waitFor(main, `document.querySelector('#session-state').textContent === 'discarded' && document.querySelector('#recording-playback').hidden`);

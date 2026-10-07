@@ -1,16 +1,11 @@
 import { View } from "./View";
+import appIcon from "../assets/app-icon.png";
 export function AppHeader() {
   return (
     <header className="app-header">
       <div className="wordmark">
-        <span className="app-mark" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
-        <h1>{"BYOK Dictation"}</h1>
+        <img className="app-mark" src={appIcon} alt="" aria-hidden="true" />
+        <h1>{"YapYap"}</h1>
       </div>
       <View
         as="button"

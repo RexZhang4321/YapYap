@@ -1,4 +1,6 @@
-# BYOK Dictation for Windows
+# YapYap for Windows
+
+YapYap's npm and Rust packages are `yapyap`, its native library is `yapyap_lib`, and its Windows executable is `yapyap.exe`. Install the generated `YapYap_0.1.0_x64-setup.exe` and launch **YapYap** from Start. If upgrading from BYOK Dictation, follow the [upgrade instructions](RELEASE.md#upgrading-from-byok-dictation) to retain preferences and your saved API key.
 
 For the Windows installer, required permissions, release checks and signing workflow, see [Windows release guide](RELEASE.md). Run `npm.cmd run release:windows` for an unsigned local test installer; installed-app acceptance and trusted signing remain separate release gates.
 
@@ -6,7 +8,7 @@ Run `npm install` and `npm run tauri dev` from this directory. The initial relea
 
 To launch the native client from the repository root, run `cd desktop`, then `npm run tauri -- dev`. Tauri starts Vite automatically; do not start a separate `npm run dev` first. If startup reports **Port 1420 is already in use**, stop the earlier Vite/Tauri terminal with Ctrl+C and retry. `npm run dev` alone is only the browser frontend and does not provide native dictation capabilities.
 
-Keep one native client instance running; closing its main window leaves it active in the tray. Use the tray's **Quit** command before starting a replacement. The browser recovery fixture has a separate Vite dependency cache, so its tests can run alongside the native development client without invalidating the floating overlay's modules.
+Opening the native app again restores and focuses its existing window, including when it is minimized or hidden in the tray. Closing the main window keeps dictation active; use the tray's **Quit** command to exit. Quit before switching between an installed build and a development build, which share the same app identity. The browser recovery fixture has a separate Vite dependency cache, so its tests can run alongside the native development client without invalidating the floating overlay's modules.
 
 The main window's **Processing phases** controls independently enable **Full audio transcription** and **gpt-6-luna cleanup**. Both default to on and your choices persist. Turning full audio transcription off uses the completed live transcript, enables live transcription for that mode, and skips the full-recording upload. Cleanup can tidy either transcript; turning it off inserts the received words directly. A failed or gapped live stream keeps the recording for **Retry full audio transcription**, which explicitly runs the full-recording pass. Unfinished live words are never inserted automatically.
 
@@ -35,7 +37,7 @@ Use `npm run dev` for browser development, `npm run build` for TypeScript checki
 
 Place the cursor in the intended text field, hold the shortcut, and speak. The passive floating window shows Listening and provisional live words. Release the shortcut to transcribe the complete recording, optionally tidy the text, and insert it. Keep the intended destination/cursor unchanged while the result finishes. A successful insertion hides the floating window, and you can dictate again without discarding the previous result.
 
-Press **Esc** while recording or finalizing to cancel before insertion is dispatched, or open **Dictation** from the tray and choose **Cancel dictation**. If another application prevents global Esc registration, the app shows that limitation and keeps the Cancel button available. Cancel clears the current session's local audio/text and unlocks the local session immediately; late responses are ignored. An already sent native request can still finish in the background. If a new transcription reaches its native busy guard, the app retains the new recording and explains how to retry shortly. A paste already dispatched cannot be cancelled.
+Press **Esc** while recording or finalizing to cancel before insertion is dispatched, or open **YapYap** from the tray and choose **Cancel dictation**. If another application prevents global Esc registration, the app shows that limitation and keeps the Cancel button available. Cancel clears the current session's local audio/text and unlocks the local session immediately; late responses are ignored. An already sent native request can still finish in the background. If a new transcription reaches its native busy guard, the app retains the new recording and explains how to retry shortly. A paste already dispatched cannot be cancelled.
 
 **Show live words** and **Light cleanup** are in Settings. Live words are a preview; the final transcript always uses the original recording. Turn cleanup off to insert the original transcript. Cleanup failure uses the original words. Audio and transcripts go directly to OpenAI; no dictation service or analytics receives them.
 
@@ -63,7 +65,7 @@ The references below retain detailed capability implementation and opt-in develo
 
 ## Floating live overlay (Tasks 8–9)
 
-Recording shows a small always-on-top **Listening** panel with live words labelled **Provisional** when live preview is enabled. While connecting, recording continues; with preview disabled, the panel shows a fixed listening status. It displays the latest 2,048 UTF-16 units, preserves emoji at the tail boundary, wraps long identifiers, and follows the newest lines. The complete bounded live preview remains in the main probe. Release shows **Finalizing** with the provisional preview; a successful paste hides and clears the overlay. Failed recording/transcription/insertion and unresolved clipboard restoration keep **Needs attention** visible. Retained probe results show **Ready** until recovery or discard. Use the tray's **Open Dictation** action for existing Retry, Copy, Restore, and Discard controls. The panel ignores mouse input and never requests focus; destination capture completes before it appears. It sits near the bottom of the foreground application's monitor, within the work area.
+Recording shows a small always-on-top **Listening** panel with live words labelled **Provisional** when live preview is enabled. While connecting, recording continues; with preview disabled, the panel shows a fixed listening status. It displays the latest 2,048 UTF-16 units, preserves emoji at the tail boundary, wraps long identifiers, and follows the newest lines. The complete bounded live preview remains in the main probe. Release shows **Finalizing** with the provisional preview; a successful paste hides and clears the overlay. Failed recording/transcription/insertion and unresolved clipboard restoration keep **Needs attention** visible. Retained probe results show **Ready** until recovery or discard. Use the tray's **Open YapYap** action for existing Retry, Copy, Restore, and Discard controls. The panel ignores mouse input and never requests focus; destination capture completes before it appears. It sits near the bottom of the foreground application's monitor, within the work area.
 
 The overlay has its own frontend entry point and event-subscription capability. Native dispatch denies it all application commands except reading the bounded overlay snapshot. It receives provisional text, fixed preview status, and a gap flag; it receives no audio, credentials, or canonical transcript. Text is rendered as plain text. State updates are serialized, coalesced, and revisioned so cancellation/reload cannot apply an older status over a newer one. Hidden updates clear both the native snapshot and the overlay DOM. Overlay failures are reported in the main probe and do not cancel dictation. Preview failure shows a warning while capture continues; explicit reconnect marks the gap. Provisional text never enters the insertion path.
 
@@ -178,7 +180,7 @@ This development check uses local Windows speech synthesis instead of paid TTS. 
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-task6-speech.ps1
 $fixtureWav = (Resolve-Path 'src-tauri/target/task6/speech.wav').Path
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--use-fake-device-for-media-stream --use-file-for-fake-audio-capture=`"$fixtureWav`" --remote-debugging-port=9223"
-Start-Process -FilePath 'src-tauri/target/debug/desktop.exe' -WindowStyle Hidden
+Start-Process -FilePath 'src-tauri/target/debug/yapyap.exe' -WindowStyle Hidden
 node scripts/task6-webview-check.mjs prepare
 ```
 

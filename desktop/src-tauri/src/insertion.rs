@@ -2,7 +2,7 @@
 use std::{mem::size_of, ptr, sync::Mutex, thread, time::Duration};
 use tauri::State;
 
-pub const TEST_TEXT: &str = "BYOK dictation insertion probe";
+pub const TEST_TEXT: &str = "YapYap dictation insertion probe";
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq, Eq)]

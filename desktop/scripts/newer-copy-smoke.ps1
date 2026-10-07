@@ -3,9 +3,9 @@
 param([int]$WaitSeconds = 15)
 
 Add-Type -AssemblyName System.Windows.Forms
-$probeText = 'BYOK dictation insertion probe'
-$olderText = 'BYOK older clipboard marker'
-$newerText = 'BYOK newer clipboard marker'
+$probeText = 'YapYap dictation insertion probe'
+$olderText = 'YapYap older clipboard marker'
+$newerText = 'YapYap newer clipboard marker'
 
 [System.Windows.Forms.Clipboard]::SetText($olderText)
 Write-Output 'Clipboard set to disposable older text. Focus a blank target and press Ctrl+Alt+F8 now.'

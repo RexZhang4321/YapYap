@@ -1,14 +1,14 @@
-:root { font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; color: #f4f7fa; background: #243a4c; font-synthesis: none; }
+:root { font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; color: #f4faf9; background: #183c3c; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; user-select: none; }
-main { height: 148px; padding: 13px 17px; border: 1px solid #526a7d; border-top: 3px solid #9dc7e0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+main { height: 148px; padding: 13px 17px; border: 1px solid #4a7775; border-top: 3px solid #65d4c7; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
 header { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 h1 { font-size: 14px; font-weight: 600; margin: 0; }
-.brand { margin-left: auto; font-size: 11px; color: #c1d0db; flex-shrink: 0; padding: 2px 6px; border: 1px solid #60798d; border-radius: 3px; }
-.signal { width: 7px; height: 7px; border-radius: 50%; background: #9dc7e0; flex-shrink: 0; }
+.brand { margin-left: auto; font-size: 11px; color: #c1dfda; flex-shrink: 0; padding: 2px 6px; border: 1px solid #568783; border-radius: 3px; }
+.signal { width: 7px; height: 7px; border-radius: 50%; background: #65d4c7; flex-shrink: 0; }
 #overlay-text { font-size: 17px; line-height: 1.35; margin: 0; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; white-space: pre-wrap; overflow-wrap: anywhere; }
 #overlay-text::-webkit-scrollbar { display: none; }
-#overlay-hint { color: #ccd8e1; font-size: 11px; line-height: 1.45; margin: 0; flex-shrink: 0; }
+#overlay-hint { color: #cce3df; font-size: 11px; line-height: 1.45; margin: 0; flex-shrink: 0; }
 [data-phase="error"] { border-top-color: #f1bd77; }
 [data-phase="error"] .signal { background: #f1bd77; }
 [data-warning="true"] { border-top-color: #f1bd77; }

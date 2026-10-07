@@ -1,6 +1,7 @@
 //! Secrets stay in the OS credential store and are never returned through IPC.
 use zeroize::Zeroizing;
 
+// Keep the original credential target so existing saved keys survive the rename.
 const TARGET: &str = "app.byokdictation.hotkeyprobe/openai-api-key";
 const MAX_KEY_BYTES: usize = 2560;
 
@@ -225,7 +226,7 @@ mod tests {
                 "credentials::tests::credential_restart_reader",
                 "--ignored",
             ])
-            .env("BYOK_CREDENTIAL_PROBE_TARGET", &target)
+            .env("YAPYAP_CREDENTIAL_PROBE_TARGET", &target)
             .output()
             .unwrap();
         assert!(
@@ -247,7 +248,7 @@ mod tests {
     #[test]
     #[ignore = "Child-process helper for windows_credential_restart_probe"]
     fn credential_restart_reader() {
-        let target = std::env::var("BYOK_CREDENTIAL_PROBE_TARGET")
+        let target = std::env::var("YAPYAP_CREDENTIAL_PROBE_TARGET")
             .expect("Run windows_credential_restart_probe instead");
         assert!(target.starts_with(&format!("{TARGET}/probe-")));
         let restored = native::read(&target).unwrap().unwrap();

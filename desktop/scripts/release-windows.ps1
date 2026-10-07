@@ -69,7 +69,9 @@ try {
     $installers = @(Get-ChildItem -LiteralPath $bundlePath -Filter '*-setup.exe' |
         Where-Object { $_.LastWriteTimeUtc -ge $started })
     if ($installers.Count -ne 1) { throw 'Expected exactly one newly built NSIS installer.' }
-    $executable = Join-Path $env:CARGO_TARGET_DIR 'release/desktop.exe'
+    $cargoPackageName = [regex]::Match($cargoText, '(?m)^name\s*=\s*"([^"]+)"').Groups[1].Value
+    if (-not $cargoPackageName) { throw 'Cannot identify the Cargo package name.' }
+    $executable = Join-Path $env:CARGO_TARGET_DIR "release/$cargoPackageName.exe"
     $appSignature = Get-AuthenticodeSignature -LiteralPath $executable
     $installerSignature = Get-AuthenticodeSignature -LiteralPath $installers[0].FullName
     if ($Signed) {
@@ -88,6 +90,10 @@ try {
     $changes = @(& git -C $repoPath status --porcelain)
     if ($LASTEXITCODE -ne 0) { throw 'Cannot identify release working-tree status.' }
     $manifest = [ordered]@{
+        productName = $config.productName
+        packageName = $package.name
+        executable = [IO.Path]::GetFileName($executable)
+        identifier = $config.identifier
         version = $config.version
         builtAtUtc = [DateTime]::UtcNow.ToString('o')
         sourceCommit = $revision

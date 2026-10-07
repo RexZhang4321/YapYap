@@ -13,7 +13,7 @@ try {
     "test", ...process.argv.slice(2),
   ], {
     stdio: "inherit",
-    env: { ...process.env, BYOK_UI_EXTERNAL_SERVER: "1" },
+    env: { ...process.env, YAPYAP_UI_EXTERNAL_SERVER: "1" },
   });
   result = await new Promise((resolve, reject) => {
     child.once("error", reject);

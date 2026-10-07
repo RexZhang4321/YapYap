@@ -1,5 +1,9 @@
 # Task 17 — Packaging and release verification
 
+Earlier artifacts and observed titles below retain the BYOK Dictation name.
+The current product is YapYap; see [rename verification](rename-verification.md)
+for its build and remaining installed-app acceptance.
+
 Date: October 5, 2026. Candidate: 0.1.0. Build host: Windows x64, build 26200. Scope: existing single-segment processing pipeline.
 
 ## Automated evidence
@@ -51,3 +55,58 @@ Artifact: src-tauri/target/release/bundle/nsis/BYOK Dictation_0.1.0_x64-setup.ex
 Installed location: `%LOCALAPPDATA%\BYOK Dictation\desktop.exe`. The installed executable was compared byte-for-byte with the built executable after replacing exactly one `__TAURI_BUNDLE_TYPE_VAR_UNK` marker with `__TAURI_BUNDLE_TYPE_VAR_NSS` in memory. They match completely under that expected transformation; only three bytes differ. Tauri patches the payload for the package, then restores the standalone file. See the [CLI 2.11.5 bundler implementation](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.5/crates/tauri-bundler/src/bundle.rs). No binary was modified by this verification.
 
 The installed app was launched with synthetic-microphone/debug flags excluded and reported a visible BYOK Dictation main window without a development server. No live provider request or dictation was initiated by automation. Full manual Windows acceptance is pending. This record doesn't close Task 10's combined native validation, the UX checkpoint, or Task 16's full privacy/lifecycle audit.
+
+## October 6 — Icon and single-instance follow-up
+
+The new candidate replaces the generated installer above with the blue waveform
+icon and single-instance startup. The full unsigned release command passed again:
+165 frontend checks, 19 rendered checks, 26 native checks (seven ignored), Rust
+formatting, production builds, four scanner regressions and the default leak
+scan (343 files/build outputs and 505 local Git objects). npm reported zero
+vulnerabilities. This default scan did not compare the saved key or app profile.
+
+The updated per-user installation exited 0. Native screenshots confirmed the
+main window, new title-bar/header icons and Settings. Relaunching while visible,
+minimized or hidden in the tray restored the same window and original process;
+Settings stayed open across hide/relaunch. Each duplicate launch exited 0 and
+only one dictation app process remained. See [app relaunch verification](app-launch-verification.md)
+for evidence and the repeatable procedure. Tray-menu Quit/reopen, shortcut
+conflicts, physical dictation and the other lifecycle/signing gates above remain
+pending.
+
+Current installer: `src-tauri/target/release/bundle/nsis/BYOK Dictation_0.1.0_x64-setup.exe`,
+1,644,414 bytes, unsigned. SHA-256:
+`F3CD4B07D00CF132F5811B60F357B1C6144D06EC12AC377DB763328ED379DC8B`.
+Source commit: `372f47dc9f22911a9fcedb106a9e0ab0231d78b1` plus uncommitted icon
+and single-instance changes, as recorded in the dirty-tree manifest.
+
+### Teal palette candidate
+
+The icon, app accents and dictation overlay now use teal. TypeScript, both Vite
+entry points, the locked native release build and NSIS packaging passed. Primary
+button and shortcut text contrast were verified. The functional checks and
+installed-app relaunch evidence above were collected on the earlier blue
+candidate; they were not rerun for this color-only change.
+
+The first teal installer superseded the earlier artifact: 1,644,609 bytes,
+unsigned, SHA-256
+`C14956C90C08E1CAEB2596977D1E9A80D6AC215401476E610FFAD35F17F4E23B`.
+The checksum and manifest reflect this build. It has not been installed by
+automation. The user reported the earlier app was missing from Installed apps
+despite a readable uninstall entry. Run the installer from the normal Windows
+desktop and verify visibility and uninstall before claiming installation
+acceptance complete.
+
+### Latest candidate — Installer and uninstaller icons
+
+NSIS `installerIcon` and `uninstallerIcon` now explicitly use `icons/icon.ico`.
+The TypeScript/Vite build, locked native release build and NSIS bundle passed.
+The generated NSIS script points both icon settings at the app's ICO file, and
+all six ICO image payloads (16, 24, 32, 48, 64 and 256 pixels) were matched
+byte-for-byte inside the setup executable's PE resource section.
+
+Current installer: 1,682,972 bytes, unsigned, SHA-256
+`E949CAE3BB272F4A6A5D3CAB8E93AF08F8806F4539E2348F9C6EC49FA5757B13`.
+The checksum and manifest were refreshed. This candidate has not been installed
+by automation; normal desktop installation and uninstall acceptance remain
+pending.

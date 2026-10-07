@@ -63,7 +63,7 @@ export function Overlay() {
       <header>
         <span className="signal" aria-hidden="true" />
         <h1 id="overlay-title">
-          {failed ? "Open Dictation from the tray" : copy.title}
+          {failed ? "Open YapYap from the tray" : copy.title}
         </h1>
         <span className="brand" id="overlay-label">
           {copy.label}

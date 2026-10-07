@@ -290,7 +290,7 @@ export const initialControls = {
     text: "First visible text: waiting",
   },
   "test-text": {
-    text: "BYOK dictation insertion probe",
+    text: "YapYap dictation insertion probe",
   },
   "insertion-status": {
     text: "Choose Text insertion test to check a destination.",

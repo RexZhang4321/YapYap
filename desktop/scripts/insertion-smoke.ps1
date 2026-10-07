@@ -21,7 +21,7 @@ public static class KeyProbe {
 }
 '@
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'BYOK insertion smoke target'
+$form.Text = 'YapYap insertion smoke target'
 $form.Width = 550
 $form.Height = 180
 $inputBox = New-Object System.Windows.Forms.TextBox

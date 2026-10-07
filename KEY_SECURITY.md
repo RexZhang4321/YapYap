@@ -2,7 +2,7 @@
 
 ## Storage and use
 
-The app stores the user's key only in Windows Credential Manager at `app.byokdictation.hotkeyprobe/openai-api-key`. No raw-key getter is registered as a Tauri command. The UI gets saved-key presence and fixed operation results, clears the input before invoking Save, and displays only explicitly recognized error codes. Unknown IPC errors are not rendered or logged.
+YapYap stores the user's key only in Windows Credential Manager at `app.byokdictation.hotkeyprobe/openai-api-key`. This original target remains stable across the YapYap rename so existing saved keys remain available. No raw-key getter is registered as a Tauri command. The UI gets saved-key presence and fixed operation results, clears the input before invoking Save, and displays only explicitly recognized error codes. Unknown IPC errors are not rendered or logged.
 
 Rust uses the key in the Authorization header for HTTPS requests and the live WebSocket to the fixed `api.openai.com` host. Certificate verification remains enabled and redirects are disabled. Provider failure bodies are not returned to the UI. Credential reads and explicitly owned temporary secret buffers are wiped on drop; WinHTTP headers reserve their entire allocation before the secret is copied, including any Content-Type header. The streaming client's Authorization HeaderValue is marked sensitive so its debug representation is redacted; third-party handshake/header/TLS allocations are not guaranteed to be wiped.
 

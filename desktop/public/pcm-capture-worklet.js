@@ -61,4 +61,4 @@ class PcmCaptureWorkletProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("byok-pcm-capture", PcmCaptureWorkletProcessor);
+registerProcessor("yapyap-pcm-capture", PcmCaptureWorkletProcessor);

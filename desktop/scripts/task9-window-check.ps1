@@ -13,7 +13,7 @@ public static class Task9Window {
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint data, UIntPtr extra);
-  public static IntPtr Overlay() { return FindWindowW(null, "BYOK Dictation \u2014 Overlay"); }
+  public static IntPtr Overlay() { return FindWindowW(null, "YapYap \u2014 Overlay"); }
 }
 '@
 $task9DesktopRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path

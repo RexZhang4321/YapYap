@@ -1,4 +1,4 @@
-# BYOK Dictation Tool — Incremental Task List
+# YapYap — Incremental Task List
 
 This list follows the capability-by-capability build order. Each task should be demonstrated with the real platform/API behavior before the next task is started.
 

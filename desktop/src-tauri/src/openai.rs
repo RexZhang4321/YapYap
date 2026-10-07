@@ -106,7 +106,7 @@ pub(crate) fn request(
         text.encode_utf16().chain(Some(0)).collect()
     }
 
-    let agent = wide("BYOK Dictation Probe/0.1");
+    let agent = wide("YapYap/0.1");
     let host = wide("api.openai.com");
     let method = wide(method);
     let path = wide(path);

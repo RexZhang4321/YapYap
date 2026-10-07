@@ -141,7 +141,7 @@ export function initializeDictation(ports: {
     (failed) => {
       overlayStatus.text = failed
         ? "The floating status window is unavailable. Recording and recovery remain available here."
-        : "The floating window shows live words and status. Open Dictation from the tray to recover text.";
+        : "The floating window shows live words and status. Open YapYap from the tray to recover text.";
     },
   );
 

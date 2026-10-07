@@ -112,7 +112,7 @@ export class PcmRecorder {
       checkCancelled();
 
       source = context.createMediaStreamSource(stream);
-      processor = new AudioWorkletNode(context, "byok-pcm-capture", {
+      processor = new AudioWorkletNode(context, "yapyap-pcm-capture", {
         numberOfInputs: 1,
         numberOfOutputs: 1,
         channelCount: 1,

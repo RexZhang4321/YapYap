@@ -278,10 +278,7 @@ mod tests {
             FindWindowW, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, IsWindowVisible,
             GWL_EXSTYLE, WS_EX_NOACTIVATE, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
         };
-        let title: Vec<u16> = "BYOK Dictation — Overlay"
-            .encode_utf16()
-            .chain(Some(0))
-            .collect();
+        let title: Vec<u16> = "YapYap — Overlay".encode_utf16().chain(Some(0)).collect();
         let hwnd = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
         assert!(!hwnd.is_null(), "Development overlay window not found");
         let style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;

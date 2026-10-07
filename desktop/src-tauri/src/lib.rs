@@ -12,6 +12,15 @@ mod overlay;
 mod streaming;
 mod transcription;
 
+fn show_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show()?;
+        window.unminimize()?;
+        window.set_focus()?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let commands: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
@@ -39,7 +48,15 @@ pub fn run() {
         streaming::finish_live_stream,
         streaming::cancel_live_stream
     ];
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Register first so duplicate launches exit before creating windows,
+    // registering shortcuts, or initializing another dictation session.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        let _ = show_main_window(app);
+    }));
+
+    builder
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(insertion::ProbeState::default())
         .manage(streaming::LiveState::default())
@@ -59,20 +76,17 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("overlay") {
                 window.set_ignore_cursor_events(true)?;
             }
-            let show = MenuItem::with_id(app, "show", "Open Dictation", true, None::<&str>)?;
+            let show = MenuItem::with_id(app, "show", "Open YapYap", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("BYOK Dictation")
+                .tooltip("YapYap")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        let _ = show_main_window(app);
                     }
                     "quit" => app.exit(0),
                     _ => {}

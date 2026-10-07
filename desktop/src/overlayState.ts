@@ -43,13 +43,13 @@ export function overlayPhase(session: OverlaySession): OverlayPhase {
 export const overlayCopy: Record<OverlayPhase, { title: string; text: string; hint: string }> = {
   hidden: { title: "Ready to dictate", text: "", hint: "" },
   recording: { title: "Listening", text: "Listening to your microphone…", hint: "Release the shortcut to insert" },
-  processing: { title: "Finalizing", text: "Finishing your dictation…", hint: "Open Dictation from the tray to stop waiting, copy, or cancel" },
-  ready: { title: "Ready", text: "Your words are available in Dictation.", hint: "Open Dictation from the tray to retry, copy, or discard" },
-  error: { title: "Needs attention", text: "Open Dictation from the tray to see the issue and recover your words.", hint: "Retry, review and copy, restore your clipboard, or discard there" },
+  processing: { title: "Finalizing", text: "Finishing your dictation…", hint: "Open YapYap from the tray to stop waiting, copy, or cancel" },
+  ready: { title: "Ready", text: "Your words are available in YapYap.", hint: "Open YapYap from the tray to retry, copy, or discard" },
+  error: { title: "Needs attention", text: "Open YapYap from the tray to see the issue and recover your words.", hint: "Retry, review and copy, restore your clipboard, or discard there" },
 };
 
 export function overlayPresentation(content: OverlayContent) {
-  const copy = { ...overlayCopy[content.phase], label: content.preview === "off" ? "BYOK" : "Provisional", warning: false };
+  const copy = { ...overlayCopy[content.phase], label: content.preview === "off" ? "YapYap" : "Provisional", warning: false };
   if (content.phase === "hidden") return copy;
   if (content.text) copy.text = content.text;
   if (content.phase === "error") return copy;
@@ -57,15 +57,15 @@ export function overlayPresentation(content: OverlayContent) {
     copy.warning = true;
     copy.title = content.phase === "recording" ? "Listening · preview unavailable" : copy.title;
     copy.hint = content.phase === "recording"
-      ? "Recording continues. Open Dictation to reconnect the preview."
-      : "Open Dictation to recover your words.";
+      ? "Recording continues. Open YapYap to reconnect the preview."
+      : "Open YapYap to recover your words.";
   } else if (content.phase === "recording") {
     if (content.preview === "connecting") {
       if (!content.text) copy.text = "Connecting live preview…";
       copy.hint = "Provisional · Recording continues while connecting";
     } else if (content.preview !== "off") copy.hint = "Provisional · Release the shortcut to finish";
     else copy.hint = "Live preview is off · Release the shortcut to finish";
-  } else if (content.phase === "processing" && content.preview !== "off") copy.hint = "Provisional · Open Dictation to stop waiting, review words, or cancel";
+  } else if (content.phase === "processing" && content.preview !== "off") copy.hint = "Provisional · Open YapYap to stop waiting, review words, or cancel";
   if (content.hasGap) { copy.warning = true; copy.hint = "Preview has a gap · " + copy.hint; }
   return copy;
 }

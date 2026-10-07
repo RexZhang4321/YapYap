@@ -6,8 +6,8 @@
   --ink: #243341;
   --muted: #657481;
   --line: #dbe2e8;
-  --accent: #28658c;
-  --accent-soft: #e9f1f7;
+  --accent: #087f82;
+  --accent-soft: #e5f5f3;
   --success: #347660;
   --warning: #98682c;
 }
@@ -22,17 +22,14 @@ h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.25px; }
 h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.2px; }
 h3 { margin: 0; font-size: 15px; font-weight: 600; }
 p { margin: 10px 0; line-height: 1.5; font-size: 14px; }
-.app-mark { display: flex; gap: 3px; align-items: center; height: 24px; color: var(--accent); }
-.app-mark i { width: 3px; height: 10px; border-radius: 2px; background: currentColor; }
-.app-mark i:nth-child(2), .app-mark i:nth-child(4) { height: 17px; }
-.app-mark i:nth-child(3) { height: 24px; }
+.app-mark { width: 30px; height: 30px; flex-shrink: 0; }
 button, input, select, textarea { font: inherit; }
 button { min-height: 34px; padding: 7px 12px; border: 1px solid #cbd5df; border-radius: 5px; color: var(--ink); background: #fff; font-size: 13px; cursor: pointer; }
 button:hover:not(:disabled) { background: #edf2f6; border-color: #aebecb; }
 button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { color: #8b969f; background: #f3f5f7; cursor: default; }
 button.primary-button { background: var(--accent); color: #fff; border-color: var(--accent); }
-button.primary-button:hover:not(:disabled) { background: #1e5376; }
+button.primary-button:hover:not(:disabled) { background: #06676a; }
 button.primary-button:disabled { opacity: .5; }
 button.quiet-button { border-color: transparent; background: transparent; color: var(--accent); }
 button.quiet-button:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
@@ -45,7 +42,7 @@ button.danger-button { color: #a23d3a; border-color: #dcc5c3; }
 [data-state="recording"] .readiness-dot { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 [data-state="error"] .readiness-dot, [data-state="setup"] .readiness-dot { background: var(--warning); }
 .shortcut-intro { margin: 24px 0 10px; color: var(--muted); }
-.shortcut-display { display: inline-block; padding: 11px 17px; font-family: inherit; font-size: 24px; font-weight: 600; line-height: 1.2; letter-spacing: -.4px; color: var(--accent); background: #f4f8fb; border: 1px solid #d5e3ec; border-bottom: 3px solid #c4d7e5; border-radius: 6px; overflow-wrap: anywhere; }
+.shortcut-display { display: inline-block; padding: 11px 17px; font-family: inherit; font-size: 24px; font-weight: 600; line-height: 1.2; letter-spacing: -.4px; color: var(--accent); background: #f2faf9; border: 1px solid #c0e2df; border-bottom: 3px solid #a7d5d1; border-radius: 6px; overflow-wrap: anywhere; }
 .dictation-instruction { margin: 13px 0 4px; }
 .cancel-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }

@@ -494,7 +494,7 @@ test("overlay renders literal text, ignores stale revisions, scrolls to the tail
   );
   await page.goto("/overlay.html?snapshot=failed");
   await expect(page.locator("#overlay-title")).toHaveText(
-    "Open Dictation from the tray",
+    "Open YapYap from the tray",
   );
   await page.evaluate(() =>
     window.__overlayFixture.receive({

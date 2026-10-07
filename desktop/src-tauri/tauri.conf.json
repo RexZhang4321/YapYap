@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "BYOK Dictation",
+  "productName": "YapYap",
   "version": "0.1.0",
   "identifier": "app.byokdictation.hotkeyprobe",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "BYOK Dictation",
+        "title": "YapYap",
         "width": 600,
         "height": 640,
         "minWidth": 380,
@@ -20,7 +20,7 @@
       },
       {
         "label": "overlay",
-        "title": "BYOK Dictation — Overlay",
+        "title": "YapYap — Overlay",
         "url": "overlay.html",
         "width": 440,
         "height": 148,
@@ -41,10 +41,13 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "YapYap",
     "targets": ["nsis"],
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper"

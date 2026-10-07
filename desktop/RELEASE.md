@@ -1,6 +1,12 @@
 # Windows packaging and release
 
-The initial package is BYOK Dictation 0.1.0 for Windows x64. The NSIS installer installs for the current Windows user. Keep the existing app identifier and Credential Manager target stable so development users retain their configuration. The current icon is retained; final branding remains a pre-distribution decision.
+The initial package is YapYap 0.1.0 for Windows x64. The NSIS installer installs for the current Windows user, with `yapyap.exe` in `%LOCALAPPDATA%\YapYap`. The npm and Rust packages are named `yapyap`; the native library is `yapyap_lib`. The app and installer use the generated teal waveform icon; its source and regeneration instructions live in src-tauri/icons/.
+
+## Upgrading from BYOK Dictation
+
+Quit the earlier app through its tray menu, then uninstall **BYOK Dictation** before installing YapYap. Leave **Delete application data** unchecked to retain preferences. NSIS identifies the uninstall entry by product name, so the renamed installer does not automatically replace the old entry. Launch YapYap from Start after installing it.
+
+The internal app identifier remains `app.byokdictation.hotkeyprobe`, the preference storage key remains `byok-dictation-preferences`, and the Credential Manager target remains `app.byokdictation.hotkeyprobe/openai-api-key`. These compatibility identifiers preserve existing settings and the saved API key. Installed and development builds continue to share the same app identity. Historical verification records describe earlier artifacts under their original names; the YapYap candidate needs its own installation acceptance.
 
 ## Build a local test installer
 
@@ -16,11 +22,11 @@ The script reinstalls npm dependencies from the lockfile, checks npm advisories 
 
 Outputs are in src-tauri/target/release/bundle/nsis/:
 
-- BYOK Dictation_0.1.0_x64-setup.exe (the bundler determines the precise filename).
+- YapYap_0.1.0_x64-setup.exe (the bundler determines the precise filename).
 - SHA256SUMS.txt, containing the installer SHA-256.
 - release-manifest.json, containing version, source commit, dirty-tree status, signature status, size and hash. A dirty-tree build is a test candidate; commit final source and rebuild for external release.
 
-The default build is explicitly unsigned and suitable for local acceptance testing. The script does not install, publish, read a user's key, or run live dictation. Run the generated installer, then launch BYOK Dictation from the Start menu with all development servers stopped. Installation and acceptance results belong in [Task 17 verification](scripts/task17-verification.md).
+The default build is explicitly unsigned and suitable for local acceptance testing. The script does not install, publish, read a user's key, or run live dictation. Run the generated installer directly from File Explorer in your normal Windows desktop session, then launch YapYap from the Start menu with all development servers stopped. Confirm that Windows Settings > Apps > Installed apps lists YapYap and its uninstall action works. An installer launched by automation and a readable uninstall registry entry do not establish that Settings can see the app. Installation and acceptance results belong in [Task 17 verification](scripts/task17-verification.md).
 
 ## Windows permissions and runtime requirements
 
@@ -29,7 +35,7 @@ The default build is explicitly unsigned and suitable for local acceptance testi
 - **Network/provider:** Dictation requires an OpenAI API key with access to the configured models and outbound HTTPS/WebSocket access to api.openai.com. The optional Check connection action sends a models request. Live preview streams audio while recording; full-audio transcription uploads the recording on release when enabled; cleanup sends the selected transcript when enabled. Live-only mode skips the full-recording request except for explicit full-audio recovery.
 - **Credentials:** Windows Credential Manager stores the key for the current user. Preferences survive app restart; audio, transcripts, and recovery clipboard backups are memory-only and disappear on quit/crash. Uninstall should not be assumed to delete a generic Windows credential. Use Settings > Remove key before uninstall if desired, or remove app.byokdictation.hotkeyprobe/openai-api-key in Windows Credential Manager.
 - **Shortcut and insertion:** No macOS-style Accessibility permission is required. Keep the shortcut available and run ordinary destination apps at the same privilege level. Windows SendInput cannot inject into higher-integrity processes, so insertion into an administrator-elevated editor is outside normal acceptance. Use manual Copy/paste recovery when needed. See [Microsoft's SendInput restrictions](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput).
-- **Startup:** Launch from Start after reboot. Automatic launch at Windows login is not currently implemented. Keep one native instance running; duplicate-launch behavior is a manual check, not a claimed single-instance guarantee.
+- **Startup:** Launch from Start after reboot. Automatic launch at Windows login is not currently implemented. Relaunching restores and focuses the existing main window, including when minimized or hidden in the tray. Quit before switching between installed and development builds, which share the same app identity. See [app relaunch verification](scripts/app-launch-verification.md) for the Windows checks.
 
 Verify on each Windows version you intend to advertise. The build host is Windows 11 x64; Windows 10 and ARM64 support are not verified by an x64 installer build.
 
@@ -50,12 +56,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-windows.ps1 
 
 For a cloud or other provider, replace the certificate fields with bundle.windows.signCommand using the issuer's signing CLI. Tauri substitutes %1 with the artifact path. Keep service authentication outside the repository and command arguments; use the provider's credential mechanism. The same -Signed command then applies.
 
-The build script requires a valid, timestamped installer signature. Tauri signs the patched executable that goes into NSIS, then restores the unsigned/unpatched standalone desktop.exe; checking that standalone file would check the wrong artifact. This behavior is visible in the [installed CLI version's bundler source](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.5/crates/tauri-bundler/src/bundle.rs).
+The build script requires a valid, timestamped installer signature. Tauri signs the patched executable that goes into NSIS, then restores the unsigned/unpatched standalone yapyap.exe; checking that standalone file would check the wrong artifact. This behavior is visible in the [installed CLI version's bundler source](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.5/crates/tauri-bundler/src/bundle.rs).
 
 Install that signed candidate, then verify the actual installed payload together with its installer (adjust the filename if the version changes):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-windows-signatures.ps1 -Installer "src-tauri/target/release/bundle/nsis/BYOK Dictation_0.1.0_x64-setup.exe" -InstalledExecutable "$env:LOCALAPPDATA\BYOK Dictation\desktop.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-windows-signatures.ps1 -Installer "src-tauri/target/release/bundle/nsis/YapYap_0.1.0_x64-setup.exe" -InstalledExecutable "$env:LOCALAPPDATA\YapYap\yapyap.exe"
 ```
 
 The verification script requires valid timestamped signatures with the same signer on both files and prints their hashes/publisher as JSON. Save that output with the release evidence, review the publisher identity, run the acceptance checks on this signed candidate, and retain its checksum. See [Tauri's current signing guidance](https://v2.tauri.app/distribute/sign/windows/); its legacy PFX walkthrough explicitly covers older certificates only. Signing-tool execution remains unverified until a real provider is configured.

@@ -47,7 +47,7 @@ class Task10Input {
         string nextHash = Regex.Match(json, "\"expectedHash\":\"([a-f0-9]{64})\"").Groups[1].Value;
         if (nextPhase.Length > 0 && nextHash.Length == 64) { phase = nextPhase; expectedHash = nextHash; }
       } catch (IOException) { }
-      IntPtr overlay = FindWindowW(null, "BYOK Dictation \u2014 Overlay");
+      IntPtr overlay = FindWindowW(null, "YapYap \u2014 Overlay");
       if (overlay != IntPtr.Zero && IsWindowVisible(overlay)) {
         samples++; if (GetForegroundWindow() != form.Handle) focusFailures++;
       }

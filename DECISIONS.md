@@ -1,4 +1,4 @@
-# BYOK Dictation Tool — Decision and Progress Log
+# YapYap — Decision and Progress Log
 
 Record decisions with alternatives, rationale, and revisit conditions. Append dated progress notes with task references and verification evidence; distinguish agreed decisions from verified implementation.
 
@@ -398,3 +398,9 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - Installed the verified candidate for the current Windows user; installer exited 0 and registered version 0.1.0. The installed executable launched with a BYOK Dictation main-window title. Full-byte payload comparison passed after accounting for Tauri's three-byte NSIS bundle marker; the standalone build is restored after bundling. Accordingly, the signing workflow checks the signed installer first and verifies the actual installed payload through a separate signature/timestamp gate.
 - Physical microphone, real insertion, tray/settings interaction, reboot, suspend/resume, device changes and final trusted signing remain pending. No CurrentUser code-signing certificate was found. Task 17 is partial; no segmentation or broader privacy-audit completion is claimed.
 - After startup, the saved-key/app-profile scan could not read WebView2's locked Cookies file and correctly reported an incomplete audit. The app remains open for the user's microphone check; rerun this scan after tray Quit. The earlier pre-launch scan passed completely.
+
+## October 6, 2026 - YapYap project name
+
+- Renamed the product to **YapYap**, the npm and Rust packages to `yapyap`, the native library to `yapyap_lib`, and the Windows executable to `yapyap.exe`. Updated current UI, tray, overlay, installer publisher metadata, release commands, smoke helpers, and documentation. Source remains in `desktop/`.
+- Keep the original application identifier, preference storage key, and Credential Manager target for continuity with existing saved settings and API keys. Historical verification evidence retains its original names. NSIS uses the product name for uninstall registration, so the release guide documents uninstalling BYOK Dictation without deleting application data before installing YapYap.
+- The full unsigned release workflow passed: 165 frontend checks, 19 rendered Edge checks, 26 native tests (seven opt-in tests ignored), formatting, production build, npm audit, scanner regressions and the default leak scan. Generated installer metadata and executable version information report YapYap. See [rename verification](desktop/scripts/rename-verification.md) for the artifact and checksum. Installed-app acceptance remains pending for this candidate.

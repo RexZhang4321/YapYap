@@ -1,7 +1,7 @@
 
 ## Product goal
 
-Build a privacy-oriented desktop dictation tool similar in interaction model to Whispr Flow, but using the user's own API key and communicating directly with model providers.
+Build YapYap, a privacy-oriented desktop dictation tool similar in interaction model to Whispr Flow, but using the user's own API key and communicating directly with model providers.
 
 The product should provide near-real-time transcription in an overlay while speaking, then insert a more accurate, cleaned-up version when dictation ends.
 

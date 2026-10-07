@@ -9,7 +9,7 @@ export default defineConfig({
     viewport: { width: 600, height: 640 },
     headless: true,
   },
-  webServer: process.env.BYOK_UI_EXTERNAL_SERVER === "1" ? undefined : {
+  webServer: process.env.YAPYAP_UI_EXTERNAL_SERVER === "1" ? undefined : {
     command: "node scripts/recovery-rendered-fixture.mjs",
     url: "http://localhost:1424/recovery-fixture.html",
     env: { UI_FIXTURE_PORT: "1424" },

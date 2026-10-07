@@ -2,7 +2,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 const MAX_AUDIO_BYTES: usize = 25_000_000;
-const BOUNDARY: &str = "byok-dictation-wav-boundary";
+const BOUNDARY: &str = "yapyap-wav-boundary";
 static REQUEST_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 // Provider-independent transport seam for deterministic probes and later providers.
