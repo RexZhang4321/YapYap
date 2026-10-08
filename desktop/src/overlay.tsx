@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openApp } from "#platform";
 import {
   OverlayReceiver,
   overlayPresentation,
@@ -63,7 +64,7 @@ export function Overlay() {
       <header>
         <span className="signal" aria-hidden="true" />
         <h1 id="overlay-title">
-          {failed ? "Open YapYap from the tray" : copy.title}
+          {failed ? openApp : copy.title}
         </h1>
         <span className="brand" id="overlay-label">
           {copy.label}

@@ -193,7 +193,7 @@ export const initialControls = {
   },
   "api-key-status": {},
   "api-key-hint": {
-    text: "Stored securely in Windows Credential Manager. Checking the connection sends no recording. Dictation sends audio directly to OpenAI.",
+    text: "Supported builds store keys in the system credential store. Checking the connection sends no recording. Dictation sends audio directly to OpenAI.",
   },
   "microphone-heading": {
     text: "Microphone",
@@ -210,7 +210,7 @@ export const initialControls = {
     ],
   },
   "microphone-access-help": {
-    text: "Microphone access is checked automatically. Allow access once when Windows asks.",
+    text: "Microphone access is checked automatically. Allow access once when your system asks.",
   },
   "prepare-microphone": {
     text: "Allow microphone",
@@ -286,6 +286,8 @@ export const initialControls = {
     disabled: true,
   },
   "overlay-status": {},
+  "probe-overlay-show": { text: "Show overlay fixture" },
+  "probe-overlay-hide": { text: "Hide overlay fixture" },
   "live-latency": {
     text: "First visible text: waiting",
   },

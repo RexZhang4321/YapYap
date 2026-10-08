@@ -1,10 +1,9 @@
+import { credentialErrorMessage } from "#platform";
 const messages: Record<string, string> = {
   transcription_live_unavailable: "The live transcript could not be completed without gaps. Your recording is kept. Retry full audio transcription below, copy available live words, or discard this dictation.",
   key_missing: "No API key is saved. Save a key above, then retry.",
   key_format: "The saved key is invalid. Save a replacement key, then retry.",
-  credential_read_failed: "Windows could not read the saved key. Check Credential Manager, then retry.",
   credential_invalid: "The saved credential could not be read. Save a replacement key, then retry.",
-  credential_platform_unsupported: "This probe requires Windows secure key storage.",
   transcription_unauthorized: "OpenAI rejected the key. It may be invalid, expired, or revoked. Save a replacement, then retry.",
   transcription_forbidden: "The saved key cannot access transcription. Check its API permissions, then retry.",
   transcription_model_unavailable: "The transcription model could not be accessed. Check account access before retrying.",
@@ -25,6 +24,8 @@ const messages: Record<string, string> = {
 };
 
 export function transcriptionError(code: string): string {
+  const platformMessage = credentialErrorMessage(code);
+  if (platformMessage !== undefined) return platformMessage;
   return Object.prototype.hasOwnProperty.call(messages, code)
     ? messages[code]
     : "Transcription could not be completed. Retry or discard the recording.";

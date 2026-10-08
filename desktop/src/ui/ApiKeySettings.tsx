@@ -4,6 +4,7 @@ import { apiKeyErrorMessage, clearAndSubmitApiKey } from "../apiKey";
 import { ui } from "./store";
 import { useUi } from "./View";
 import { application } from "../applicationModel";
+import { supportsCredentialStorage, credentialHint } from "#platform";
 
 export function ApiKeySettings() {
   const input = useRef<HTMLInputElement>(null);
@@ -13,9 +14,14 @@ export function ApiKeySettings() {
   const [storedStatus, setStoredStatus] = useState("Checking for a saved key…");
   const [status, setStatus] = useState("");
   const active = useUi(ui.active);
-  const locked = busy || active;
+  const locked = busy || active || !supportsCredentialStorage;
 
   async function refresh() {
+    if (!supportsCredentialStorage) {
+      setStoredStatus(apiKeyErrorMessage("credential_platform_unsupported"));
+      application.setKeyState({ state: "unknown", busy: running.current });
+      return;
+    }
     try {
       const saved = await invoke<boolean>("has_api_key");
       setStoredStatus(
@@ -25,10 +31,8 @@ export function ApiKeySettings() {
         state: saved ? "saved" : "missing",
         busy: running.current,
       });
-    } catch {
-      setStoredStatus(
-        "Windows could not read your saved key. Save it again or remove it.",
-      );
+    } catch (error) {
+      setStoredStatus(apiKeyErrorMessage(error));
       application.setKeyState({ state: "unknown", busy: running.current });
     }
   }
@@ -50,7 +54,7 @@ export function ApiKeySettings() {
     pending: string,
     success: string,
   ) {
-    if (running.current || ui.active()) return;
+    if (running.current || ui.active() || !supportsCredentialStorage) return;
     running.current = true;
     setStatus(pending);
     application.setKeyState({ ...application.readiness.key, busy: true });
@@ -154,8 +158,7 @@ export function ApiKeySettings() {
         {status}
       </p>
       <p id="api-key-hint" className="hint">
-        Stored securely in Windows Credential Manager. Checking the connection
-        sends no recording. Dictation sends audio directly to OpenAI.
+        {credentialHint}
       </p>
     </section>
   );

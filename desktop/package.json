@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "node --experimental-transform-types --test scripts/application-model.test.mjs scripts/transcription-session.test.mjs scripts/live-transcription.test.mjs scripts/api-key-privacy.test.mjs scripts/overlay.test.mjs scripts/recovery-audit.test.mjs scripts/provisional-recovery.test.mjs scripts/ux-behavior.test.mjs scripts/actionable-recovery.test.mjs scripts/ui-store.test.mjs scripts/vite-cache.test.mjs",
+    "test": "node --conditions=yapyap-windows --experimental-transform-types --test scripts/application-model.test.mjs scripts/transcription-session.test.mjs scripts/live-transcription.test.mjs scripts/api-key-privacy.test.mjs scripts/overlay.test.mjs scripts/recovery-audit.test.mjs scripts/provisional-recovery.test.mjs scripts/ux-behavior.test.mjs scripts/actionable-recovery.test.mjs scripts/ui-store.test.mjs scripts/vite-cache.test.mjs scripts/platform.test.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
+    "dev:macos": "tauri dev --config src-tauri/tauri.macos.conf.json",
+    "build:macos": "tauri build --config src-tauri/tauri.macos.conf.json --bundles app,dmg",
     "test:ui": "node scripts/run-ui-tests.mjs",
     "release:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-windows.ps1",
     "format:ui": "prettier --write src/ui src/main.tsx src/overlay.tsx"
@@ -28,5 +30,12 @@
     "prettier": "^3.9.9",
     "typescript": "~6.0.3",
     "vite": "^8.0.16"
+  },
+  "imports": {
+    "#platform": {
+      "yapyap-windows": "./src/platform/platform.windows.ts",
+      "yapyap-macos": "./src/platform/platform.macos.ts",
+      "default": "./src/platform/platform.unsupported.ts"
+    }
   }
 }

@@ -2,7 +2,8 @@
 
 Created October 6, 2026. Companion: [port scope](MACOS_PORT_SCOPE.md).
 This is the execution checklist for investigation before the full port.
-All probes are not started; the earlier source assessment is not a native pass.
+MP-00 passed on October 7, 2026; MP-01 through MP-10 are not started. The earlier source
+assessment is not a native pass. See [MP-00 evidence](desktop/scripts/macos-mp-00-verification.md).
 
 Use an Apple Silicon Mac for the first pass. Record its macOS version, hardware,
 toolchain, source revision and bundle identity. Minimum OS and Intel coverage
@@ -35,19 +36,19 @@ independent probe. Re-estimate implementation only after the results are known.
 
 ## MP-00 — Establish a runnable Mac probe shell
 
-- [ ] Inventory Node/npm, Rust/Cargo and Xcode tools; identify missing prerequisites.
-- [ ] Install locked npm dependencies and attempt the locked native build. Record
+- [x] Inventory Node/npm, Rust/Cargo and Xcode tools; identify missing prerequisites.
+- [x] Install locked npm dependencies and attempt the locked native build. Record
   the actual compiler errors before refactoring; avoid a broad dependency upgrade.
-- [ ] Put Win32 insertion behind target configuration. Preserve the existing IPC
+- [x] Put Win32 insertion behind target configuration. Preserve the existing IPC
   signatures using fail-closed Mac stubs until the relevant adapters are probed.
-- [ ] Add a Mac build config for `.app`/DMG, microphone usage text and audio-input
+- [x] Add a Mac build config for `.app`/DMG, microphone usage text and audio-input
   entitlement. Preserve the Windows NSIS config and existing application identity.
-- [ ] Launch both development and packaged apps; verify both React entry points
+- [x] Launch both development and packaged apps; verify both React entry points
   load, the main window renders, and the overlay can receive bounded fixture state.
-- [ ] Add the smallest local probe controls/results needed. Reuse existing
+- [x] Add the smallest local probe controls/results needed. Reuse existing
   Developer diagnostics and fixed insertion fixtures where possible. Do not
   assume WebView2 CDP or PowerShell helpers work on Mac.
-- [ ] Run frontend tests/build and native tests/formatting once runnable; classify
+- [x] Run frontend tests/build and native tests/formatting once runnable; classify
   failures as platform implementation, fixture assumption or missing dependency.
 
 **Exit:** a packaged Mac shell launches without Vite and produces reproducible

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { platformAlias } from "../platform.config.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const indexPath = resolve(root, "index.html");
@@ -256,13 +257,14 @@ const plugin = {
   },
 };
 
-export function createRecoveryFixtureServer(port = Number(process.env.UI_FIXTURE_PORT ?? 1422)) {
+export function createRecoveryFixtureServer(port = Number(process.env.UI_FIXTURE_PORT ?? 1422), target = process.env.UI_FIXTURE_PLATFORM ?? "windows") {
   return createServer({
   configFile: false,
   root,
+  resolve: { alias: platformAlias(target) },
   // The native dev server may be running concurrently. Different optimizer
   // configs must not replace its cached modules and strand a hidden WebView.
-  cacheDir: resolve(root, "node_modules/.vite-recovery-fixture"),
+  cacheDir: resolve(root, `node_modules/.vite-recovery-fixture-${target}`),
   plugins: [plugin],
   server: { host: "127.0.0.1", port, strictPort: true },
   });

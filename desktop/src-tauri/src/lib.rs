@@ -6,9 +6,10 @@ use tauri::{
 
 mod cleanup;
 mod credentials;
-mod insertion;
+use platform::insertion;
 mod openai;
 mod overlay;
+mod platform;
 mod streaming;
 mod transcription;
 
@@ -19,6 +20,10 @@ fn show_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         window.set_focus()?;
     }
     Ok(())
+}
+
+fn command_available(webview: &str, command: &str) -> bool {
+    webview == "main" || (webview == "overlay" && command == "overlay_snapshot")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -64,9 +69,7 @@ pub fn run() {
         .invoke_handler(move |invoke| {
             // App commands have no generated plugin ACL. Restrict the second
             // WebView explicitly; it may read bounded overlay state only.
-            if invoke.message.webview().label() != "main"
-                && invoke.message.command() != "overlay_snapshot"
-            {
+            if !command_available(invoke.message.webview().label(), invoke.message.command()) {
                 invoke.resolver.reject("command_unavailable");
                 return true;
             }
@@ -110,4 +113,27 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn overlay_reads_only_its_snapshot() {
+        for command in ["overlay_snapshot"] {
+            assert!(super::command_available("overlay", command));
+            assert!(!super::command_available("unknown", command));
+        }
+        assert!(!super::command_available("overlay", "platform_info"));
+        for command in [
+            "save_api_key",
+            "has_api_key",
+            "capture_target",
+            "copy_test_text",
+            "insert_dictation_text",
+            "update_overlay",
+        ] {
+            assert!(!super::command_available("overlay", command));
+            assert!(super::command_available("main", command));
+        }
+    }
 }

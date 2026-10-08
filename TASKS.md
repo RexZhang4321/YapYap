@@ -20,8 +20,11 @@ Status markers: `[ ]` not started, `[-]` in progress, `[x]` verified complete, `
 
 The user requested a gap-first task list before the full port. The [macOS probe
 checklist](MACOS_PROBES.md) tracks MP-00 through MP-10, with dependencies, bounded
-experiments, exit criteria and adapter/fallback decisions. All probes are not
-started. The [scope assessment](MACOS_PORT_SCOPE.md) is source evidence only;
+experiments, exit criteria and adapter/fallback decisions. MP-00 passed on October
+7, 2026: Apple Silicon app/DMG builds, development and Vite-independent packaged
+launch, both React windows and fail-closed unsupported operations. See the
+[MP-00 evidence](desktop/scripts/macos-mp-00-verification.md). MP-01 through MP-10
+are not started. The [scope assessment](MACOS_PORT_SCOPE.md) retains historical source evidence;
 historical Windows completion markers below do not establish Mac support.
 
 ## Milestone 0 — Real capability probes

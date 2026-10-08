@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 import { createRecoveryFixtureServer } from "./recovery-rendered-fixture.mjs";
 
 const server = await createRecoveryFixtureServer(1424);
+const macServer = await createRecoveryFixtureServer(1425, "macos");
 let result = 1;
 try {
-  await server.listen();
+  await Promise.all([server.listen(), macServer.listen()]);
   const child = spawn(process.execPath, [
     fileURLToPath(new URL("../node_modules/@playwright/test/cli.js", import.meta.url)),
     "test", ...process.argv.slice(2),
@@ -20,6 +21,6 @@ try {
     child.once("exit", (code) => resolve(code ?? 1));
   });
 } finally {
-  await server.close();
+  await Promise.all([server.close(), macServer.close()]);
 }
 process.exitCode = result;

@@ -30,6 +30,7 @@ import { confirmRecoveryCopy, type RecoveryCopyChoice } from "./recoveryCopy";
 import { processingStages } from "./processingTimings";
 
 import { application as app, preferencesKey } from "./applicationModel";
+import { preferencesSaveFailed, openApp, formatShortcut, showOverlayFixture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
 
 let initialized = false;
 export function initializeDictation(ports: {
@@ -107,8 +108,7 @@ export function initializeDictation(ports: {
     try {
       localStorage.setItem(preferencesKey, app.serializePreferences());
     } catch {
-      status.text =
-        "Settings work for this session. Windows could not save them for next time.";
+      status.text = preferencesSaveFailed;
     }
   }
 
@@ -141,7 +141,7 @@ export function initializeDictation(ports: {
     (failed) => {
       overlayStatus.text = failed
         ? "The floating status window is unavailable. Recording and recovery remain available here."
-        : "The floating window shows live words and status. Open YapYap from the tray to recover text.";
+        : `The floating window shows live words and status. ${openApp} to recover text.`;
     },
   );
 
@@ -198,7 +198,7 @@ export function initializeDictation(ports: {
   }
 
   function showConfiguration() {
-    shortcutInput.value = app.interaction.shortcutDraft;
+    shortcutInput.value = formatShortcut(app.interaction.shortcutDraft);
     microphoneSelect.value = app.readiness.selectedMicrophone;
     actionSelect.value = app.interaction.testMode;
     cleanupEnabled.checked = app.preferences.cleanup;
@@ -218,6 +218,8 @@ export function initializeDictation(ports: {
     void escapeBinding.setActive(cancellable);
     holdState.text = app.interaction.held ? "DOWN" : "UP";
     const locked = app.active;
+    ui.control("probe-overlay-show").disabled = locked || !showOverlayFixture;
+    ui.control("probe-overlay-hide").disabled = locked || !showOverlayFixture;
     app.publish();
     showConfiguration();
     restoreButton.disabled = !app.canRestoreClipboard;
@@ -406,15 +408,17 @@ export function initializeDictation(ports: {
               ? "ready"
               : "setup";
     const display = ui.control("shortcut-display");
-    if (display) display.text = shortcutBinding.active ?? "Set a shortcut";
+    if (display) display.text = shortcutBinding.active ? formatShortcut(shortcutBinding.active) : "Set a shortcut";
     const setupMessage = ui.control("setup-message");
     if (setupMessage)
       setupMessage.text =
-        app.readiness.key.state !== "saved"
+        !supportsCredentialStorage
+          ? credentialHint
+          : app.readiness.key.state !== "saved"
           ? "Add your OpenAI API key in Settings to start dictating."
           : app.readiness.microphoneAccess === "blocked"
             ? app.readiness.microphoneIssue ||
-              "Allow microphone access in Windows settings, then retry in Settings."
+              microphoneSettingsHelp
             : app.readiness.microphoneAccess === "unknown"
               ? "Checking microphone access…"
               : "Choose an available dictation shortcut in Settings.";
@@ -426,7 +430,7 @@ export function initializeDictation(ports: {
           : app.readiness.microphoneAccess === "blocked"
             ? app.readiness.microphoneIssue ||
               "Allow microphone access, then retry."
-            : "Microphone access is checked automatically after your key is saved. Allow access once when asked.";
+            : microphoneAccessHelp;
     setHidden("setup-callout", ready || active);
     setHidden(
       "live-panel",
@@ -629,6 +633,17 @@ export function initializeDictation(ports: {
   }
 
   const live = new LiveTranscription(nativeStreamingSTT, showLiveState);
+  ui.on("probe-overlay-show", "click", () => {
+    if (app.active || !showOverlayFixture) return;
+    overlay.update("recording", {
+      state: "listening",
+      text: "YapYap overlay fixture · 你好 😀",
+      hasGap: false,
+    });
+  });
+  ui.on("probe-overlay-hide", "click", () => {
+    if (!app.active && showOverlayFixture) overlay.update("hidden");
+  });
   ui.on("hotkey-action", "change", () => {
     const mode = actionSelect.value;
     app.updateInteraction({
@@ -795,7 +810,9 @@ export function initializeDictation(ports: {
     const previous =
       app.preferences.microphone || app.readiness.selectedMicrophone;
     const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
-      (device) => device.kind === "audioinput",
+      // WKWebView can return an anonymous device before microphone permission.
+      // It cannot be selected by ID; the system-default option already covers it.
+      (device) => device.kind === "audioinput" && device.deviceId !== "",
     );
     microphoneSelect.options = [
       { label: "System default microphone", value: "" },
@@ -822,8 +839,7 @@ export function initializeDictation(ports: {
     }
 
     if (devices.length === 0 && reportEmptyList && !recorder.isRecording) {
-      recordingStatus.text =
-        "No microphone is listed. The system default may still work; connect an input or check Windows microphone access.";
+      recordingStatus.text = noMicrophone;
     }
     showConfiguration();
   }
@@ -1125,7 +1141,7 @@ export function initializeDictation(ports: {
       ) ||
       !/(Ctrl|Alt|Super)\+/.test(next)
     ) {
-      status.text = "Use Ctrl, Alt, or Windows with another key.";
+      status.text = shortcutUseHint;
       return;
     }
     app.updateInteraction({ shortcutBusy: true });
@@ -1138,7 +1154,7 @@ export function initializeDictation(ports: {
         heldAction: null,
         shortcutDraft: next,
       });
-      status.text = "Shortcut saved: " + next;
+      status.text = "Shortcut saved: " + formatShortcut(next);
       app.setPreferences({ shortcut: next });
       savePreferences();
       log("registered " + next);
@@ -1147,7 +1163,7 @@ export function initializeDictation(ports: {
       status.text =
         "That shortcut is unavailable. Try a different combination." +
         (shortcutBinding.available
-          ? ` Your shortcut remains ${shortcutBinding.active}.`
+          ? ` Your shortcut remains ${formatShortcut(shortcutBinding.active ?? "")}.`
           : " Choose Record shortcut to set an available combination.");
       log("shortcut registration unavailable");
     } finally {
@@ -1191,7 +1207,7 @@ export function initializeDictation(ports: {
     }
     app.updateInteraction({ shortcutBusy: false });
     shortcutRecordButton.text = "Cancel recording";
-    status.text = "Press Ctrl, Alt, or Windows with another key. Esc cancels.";
+    status.text = shortcutCaptureHint;
     app.updateInteraction({ shortcutDraft: "Press your shortcut…" });
     ui.focus("shortcut");
     showState();
@@ -1210,7 +1226,7 @@ export function initializeDictation(ports: {
         const shortcut = shortcutFromKey(event);
         if (!shortcut) {
           if (!event.repeat && !/^(Control|Alt|Shift|Meta)/.test(event.code))
-            status.text = "Use Ctrl, Alt, or Windows with another key.";
+            status.text = shortcutUseHint;
           return;
         }
         // Wait for all keys to be released before enabling the global callback.
@@ -1254,7 +1270,8 @@ export function initializeDictation(ports: {
 
   ui.on("shortcut-form", "submit", (event) => {
     event.preventDefault();
-    app.updateInteraction({ shortcutDraft: shortcutInput.value });
+    // The input is read-only presentation; platform labels must never become
+    // the canonical accelerator stored in preferences or passed to the plugin.
     void applyShortcut(app.interaction.shortcutDraft);
   });
 
@@ -1484,7 +1501,7 @@ export function initializeDictation(ports: {
               text,
               withoutBackup,
             });
-            resultStatus.text = `${choice.source === "original" ? "Original transcript" : "Provisional live words"} copied. Return to your intended text field and press Ctrl+V. Review the words before pasting.`;
+            resultStatus.text = `${choice.source === "original" ? "Original transcript" : "Provisional live words"} copied. Return to your intended text field and press ${pasteShortcut}. Review the words before pasting.`;
             provisionalCopyStatus.text = resultStatus.text;
             ui.control("copy-status").text = resultStatus.text;
           } finally {
@@ -1564,7 +1581,7 @@ export function initializeDictation(ports: {
       });
       resultStatus.text =
         result +
-        " Return to your intended text field and press Ctrl+V to paste.";
+        ` Return to your intended text field and press ${pasteShortcut} to paste.`;
     } catch {
       resultStatus.text =
         "Copy failed. Restore the previous clipboard, or open Clipboard options and choose Replace clipboard if you want to replace its contents.";

@@ -4,6 +4,8 @@ import { ui } from "./store";
 import { View } from "./View";
 import { SettingsContent } from "./SettingsContent";
 import { ProcessingTimes } from "./ProcessingTimes";
+import { PlatformNotice } from "./PlatformNotice";
+import { pasteShortcut } from "#platform";
 import {
   AppHeader,
   Readiness,
@@ -50,6 +52,7 @@ export function App() {
     <>
       <main className="app-shell">
         <AppHeader />
+        <PlatformNotice />
         <Readiness />
         <SetupCallout />
         <ProcessingOptions />
@@ -87,9 +90,7 @@ export function App() {
             spellCheck={false}
           />
           <p className="hint">
-            {
-              "This copies the exact text above. Return to your intended text field and press Ctrl+V to paste."
-            }
+            {`This copies the exact text above. Return to your intended text field and press ${pasteShortcut} to paste.`}
           </p>
           <div className="row recording-actions">
             <View

@@ -1,20 +1,13 @@
+import { credentialErrorMessage } from "#platform";
 // Backend errors are codes. Never display/log raw IPC errors or provider responses.
 const errorMessages: Record<string, string> = {
   key_empty: "Enter an API key first.",
   key_format: "Paste the API key without spaces or extra characters.",
   key_missing: "No API key is saved. Enter and save a key first.",
-  credential_write_failed:
-    "Windows could not save the key. Try again or check Credential Manager.",
-  credential_read_failed:
-    "Windows could not read the saved key. Try again or check Credential Manager.",
-  credential_delete_failed:
-    "Windows could not remove the key. Try again or remove it in Credential Manager.",
   credential_invalid:
     "The saved credential could not be read. Save a replacement key or remove it.",
   credential_operation_failed:
     "The credential operation could not be completed. Try again.",
-  credential_platform_unsupported:
-    "Secure API-key storage is available on Windows.",
   validation_unauthorized:
     "OpenAI rejected the saved key. It may be invalid or revoked. Save a replacement key.",
   validation_forbidden:
@@ -36,10 +29,12 @@ const errorMessages: Record<string, string> = {
 };
 
 export function apiKeyErrorMessage(error: unknown): string {
-  return typeof error === "string" &&
-    Object.prototype.hasOwnProperty.call(errorMessages, error)
-    ? errorMessages[error]
-    : "The API-key operation could not be completed. Try again.";
+  if (typeof error === "string") {
+    const platformMessage = credentialErrorMessage(error);
+    if (platformMessage !== undefined) return platformMessage;
+    if (Object.prototype.hasOwnProperty.call(errorMessages, error)) return errorMessages[error];
+  }
+  return "The API-key operation could not be completed. Try again.";
 }
 
 export function clearAndSubmitApiKey(

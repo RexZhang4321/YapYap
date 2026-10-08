@@ -1,5 +1,48 @@
 import { test, expect } from "@playwright/test";
 
+test("Windows build keeps credential setup and omits Mac probe controls", async ({ page }) => {
+  await ready(page);
+  await expect(page.locator('[aria-label="macOS feasibility probe"]')).toHaveCount(0);
+  await expect(page.locator("#shortcut-display")).toHaveText("Ctrl+Alt+F8");
+  await page.locator("#open-settings").click();
+  await expect(page.locator("#api-key")).toBeEnabled();
+  await expect(page.locator("#api-key-hint")).toContainText("Windows Credential Manager");
+  await page.locator("#diagnostics").evaluate(element => { element.open = true; });
+  await expect(page.locator("#probe-overlay-show")).toHaveCount(0);
+  await page.evaluate(async () => {
+    window.__fixtureIPC.resetCalls();
+    const { ui } = await import("/src/ui/store.ts");
+    ui.dispatch("probe-overlay-show", "click", new Event("click"));
+    ui.dispatch("probe-overlay-hide", "click", new Event("click"));
+  });
+  expect((await snapshot(page)).commands).not.toContain("update_overlay");
+  expect((await snapshot(page)).commands).not.toContain("platform_info");
+});
+
+test("Mac build shows only the shell fixture and uses Mac labels", async ({ page }) => {
+  await page.goto("http://localhost:1425/recovery-fixture.html");
+  await expect(page.locator("#dictation-status")).toHaveText("Setup needed");
+  await expect(page.locator('[aria-label="macOS feasibility probe"]')).toBeVisible();
+  await expect(page.locator("#shortcut-display")).toHaveText("Control+Option+F8");
+  await expect(page.locator(".app-footer")).toContainText("menu bar");
+  await page.locator("#open-settings").click();
+  await expect(page.locator("#api-key")).toBeDisabled();
+  await expect(page.locator("#save-api-key")).toBeDisabled();
+  await expect(page.locator("#shortcut")).toHaveValue("Control+Option+F8");
+  await page.locator("#shortcut-form").evaluate(form => form.requestSubmit());
+  await expect(page.locator("#status")).toHaveText("Shortcut saved: Control+Option+F8");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("byok-dictation-preferences")).shortcut)).toBe("Ctrl+Alt+F8");
+  expect((await snapshot(page)).commands).not.toContain("has_api_key");
+  expect((await snapshot(page)).commands).not.toContain("platform_info");
+  await page.locator("#diagnostics").evaluate(element => { element.open = true; });
+  await page.locator("#probe-overlay-show").click();
+  await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
+    .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("recording");
+  await page.locator("#probe-overlay-hide").click();
+  await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
+    .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("hidden");
+});
+
 const original =
   "Original words: send 42 to user_id\n你好 😀 https://example.test/a?q=2";
 const provisional = "Provisional, possibly incomplete words 17 😀";

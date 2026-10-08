@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { resolve, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -9,6 +9,7 @@ import { createRecoveryFixtureServer } from "./recovery-rendered-fixture.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 test("browser fixtures cannot invalidate modules served to the native overlay", async () => {
   const target = resolve(root, "src-tauri/target");
+  await mkdir(target, { recursive: true });
   const temporary = await mkdtemp(join(target, "vite-cache-test-"));
   const client = await createServer({
     root,

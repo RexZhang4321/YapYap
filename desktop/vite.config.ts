@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { platformAlias, resolvePlatform } from "./platform.config.mjs";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
@@ -7,6 +8,8 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react()],
+  resolve: { alias: platformAlias() },
+  cacheDir: `node_modules/.vite-${resolvePlatform()}`,
   // Scan both windows before serving either one, including overlay-only IPC.
   optimizeDeps: { entries: ["index.html", "overlay.html"] },
 

@@ -1,5 +1,6 @@
 import { View } from "./View";
 import appIcon from "../assets/app-icon.png";
+import { backgroundHint } from "#platform";
 export function AppHeader() {
   return (
     <header className="app-header">
@@ -116,7 +117,7 @@ export function AppFooter() {
     <footer className="app-footer">
       <span className="privacy-indicator" aria-hidden="true" />
       <p>{"Your key. Direct to OpenAI."}</p>
-      <p>{"Close to keep dictating from the tray."}</p>
+      <p>{backgroundHint}</p>
     </footer>
   );
 }

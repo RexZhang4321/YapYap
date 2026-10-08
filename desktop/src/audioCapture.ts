@@ -1,3 +1,4 @@
+import { microphoneDenied } from "#platform";
 export interface CapturedPcm {
   samples: Float32Array[];
   sampleRate: number;
@@ -354,7 +355,7 @@ export function microphoneErrorMessage(error: unknown): string {
     ? String((error as { name?: unknown }).name)
     : "";
   if (name === "NotAllowedError" || name === "SecurityError") {
-    return "Microphone access was denied. Allow microphone access for this app in Windows settings, then refresh the device list and try again.";
+    return microphoneDenied;
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {
     return "No microphone input is available. Connect a microphone and refresh the device list.";

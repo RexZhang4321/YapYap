@@ -6,6 +6,31 @@ For the Windows installer, required permissions, release checks and signing work
 
 Run `npm install` and `npm run tauri dev` from this directory. The initial release targets Windows. The normal flow is **hold shortcut → speak → release → insert**; the app stays available in the system tray when its window closes.
 
+## macOS feasibility shell
+
+The first Mac probe builds and launches on Apple Silicon. It is a shell for
+capability testing; dictation, API-key storage, provider requests, automatic
+insertion and clipboard recovery remain unavailable. See the
+[Mac checklist](../MACOS_PROBES.md) and [MP-00 evidence](scripts/macos-mp-00-verification.md).
+
+Install Node, Rust and Xcode tools, then run from `desktop/`:
+
+```sh
+npm ci
+npm run dev:macos
+# Quit the development app before launching a packaged build.
+npm run build:macos -- --ci
+```
+
+The local app and DMG are in `src-tauri/target/release/bundle/macos/` and
+`src-tauri/target/release/bundle/dmg/`. These use ad-hoc signing for local probes;
+Developer ID signing, notarization and downloaded-app acceptance are pending.
+Settings → Developer diagnostics → Show/Hide overlay fixture exercises the
+second window with fixed Unicode text and no provider request. Microphone and
+physical-shortcut acceptance are separate probes.
+
+## Native development
+
 To launch the native client from the repository root, run `cd desktop`, then `npm run tauri -- dev`. Tauri starts Vite automatically; do not start a separate `npm run dev` first. If startup reports **Port 1420 is already in use**, stop the earlier Vite/Tauri terminal with Ctrl+C and retry. `npm run dev` alone is only the browser frontend and does not provide native dictation capabilities.
 
 Opening the native app again restores and focuses its existing window, including when it is minimized or hidden in the tray. Closing the main window keeps dictation active; use the tray's **Quit** command to exit. Quit before switching between an installed build and a development build, which share the same app identity. The browser recovery fixture has a separate Vite dependency cache, so its tests can run alongside the native development client without invalidating the floating overlay's modules.
@@ -13,6 +38,42 @@ Opening the native app again restores and focuses its existing window, including
 The main window's **Processing phases** controls independently enable **Full audio transcription** and **gpt-6-luna cleanup**. Both default to on and your choices persist. Turning full audio transcription off uses the completed live transcript, enables live transcription for that mode, and skips the full-recording upload. Cleanup can tidy either transcript; turning it off inserts the received words directly. A failed or gapped live stream keeps the recording for **Retry full audio transcription**, which explicitly runs the full-recording pass. Unfinished live words are never inserted automatically.
 
 ## Frontend development
+
+Platform differences are selected at build time. Frontend code imports ordinary
+named exports from `#platform`, for example:
+
+```ts
+import { formatShortcut, pasteShortcut, showOverlayFixture } from "#platform";
+```
+
+`platform.config.mjs` configures Vite to resolve that import to
+`src/platform/platform.windows.ts`, `platform.macos.ts`, or
+`platform.unsupported.ts`. Tauri's `TAURI_ENV_PLATFORM` chooses the target during
+native builds; the build machine's OS is only a fallback for standalone Vite.
+There is no runtime platform detection, adapter object or capability-query IPC.
+Both entry points render immediately. TypeScript checks every implementation
+against the named-export contract in `src/platform/platform.d.ts`.
+
+For frontend-only builds or browser development, an explicit selection is useful:
+
+```sh
+YAPYAP_BUILD_PLATFORM=windows npm run build
+YAPYAP_BUILD_PLATFORM=macos npm run dev
+```
+
+An override that conflicts with Tauri's target is rejected. Vite dependency
+caches are isolated by platform. These frontend builds do not cross-compile the
+native executable. Node's package-import conditions select the same modules for
+unbundled tests; `npm test` uses the Windows condition for the shared regressions
+and also verifies the other module selections and production bundle contents.
+
+The Mac module exposes the probe notice and overlay fixture controls; Windows
+omits them. Displayed Command/Option/Windows labels are presentation: preferences
+and shortcut registration retain canonical `Ctrl`/`Alt`/`Super` accelerators.
+Future features should add named exports to the contract and each implementation,
+with native support verified before enabling their build-specific UI flags.
+Rust retains compile-time backend selection in `src-tauri/src/platform/mod.rs`;
+native command authorization remains independent of frontend flags.
 
 Both windows use React 19 and TypeScript, built with Vite. `index.html` and `overlay.html` mount separate React roots; their existing CSS and native Tauri capabilities remain in place.
 
@@ -24,7 +85,13 @@ Both windows use React 19 and TypeScript, built with Vite. `index.html` and `ove
 
 API-key drafts stay in an uncontrolled password input and are cleared synchronously before IPC. They never enter shared view snapshots or persisted preferences.
 
-Use `npm run dev` for browser development, `npm run build` for TypeScript checking and both production entry points, and `npm test` for the session and view-store regressions. `npm run test:ui` runs ten rendered React checks using installed Microsoft Edge and a local fixture server on port 1424. These checks stub credentials, microphone, provider, clipboard, shortcuts, and insertion; they make no provider requests or native paste operations. Windows tray, physical-microphone, focus preservation, and real insertion acceptance still require the native checks below. `npm run format:ui` formats the React UI sources.
+Use `npm run dev` for browser development, `npm run build` for TypeScript checking and both production entry points, and `npm test` for the session and view-store regressions. `npm run test:ui` runs 21 rendered React checks using installed Microsoft Edge and a local fixture server on port 1424. These checks stub credentials, microphone, provider, clipboard, shortcuts, and insertion; they make no provider requests or native paste operations. Windows tray, physical-microphone, focus preservation, and real insertion acceptance still require the native checks below. `npm run format:ui` formats the React UI sources.
+
+The rendered suite uses separately compiled Windows/Mac fixtures on ports
+1424/1425 with independent Vite aliases and caches. Edge remains the
+default browser; on a Mac with Chrome installed use
+`YAPYAP_UI_CHANNEL=chrome npm run test:ui`. These platform builds prove view
+behavior, not native Windows execution or physical Mac input.
 
 ## Set up once
 
@@ -67,7 +134,7 @@ The references below retain detailed capability implementation and opt-in develo
 
 Recording shows a small always-on-top **Listening** panel with live words labelled **Provisional** when live preview is enabled. While connecting, recording continues; with preview disabled, the panel shows a fixed listening status. It displays the latest 2,048 UTF-16 units, preserves emoji at the tail boundary, wraps long identifiers, and follows the newest lines. The complete bounded live preview remains in the main probe. Release shows **Finalizing** with the provisional preview; a successful paste hides and clears the overlay. Failed recording/transcription/insertion and unresolved clipboard restoration keep **Needs attention** visible. Retained probe results show **Ready** until recovery or discard. Use the tray's **Open YapYap** action for existing Retry, Copy, Restore, and Discard controls. The panel ignores mouse input and never requests focus; destination capture completes before it appears. It sits near the bottom of the foreground application's monitor, within the work area.
 
-The overlay has its own frontend entry point and event-subscription capability. Native dispatch denies it all application commands except reading the bounded overlay snapshot. It receives provisional text, fixed preview status, and a gap flag; it receives no audio, credentials, or canonical transcript. Text is rendered as plain text. State updates are serialized, coalesced, and revisioned so cancellation/reload cannot apply an older status over a newer one. Hidden updates clear both the native snapshot and the overlay DOM. Overlay failures are reported in the main probe and do not cancel dictation. Preview failure shows a warning while capture continues; explicit reconnect marks the gap. Provisional text never enters the insertion path.
+The overlay has its own frontend entry point and event-subscription capability. Native dispatch permits only reading the bounded overlay snapshot; other application commands are denied. It receives provisional text, fixed preview status, and a gap flag; it receives no audio, credentials, or canonical transcript. Text is rendered as plain text. State updates are serialized, coalesced, and revisioned so cancellation/reload cannot apply an older status over a newer one. Hidden updates clear both the native snapshot and the overlay DOM. Overlay failures are reported in the main probe and do not cancel dictation. Preview failure shows a warning while capture continues; explicit reconnect marks the gap. Provisional text never enters the insertion path.
 
 Task 9 manual Windows check: choose **Live transcription test (no insertion)**, enable live words, prepare the actual microphone, and focus a disposable Notepad/VS Code/browser input. Hold the shortcut for 8–15 seconds and confirm provisional words appear before release while focus/input contents stay unchanged. Release retains audio and performs no automatic insertion in this mode. Test preview failure/reconnect while capturing, then cancel/discard and confirm no late text reappears. For the original Task 9 baseline, bypass cleanup in normal dictate mode and confirm canonical insertion, Finalizing status, clipboard restoration, and success hiding. Real provider requests occur with live preview enabled. See [Task 9 verification](scripts/task9-verification.md) for observed scope.
 
