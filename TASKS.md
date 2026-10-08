@@ -5,7 +5,7 @@ This list follows the capability-by-capability build order. Each task should be 
 ## Working rules
 
 - [ ] Keep the app runnable after every task.
-- [ ] Develop and verify the initial release on Windows; macOS is deferred.
+- [ ] Develop and verify the initial release on Windows; track macOS feasibility separately in [the Mac probe checklist](MACOS_PROBES.md).
 - [ ] Capture one short manual-test note or artifact for each completed task.
 - [ ] Update [DECISIONS.md](DECISIONS.md) with decisions, progress, and verification evidence as work proceeds.
 - [ ] Use deterministic fixtures/fakes for regular tests; keep real API checks opt-in.
@@ -15,6 +15,14 @@ This list follows the capability-by-capability build order. Each task should be 
 - [ ] Keep `StreamingSTT`, `FinalSTT`, and `CleanupModel` behind small interfaces from the start.
 
 Status markers: `[ ]` not started, `[-]` in progress, `[x]` verified complete, `[!]` blocked or needs a decision.
+
+## macOS feasibility checkpoint
+
+The user requested a gap-first task list before the full port. The [macOS probe
+checklist](MACOS_PROBES.md) tracks MP-00 through MP-10, with dependencies, bounded
+experiments, exit criteria and adapter/fallback decisions. All probes are not
+started. The [scope assessment](MACOS_PORT_SCOPE.md) is source evidence only;
+historical Windows completion markers below do not establish Mac support.
 
 ## Milestone 0 — Real capability probes
 
@@ -236,7 +244,7 @@ Done when: the P0 flow is installable and manually verified on Windows.
 
 ## Deferred after P0
 
-- [ ] macOS support: verify hotkeys, capture, secure storage, insertion, overlay, permissions, packaging, and signing/notarization.
+- [ ] macOS support: first execute [MP-00 through MP-10](MACOS_PROBES.md) for build, insertion, capture, shortcuts, overlay, credentials, transport, lifecycle and distribution gaps; use results to scope implementation.
 - [ ] Personal vocabulary and application-aware context.
 - [ ] Undo, richer raw-vs-cleaned comparison UI, and polished cleanup mode.
 - [ ] True inline live transcription.
