@@ -29,7 +29,8 @@ test("selected modules preserve platform labels, supported features and canonica
   assert.equal(windows.platformNotice, null);
   assert.match(windows.credentialHint, /Windows Credential Manager/);
   assert.equal(windows.pasteShortcut, "Ctrl+V");
-  assert.equal(macos.supportsCredentialStorage, false);
+  assert.equal(macos.supportsCredentialStorage, true);
+  assert.match(macos.credentialHint, /macOS Keychain/);
   assert.equal(macos.showOverlayFixture, true);
   assert.equal(macos.platformNotice.title, "macOS feasibility probe");
   assert.equal(macos.pasteShortcut, "Command+V");
@@ -70,7 +71,7 @@ test("both entry points bundle only their selected platform, with no capability-
     const source = chunks.map(chunk => chunk.code).join("\n");
     assert.equal(source.includes("platform_info"), false);
     if (target === "windows") {
-      for (const marker of ["macOS feasibility probe", "macOS System Settings", "Keychain", "YapYap overlay fixture"])
+      for (const marker of ["macOS feasibility probe", "macOS System Settings", "Keychain", "End of overlay check"])
         assert.equal(source.includes(marker), false, `${marker} must not ship in the Windows frontend`);
     } else {
       assert.equal(source.includes("Windows Credential Manager"), false);

@@ -258,6 +258,10 @@ export const initialControls = {
         label: "Live transcription test (no insertion)",
       },
       {
+        value: "capture",
+        label: "Microphone test (no upload or insertion)",
+      },
+      {
         value: "insert",
         label: "Text insertion test",
       },

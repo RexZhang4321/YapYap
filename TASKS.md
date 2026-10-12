@@ -16,15 +16,16 @@ This list follows the capability-by-capability build order. Each task should be 
 
 Status markers: `[ ]` not started, `[-]` in progress, `[x]` verified complete, `[!]` blocked or needs a decision.
 
-## macOS feasibility checkpoint
+## macOS feature-parity checkpoint
 
-The user requested a gap-first task list before the full port. The [macOS probe
-checklist](MACOS_PROBES.md) tracks MP-00 through MP-10, with dependencies, bounded
-experiments, exit criteria and adapter/fallback decisions. MP-00 passed on October
-7, 2026: Apple Silicon app/DMG builds, development and Vite-independent packaged
-launch, both React windows and fail-closed unsupported operations. See the
-[MP-00 evidence](desktop/scripts/macos-mp-00-verification.md). MP-01 through MP-10
-are not started. The [scope assessment](MACOS_PORT_SCOPE.md) retains historical source evidence;
+The [macOS probe checklist](MACOS_PROBES.md) requires parity with existing Windows
+features in three groups: recording/controls, insertion/clipboard, and
+pipeline/settings/recovery. MP-00 passed on October 7, 2026; see the
+[build evidence](desktop/scripts/macos-mp-00-verification.md). Probe 1 passed on
+October 11: native recording/playback/stop/clear, shortcuts/cancellation/conflict
+recovery, permission/device recovery, Keychain setup, and floating-overlay checks.
+Groups 2 and 3 remain open; Windows native combined acceptance remains pending.
+The [scope assessment](MACOS_PORT_SCOPE.md) retains historical source evidence;
 historical Windows completion markers below do not establish Mac support.
 
 ## Milestone 0 — Real capability probes
@@ -247,7 +248,7 @@ Done when: the P0 flow is installable and manually verified on Windows.
 
 ## Deferred after P0
 
-- [ ] macOS support: first execute [MP-00 through MP-10](MACOS_PROBES.md) for build, insertion, capture, shortcuts, overlay, credentials, transport, lifecycle and distribution gaps; use results to scope implementation.
+- [ ] macOS support: complete the [three feature-parity probes](MACOS_PROBES.md), then address broader OS/hardware coverage and trusted distribution.
 - [ ] Personal vocabulary and application-aware context.
 - [ ] Undo, richer raw-vs-cleaned comparison UI, and polished cleanup mode.
 - [ ] True inline live transcription.

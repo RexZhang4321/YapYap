@@ -9,8 +9,9 @@ operations refuse. This closes the build-shell gap only. Keychain, transport,
 microphone capture, safe insertion, physical shortcuts and distribution acceptance
 remain unverified. The findings below describe the original source assessment.
 
-Next: [ordered gap probes and decision gates](MACOS_PROBES.md). The full probe
-checklist includes failure and release checks beyond the initial feasibility spike.
+Next: [three feasibility checks](MACOS_PROBES.md). The checklist was
+simplified October 10: broader compatibility and release QA below follow a working
+Mac dictation flow. This document retains the original assessment and estimates.
 
 YapYap can keep its Tauri 2 / Rust / React architecture. The port is primarily
 native integration plus platform acceptance work. A UI rewrite is unnecessary.

@@ -1,21 +1,20 @@
 import {
   knownMessage,
   formatWithNames,
-  unsupportedCredentialMessage,
 } from "./shared.ts";
 export {
   preferencesSaveFailed,
-  unsupportedCredentialHint as credentialHint,
 } from "./shared.ts";
 
 export const platformName = "macos";
 // These describe the current probe build, not OS permission grants. Enable
 // storage only after the native Keychain implementation is available.
-export const supportsCredentialStorage = false;
+export const supportsCredentialStorage = true;
+export const credentialHint = "Stored securely in macOS Keychain. Live transcription sends audio directly to OpenAI.";
 export const showOverlayFixture = true;
 export const platformNotice = Object.freeze({
   title: "macOS feasibility probe",
-  text: "This build tests the app shell. Unavailable features: secure key storage, provider requests, automatic insertion, clipboard recovery. Settings → Developer diagnostics includes a fixed overlay fixture.",
+  text: "Recording and live overlay are under test. Full-audio transcription, cleanup, connection checking, automatic insertion and clipboard recovery are not available yet. Settings → Developer diagnostics includes microphone and live transcription tests.",
 });
 export const pasteShortcut = "Command+V";
 export const shortcutUseHint =
@@ -38,9 +37,12 @@ const credentialMessages = {
     "Could not save the key. Try again or check Keychain.",
   credential_read_failed:
     "Could not read the saved key. Try again or check Keychain.",
+  credential_access_denied:
+    "Keychain access is blocked. Choose Unlock saved key and respond to the macOS prompt.",
   credential_delete_failed:
     "Could not remove the key. Try again or remove it in Keychain.",
-  credential_platform_unsupported: unsupportedCredentialMessage,
+  credential_platform_unsupported:
+    "Connection checking is unavailable in this Mac probe. Your saved key is unchanged.",
 };
 export function credentialErrorMessage(code: string) {
   return knownMessage(credentialMessages, code);

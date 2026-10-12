@@ -76,6 +76,61 @@ pub fn overlay_snapshot(state: tauri::State<'_, OverlayState>) -> Result<Snapsho
         .map_err(|_| "overlay_unavailable")
 }
 
+#[cfg(target_os = "macos")]
+fn foreground_point() -> Option<(f64, f64)> {
+    use core_foundation::{
+        array::{CFArray, CFArrayRef},
+        base::{CFType, TCFType},
+        dictionary::CFDictionary,
+        number::CFNumber,
+        string::CFString,
+    };
+    use objc2::{class, msg_send, runtime::AnyObject};
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGWindowListCopyWindowInfo(options: u32, relative_to: u32) -> CFArrayRef;
+    }
+    fn value(dictionary: &CFDictionary, key: &str) -> Option<CFType> {
+        let key = CFString::new(key);
+        dictionary
+            .find(key.as_CFTypeRef())
+            .map(|value| unsafe { CFType::wrap_under_get_rule(*value) })
+    }
+    fn number(dictionary: &CFDictionary, key: &str) -> Option<f64> {
+        value(dictionary, key)?.downcast::<CFNumber>()?.to_f64()
+    }
+    // Called on the main thread. Read geometry/PID only, never window titles.
+    let pid: i32 = unsafe {
+        let workspace: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let application: *mut AnyObject = msg_send![workspace, frontmostApplication];
+        if application.is_null() {
+            return None;
+        }
+        msg_send![application, processIdentifier]
+    };
+    let list = unsafe { CGWindowListCopyWindowInfo(1 | 16, 0) }; // On-screen, exclude desktop.
+    if list.is_null() {
+        return None;
+    }
+    let windows = unsafe { CFArray::<CFType>::wrap_under_create_rule(list) };
+    for item in windows.iter() {
+        let Some(window) = item.downcast::<CFDictionary>() else {
+            continue;
+        };
+        if number(&window, "kCGWindowOwnerPID") != Some(pid as f64)
+            || number(&window, "kCGWindowLayer") != Some(0.0)
+        {
+            continue;
+        }
+        let bounds = value(&window, "kCGWindowBounds")?.downcast::<CFDictionary>()?;
+        let x = number(&bounds, "X")? + number(&bounds, "Width")? / 2.0;
+        let y = number(&bounds, "Y")? + number(&bounds, "Height")? / 2.0;
+        return (x.is_finite() && y.is_finite()).then_some((x, y));
+    }
+    None
+}
+
 fn position(window: &WebviewWindow) -> tauri::Result<()> {
     // Choose the foreground application's monitor, including its work area and
     // DPI. Fall back to the primary monitor when no foreground rect is available.
@@ -96,7 +151,23 @@ fn position(window: &WebviewWindow) -> tauri::Result<()> {
             None
         }
     };
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    let monitor = foreground_point().and_then(|(x, y)| {
+        window
+            .available_monitors()
+            .ok()?
+            .into_iter()
+            .find(|monitor| {
+                // CoreGraphics window bounds are in points; Tauri uses physical pixels.
+                let origin = monitor.position().to_logical::<f64>(monitor.scale_factor());
+                let size = monitor.size().to_logical::<f64>(monitor.scale_factor());
+                x >= origin.x
+                    && x < origin.x + size.width
+                    && y >= origin.y
+                    && y < origin.y + size.height
+            })
+    });
+    #[cfg(not(any(windows, target_os = "macos")))]
     let monitor = window.current_monitor()?;
     if let Some(monitor) = monitor.or(window.primary_monitor()?) {
         let area = monitor.work_area();
@@ -138,7 +209,15 @@ fn apply(app: &tauri::AppHandle, snapshot: Snapshot) -> Result<(), &'static str>
                 ShowWindow(hwnd.0 as _, SW_SHOWNOACTIVATE);
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        unsafe {
+            // Tauri/tao show() calls makeKeyAndOrderFront on Mac. Order the
+            // passive window without making it key or activating the app.
+            let native = window.ns_window().map_err(|_| "overlay_unavailable")?
+                as *mut objc2::runtime::AnyObject;
+            let _: () = objc2::msg_send![native, orderFrontRegardless];
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         window.show().map_err(|_| "overlay_unavailable")?;
     }
     // Clear the hidden WebView's text too, so discarded previews are not kept

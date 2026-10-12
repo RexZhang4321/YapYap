@@ -2,7 +2,7 @@ import type { TranscriptionSession } from "./transcriptionSession.ts";
 import type { LiveTranscription } from "./liveTranscription.ts";
 
 export type KeyState = "unknown" | "saved" | "missing";
-export type HotkeyAction = "record" | "live" | "insert" | "retry";
+export type HotkeyAction = "record" | "live" | "capture" | "insert" | "retry";
 export interface Preferences {
   shortcut: string;
   microphone: string;

@@ -4,7 +4,7 @@ import { apiKeyErrorMessage, clearAndSubmitApiKey } from "../apiKey";
 import { ui } from "./store";
 import { useUi } from "./View";
 import { application } from "../applicationModel";
-import { supportsCredentialStorage, credentialHint } from "#platform";
+import { supportsCredentialStorage, credentialHint, platformName } from "#platform";
 
 export function ApiKeySettings() {
   const input = useRef<HTMLInputElement>(null);
@@ -16,11 +16,11 @@ export function ApiKeySettings() {
   const active = useUi(ui.active);
   const locked = busy || active || !supportsCredentialStorage;
 
-  async function refresh() {
+  async function refresh(): Promise<boolean> {
     if (!supportsCredentialStorage) {
       setStoredStatus(apiKeyErrorMessage("credential_platform_unsupported"));
       application.setKeyState({ state: "unknown", busy: running.current });
-      return;
+      return false;
     }
     try {
       const saved = await invoke<boolean>("has_api_key");
@@ -31,9 +31,11 @@ export function ApiKeySettings() {
         state: saved ? "saved" : "missing",
         busy: running.current,
       });
+      return true;
     } catch (error) {
       setStoredStatus(apiKeyErrorMessage(error));
       application.setKeyState({ state: "unknown", busy: running.current });
+      return false;
     }
   }
   useEffect(() => {
@@ -58,13 +60,16 @@ export function ApiKeySettings() {
     running.current = true;
     setStatus(pending);
     application.setKeyState({ ...application.readiness.key, busy: true });
+    let completed = false;
     try {
       await work();
-      setStatus(success);
+      completed = true;
     } catch (error) {
       setStatus(apiKeyErrorMessage(error));
     } finally {
-      await refresh();
+      const refreshed = await refresh();
+      // A successful write with a failed readiness read is not usable setup.
+      if (completed) setStatus(refreshed ? success : "");
       running.current = false;
       application.setKeyState({ ...application.readiness.key, busy: false });
     }
@@ -122,6 +127,24 @@ export function ApiKeySettings() {
         </div>
       </form>
       <div className="row recording-actions">
+        {platformName === "macos" && keyState === "unknown" && (
+          <button
+            id="unlock-api-key"
+            type="button"
+            disabled={locked}
+            onClick={() => {
+              void run(
+                async () => {
+                  if (!(await invoke<boolean>("unlock_api_key"))) throw "key_missing";
+                },
+                "Waiting for Keychain access…",
+                "Saved key unlocked.",
+              );
+            }}
+          >
+            Unlock saved key
+          </button>
+        )}
         <button
           id="validate-api-key"
           type="button"

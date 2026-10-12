@@ -6,6 +6,8 @@ use tauri::{
 
 mod cleanup;
 mod credentials;
+#[cfg(target_os = "macos")]
+mod macos_shortcuts;
 use platform::insertion;
 mod openai;
 mod overlay;
@@ -43,6 +45,7 @@ pub fn run() {
         insertion::has_clipboard_backup,
         insertion::restore_previous_clipboard,
         credentials::has_api_key,
+        credentials::unlock_api_key,
         credentials::save_api_key,
         credentials::delete_api_key,
         credentials::validate_api_key,
@@ -61,8 +64,12 @@ pub fn run() {
         let _ = show_main_window(app);
     }));
 
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(macos_shortcuts::init());
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+
     builder
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(insertion::ProbeState::default())
         .manage(streaming::LiveState::default())
         .manage(overlay::OverlayState::default())
@@ -127,6 +134,7 @@ mod tests {
         for command in [
             "save_api_key",
             "has_api_key",
+            "unlock_api_key",
             "capture_target",
             "copy_test_text",
             "insert_dictation_text",

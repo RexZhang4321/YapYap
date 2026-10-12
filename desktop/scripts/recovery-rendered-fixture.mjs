@@ -17,7 +17,7 @@ const bridge = `
   let callbackId = 0;
   const handlers = new Map();
   const gates = new Map();
-  const state = { hasKey: new URLSearchParams(location.search).get("key") !== "missing", transcription: "immediate", cleanup: "pending", lastPendingName: "", copies: [], insertions: [], calls: [] };
+  const state = { hasKey: new URLSearchParams(location.search).get("key") !== "missing", keyBlocked: new URLSearchParams(location.search).get("key") === "blocked", transcription: "immediate", cleanup: "pending", lastPendingName: "", copies: [], insertions: [], calls: [] };
   const renderSnapshot = () => {
     const target = document.querySelector("#fixture-snapshot");
     const session = window.__recoveryFixture?.transcription;
@@ -85,7 +85,8 @@ const bridge = `
         for (const shortcut of args.shortcuts ?? []) handlers.delete(shortcut);
         return Promise.resolve();
       }
-      if (command === "has_api_key") return Promise.resolve(state.hasKey);
+      if (command === "has_api_key") return state.keyBlocked ? Promise.reject("credential_access_denied") : Promise.resolve(state.hasKey);
+      if (command === "unlock_api_key") { state.keyBlocked = false; return Promise.resolve(state.hasKey); }
       if (command === "save_api_key") { state.hasKey = true; return Promise.resolve(); }
       if (command === "delete_api_key") { state.hasKey = false; return Promise.resolve(); }
       if (command === "has_clipboard_backup") return Promise.resolve(false);

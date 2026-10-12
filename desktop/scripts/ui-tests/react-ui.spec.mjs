@@ -19,20 +19,20 @@ test("Windows build keeps credential setup and omits Mac probe controls", async 
   expect((await snapshot(page)).commands).not.toContain("platform_info");
 });
 
-test("Mac build shows only the shell fixture and uses Mac labels", async ({ page }) => {
+test("Mac build supports key setup and uses Mac labels and overlay fixtures", async ({ page }) => {
   await page.goto("http://localhost:1425/recovery-fixture.html");
-  await expect(page.locator("#dictation-status")).toHaveText("Setup needed");
+  await expect(page.locator("#dictation-status")).toHaveText("Ready to dictate");
   await expect(page.locator('[aria-label="macOS feasibility probe"]')).toBeVisible();
   await expect(page.locator("#shortcut-display")).toHaveText("Control+Option+F8");
   await expect(page.locator(".app-footer")).toContainText("menu bar");
   await page.locator("#open-settings").click();
-  await expect(page.locator("#api-key")).toBeDisabled();
-  await expect(page.locator("#save-api-key")).toBeDisabled();
+  await expect(page.locator("#api-key")).toBeEnabled();
+  await expect(page.locator("#api-key-hint")).toContainText("macOS Keychain");
   await expect(page.locator("#shortcut")).toHaveValue("Control+Option+F8");
   await page.locator("#shortcut-form").evaluate(form => form.requestSubmit());
   await expect(page.locator("#status")).toHaveText("Shortcut saved: Control+Option+F8");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("byok-dictation-preferences")).shortcut)).toBe("Ctrl+Alt+F8");
-  expect((await snapshot(page)).commands).not.toContain("has_api_key");
+  expect((await snapshot(page)).commands).toContain("has_api_key");
   expect((await snapshot(page)).commands).not.toContain("platform_info");
   await page.locator("#diagnostics").evaluate(element => { element.open = true; });
   await page.locator("#probe-overlay-show").click();
@@ -42,6 +42,224 @@ test("Mac build shows only the shell fixture and uses Mac labels", async ({ page
   await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
     .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("hidden");
 });
+
+for (const port of [1424, 1425]) {
+  test(`saving cannot claim readiness when the saved key is unreadable on ${port}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}/recovery-fixture.html?key=blocked`);
+    await expect(page.locator("#setup-message")).toContainText("could not be accessed");
+    await page.locator("#open-settings").click();
+    await page.locator("#api-key").fill("disposable-key-test-marker");
+    await page.locator("#save-api-key").click();
+    await expect(page.locator("#api-key-stored-status")).toHaveAttribute("data-state", "unknown");
+    await expect(page.locator("#api-key-status")).toBeEmpty();
+    await expect(page.locator("#api-key")).toHaveValue("");
+    await expect(page.locator("#validate-api-key")).toBeDisabled();
+  });
+}
+
+test("Mac can unlock its existing saved key and leave setup without reentering it", async ({ page }) => {
+  await page.goto("http://localhost:1425/recovery-fixture.html?key=blocked");
+  await expect(page.locator("#setup-message")).toContainText("could not be accessed");
+  await page.locator("#open-settings").click();
+  await expect(page.locator("#api-key-stored-status")).toContainText("Unlock saved key");
+  await page.locator("#unlock-api-key").click();
+  await expect(page.locator("#api-key-stored-status")).toHaveAttribute("data-state", "saved");
+  await expect(page.locator("#unlock-api-key")).toHaveCount(0);
+  await page.locator("#settings-close").click();
+  await expect(page.locator("#dictation-status")).toHaveText("Ready to dictate");
+  await expect(page.locator("#setup-callout")).toBeHidden();
+  const commands = (await snapshot(page)).commands;
+  expect(commands).toContain("unlock_api_key");
+  expect(commands).not.toContain("save_api_key");
+});
+
+for (const port of [1424, 1425]) {
+  test(`microphone-only mode captures without a key or provider calls on ${port}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}/recovery-fixture.html?key=missing`);
+    await expect(page.locator("#dictation-status")).toHaveText("Setup needed");
+    await page.locator("#open-settings").click();
+    await page.locator("#diagnostics").evaluate(element => { element.open = true; });
+    await page.locator("#hotkey-action").selectOption("capture");
+    await page.locator("#settings-close").click();
+    await dictate(page);
+    await expect(page.locator("#dictation-status")).toHaveText("Recording ready");
+    await expect(page.locator("#transcribe-recording")).toBeHidden();
+    const state = await snapshot(page);
+    expect(state.session.audioRetained).toBe(true);
+    expect(state.insertions).toHaveLength(0);
+    for (const command of ["capture_dictation_target", "start_live_stream", "transcribe_recording", "cleanup_transcript"])
+      expect(state.commands).not.toContain(command);
+    const phases = await page.evaluate(() => window.__fixtureIPC.state.calls
+      .filter(call => call.command === "update_overlay").map(call => call.args.snapshot.phase));
+    expect(phases).toContain("recording");
+    expect(phases.at(-1)).toBe("ready");
+    await page.locator("#discard-transcription").click();
+    await expect.poll(async () => (await snapshot(page)).session.audioRetained).toBe(false);
+    await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
+      .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("hidden");
+  });
+}
+
+test("cancel pending microphone access disposes a late stream without recording", async ({ page }) => {
+  await page.goto("http://localhost:1425/recovery-fixture.html?key=missing");
+  await expect(page.locator("#dictation-status")).toHaveText("Setup needed");
+  await page.locator("#open-settings").click();
+  await page.locator("#diagnostics").evaluate(element => { element.open = true; });
+  await page.locator("#hotkey-action").selectOption("capture");
+  await page.locator("#settings-close").click();
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__lateMic = resolve; });
+    window.__recoveryFixture.shortcut("Pressed");
+  });
+  await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
+  await page.locator("#cancel-dictation").click();
+  await page.evaluate(() => {
+    window.__lateTrackStopped = false;
+    const track = { stop() { window.__lateTrackStopped = true; } };
+    window.__lateMic({ getTracks: () => [track] });
+    window.__recoveryFixture.shortcut("Released");
+  });
+  await expect.poll(() => page.evaluate(() => window.__lateTrackStopped)).toBe(true);
+  expect((await snapshot(page)).session.audioRetained).toBe(false);
+  expect((await snapshot(page)).commands).not.toContain("start_live_stream");
+});
+
+for (const port of [1424, 1425]) {
+  test(`cancelling after capture stops unlocks the next recording on ${port}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}/recovery-fixture.html`);
+    await expect(page.locator("#dictation-status")).toHaveText("Ready to dictate");
+    await page.locator("#open-settings").click();
+    await page.locator("#diagnostics").evaluate(element => { element.open = true; });
+    await page.locator("#hotkey-action").selectOption("capture");
+    await page.locator("#settings-close").click();
+    await page.evaluate(() => {
+      const { recorder } = window.__recoveryFixture;
+      recorder.start = async () => { recorder.active = true; return "Fixture recording"; };
+      recorder.stop = () => {
+        recorder.active = false;
+        const stopped = Promise.resolve({ samples: [new Float32Array(128)], sampleRate: 48000,
+          channelCount: 1, frameCount: 128, deviceId: "fixture-mic", deviceLabel: "Fixture",
+          durationSeconds: 128 / 48000 });
+        // Cancel after capture has stopped, before its finalizer resumes.
+        stopped.then(() => {
+          const escape = window.__fixtureIPC.state.calls.findLast(call =>
+            call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes("Escape"));
+          escape.args.handler.onmessage({ shortcut: "Escape", state: "Pressed" });
+        });
+        return stopped;
+      };
+      window.__recoveryFixture.shortcut("Pressed");
+    });
+    await expect(page.locator("#dictation-status")).toHaveText("Listening");
+    await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls.some(call =>
+      call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes("Escape")))).toBe(true);
+    await page.evaluate(() => window.__recoveryFixture.shortcut("Released"));
+    await expect(page.locator("#dictation-status")).toHaveText("Ready to test microphone");
+    expect((await snapshot(page)).session.audioRetained).toBe(false);
+    await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
+      .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("hidden");
+    await page.evaluate(() => window.__recoveryFixture.shortcut("Pressed"));
+    await expect(page.locator("#dictation-status")).toHaveText("Listening");
+    await page.locator("#cancel-dictation").click();
+    await expect(page.locator("#dictation-status")).toHaveText("Ready to test microphone");
+  });
+
+  test(`Escape preserves Windows defaults and handles held Mac modifiers on ${port}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}/recovery-fixture.html?key=missing`);
+    await expect(page.locator("#dictation-status")).toHaveText("Setup needed");
+    await page.locator("#open-settings").click();
+    await page.locator("#prepare-microphone").click();
+    await expect(page.locator("#microphone-access-help")).toContainText("Microphone ready");
+    await page.locator("#diagnostics").evaluate(element => { element.open = true; });
+    await page.locator("#hotkey-action").selectOption("capture");
+    await page.locator("#settings-close").click();
+    await page.evaluate(() => {
+      navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__lateMic = resolve; });
+      window.__recoveryFixture.shortcut("Pressed");
+    });
+    await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
+    const escape = port === 1425 ? "Ctrl+Alt+Escape" : "Escape";
+    await expect.poll(() => page.evaluate(escape => window.__fixtureIPC.state.calls.some(call =>
+      call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes(escape)), escape)).toBe(true);
+    await page.evaluate(escape => {
+      const binding = window.__fixtureIPC.state.calls.findLast(call =>
+        call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes(escape));
+      binding.args.handler.onmessage({ shortcut: escape, state: "Pressed" });
+      window.__recoveryFixture.shortcut("Released");
+      window.__lateTrackStopped = false;
+      window.__lateMic({ getTracks: () => [{ stop() { window.__lateTrackStopped = true; } }] });
+    }, escape);
+    await expect(page.locator("#dictation-status")).toHaveText("Ready to test microphone");
+    await expect.poll(() => page.evaluate(() => window.__lateTrackStopped)).toBe(true);
+    await expect.poll(() => page.evaluate(escape => window.__fixtureIPC.state.calls.some(call =>
+      call.command === "plugin:global-shortcut|unregister" && call.args.shortcuts.includes("Escape") &&
+      call.args.shortcuts.includes(escape)), escape)).toBe(true);
+    if (port === 1424) expect(await page.evaluate(() => window.__fixtureIPC.state.calls.some(call =>
+      call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes("Ctrl+Alt+Escape")))).toBe(false);
+    expect((await snapshot(page)).session.audioRetained).toBe(false);
+    expect((await snapshot(page)).commands).not.toContain("start_live_stream");
+    await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
+      .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("hidden");
+  });
+}
+
+test("Windows keeps plain Escape independent of modified-Esc conflicts", async ({ page }) => {
+  await ready(page);
+  await page.locator("#open-settings").click();
+  await page.locator("#diagnostics").evaluate(element => { element.open = true; });
+  await page.locator("#hotkey-action").selectOption("capture");
+  await page.locator("#settings-close").click();
+  await page.evaluate(() => {
+    const invoke = window.__TAURI_INTERNALS__.invoke;
+    window.__TAURI_INTERNALS__.invoke = (command, args) => {
+      if (command === "plugin:global-shortcut|register" && args.shortcuts.includes("Ctrl+Alt+Escape"))
+        return Promise.reject("shortcut_already_registered");
+      return invoke(command, args);
+    };
+    navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__lateMic = resolve; });
+    window.__recoveryFixture.shortcut("Pressed");
+  });
+  await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
+  await expect.poll(() => page.evaluate(() => window.__recoveryFixture.application.readiness.escapeAvailable)).toBe(true);
+  await expect(page.locator("#cancel-hint")).toContainText("Press Esc");
+  await page.evaluate(() => {
+    const binding = window.__fixtureIPC.state.calls.findLast(call =>
+      call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes("Escape"));
+    binding.args.handler.onmessage({ shortcut: "Escape", state: "Pressed" });
+    window.__recoveryFixture.shortcut("Released");
+    window.__lateMic({ getTracks: () => [{ stop() {} }] });
+  });
+  await expect(page.locator("#dictation-status")).toHaveText("Ready to test microphone");
+});
+
+for (const port of [1424, 1425]) {
+  test(`cancel cannot start another dictation during a pending clipboard copy on ${port}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}/recovery-fixture.html`);
+    await expect(page.locator("#dictation-status")).toHaveText("Ready to dictate");
+    await page.evaluate(async () => {
+      await window.__recoveryFixture.startSuccessful();
+      const invoke = window.__TAURI_INTERNALS__.invoke;
+      window.__TAURI_INTERNALS__.invoke = (command, args) => command === "copy_dictation_text"
+        ? new Promise(resolve => { window.__finishCopy = resolve; })
+        : invoke(command, args);
+    });
+    await page.locator("#copy-transcript").click();
+    await expect.poll(() => page.evaluate(() => typeof window.__finishCopy)).toBe("function");
+    await page.locator("#cancel-dictation").click();
+    expect(await page.evaluate(() => window.__recoveryFixture.application.interaction.operationBusy)).toBe(true);
+    await page.evaluate(() => window.__recoveryFixture.shortcut("Pressed"));
+    expect((await snapshot(page)).session.state).toBe("discarded");
+    await page.evaluate(() => window.__finishCopy("Fixture copy complete"));
+    await expect.poll(() => page.evaluate(() => window.__recoveryFixture.application.interaction.operationBusy)).toBe(false);
+    await page.evaluate(() => {
+      navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__nextMic = resolve; });
+      window.__recoveryFixture.shortcut("Pressed");
+    });
+    await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
+    await page.locator("#cancel-dictation").click();
+    await page.evaluate(() => window.__nextMic({ getTracks: () => [{ stop() {} }] }));
+  });
+}
 
 const original =
   "Original words: send 42 to user_id\n你好 😀 https://example.test/a?q=2";

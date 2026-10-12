@@ -426,3 +426,17 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - Tauri's target platform determines selection during native builds. Standalone Vite supports `YAPYAP_BUILD_PLATFORM`, with the host OS as fallback; conflicting Tauri/override targets fail the build. Vite caches are isolated by selected platform. Node package-import conditions provide the same selection for unbundled tests.
 - Removed runtime capability serialization, `platform_info` IPC and asynchronous platform initialization from both entry points. Native Rust selection remains compile-time; the overlay again reads only its bounded snapshot. Shortcut formatting and canonical stored accelerators retain their behavior.
 - Windows and Mac browser fixtures now compile independently on separate ports instead of switching metadata at runtime. Tests inspect both entry-point production bundles to prove only the selected implementation is included, Windows omits Mac probe strings/fixture code, and capability-query IPC is absent. See [build-time verification](desktop/scripts/platform-build-selection-verification.md) for results and native acceptance limits.
+
+### October 7, 2026 — MP-01 cleanup
+
+- Observed Accessibility denial in the packaged app. Granted-access destination/caret checks remain pending; MP-01 is incomplete.
+- Removed the temporary MP-01 harness, UI/IPC wiring, disposable fixtures, separate verification note and logs at the user's request. Keep future probe work compact and avoid adding disposable test scaffolding to the codebase.
+
+### October 11, 2026 — Record/display parity
+
+Probe 1 passed; evidence is kept in [MACOS_PROBES.md](MACOS_PROBES.md).
+Mac shortcuts use exclusive Carbon registration behind the existing plugin IPC
+contract because the original library requests shared bindings; Windows retains
+its original plugin. Keychain prompts are limited to explicit Settings actions.
+Reuse the overlay diagnostic controls and keep only one packaged app; temporary
+native conflict helpers were removed. Insertion and the full pipeline remain open.
