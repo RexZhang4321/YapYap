@@ -21,3 +21,5 @@ export declare function credentialErrorMessage(
   code: string,
 ): string | undefined;
 export declare function formatShortcut(shortcut: string): string;
+
+export declare const insertionTestText: string;

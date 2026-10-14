@@ -28,7 +28,7 @@ Baseline: [Windows implementation and behavior](desktop/README.md).
 
 - [x] **1 — Record and display:** verify every group 1 row with the physical hotkey,
   microphone and floating overlay while another app has focus.
-- [ ] **2 — Insert and restore:** verify every group 2 row in TextEdit, VS Code
+- [x] **2 — Insert and restore:** verify every group 2 row in TextEdit, VS Code
   and a browser using disposable text/clipboards.
 - [ ] **3 — Dictate and recover:** verify every group 3 row, including the full
   recording → live overlay → transcription → cleanup → paste flow and failures.
@@ -52,8 +52,24 @@ can require fresh Keychain approval. Audio/text remain in memory and overlay IPC
 stays restricted. Full pipeline/insertion acceptance belongs to groups 2 and 3.
 Automated: 169 frontend, 34 rendered UI, 25 regular native checks; Windows frontend
 build passes. Windows retains its original Esc binding and clipboard busy lock.
-Groups 2 and 3 remain open.
+Group 2 passed on October 13; group 3 remains open.
 
 Keep one short result per group here. Reuse existing controls; remove disposable
 fixtures. Implement one group at a time. Future roadmap features are excluded;
 broader OS/hardware coverage and trusted signing follow parity.
+
+Probe 2 — October 13: passed in the unchanged packaged app. Unicode/multiline
+paste works in TextEdit, VS Code and a browser. Caret/pointer movement, app
+switching, target closure and a three-second held modifier refuse paste. Retained
+output retries in a new editor without transcription/cleanup (0.29 s). Packaged
+Copy/Restore preserves rich/custom formats and multiple items; safe Copy refuses
+promised files without mutation, while explicit Replace succeeds without backup.
+The final physical two-paste check restored every rich/custom format and both
+items, then preserved a newer copy made during the second paste. The user saw the
+sample both times; native diagnostics confirm both outcomes. The observer restored
+the original clipboard and disposable fixtures were removed. Refreshing only the
+stale Accessibility entry fixed this ad-hoc build's permission mismatch. Mac code
+is isolated by compile-time platform selection; the Windows native adapter is
+unchanged. Automated: 169 frontend, 34 rendered UI and 29 native checks; Windows
+frontend build, Mac signature and DMG integrity pass. Windows native regression
+and combined manual acceptance remain pending. Group 3 remains open.

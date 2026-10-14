@@ -42,3 +42,5 @@ export function credentialErrorMessage(code: string) {
 export function formatShortcut(shortcut: string) {
   return shortcut;
 }
+
+export const insertionTestText = "YapYap dictation insertion probe";

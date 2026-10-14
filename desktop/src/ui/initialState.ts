@@ -1,3 +1,5 @@
+import { insertionTestText } from "#platform";
+
 export const initialControls = {
   "open-settings": {
     text: "Settings",
@@ -296,7 +298,7 @@ export const initialControls = {
     text: "First visible text: waiting",
   },
   "test-text": {
-    text: "YapYap dictation insertion probe",
+    text: insertionTestText,
   },
   "insertion-status": {
     text: "Choose Text insertion test to check a destination.",

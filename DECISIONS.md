@@ -440,3 +440,123 @@ contract because the original library requests shared bindings; Windows retains
 its original plugin. Keychain prompts are limited to explicit Settings actions.
 Reuse the overlay diagnostic controls and keep only one packaged app; temporary
 native conflict helpers were removed. Insertion and the full pipeline remain open.
+
+
+## October 11, 2026 — macOS probe 2 implementation
+
+- Added compile-time Mac insertion selection in `platform/mod.rs` with the full
+  existing command contract in `platform/insertion_macos.rs`. Windows retains
+  `insertion.rs`; unsupported platforms retain refusal stubs. No dependencies or
+  provider behavior changed. Mac diagnostics use a fixed Unicode/multiline sample.
+- Destination guards compare foreground PID, AX window/input identity, selection
+  offsets and pointer position. Require Accessibility/event-posting access and a
+  readable selection; apps without this metadata use Copy. Wait for modifiers,
+  recheck after clipboard preparation, latch attempted sessions, and keep uncertain
+  paste outcomes distinct from safe refusals. AppKit/AX operations run on the main
+  thread; modifier and clipboard-consumer waits are asynchronous.
+- NSPasteboard snapshots preserve each item's readable formats in memory. Reject
+  promised/unreadable files, excessive item/format counts and backups over 64 MiB.
+  AppKit may synthesize converted text formats; backups retain them, while our text
+  and change count guard automatic restore. Explicit Replace skips backup; explicit
+  Restore replaces current clipboard contents. App operations are serialized;
+  NSPasteboard has no system-wide lock/atomic conditional write. An error before
+  clearing leaves newer content intact and creates no unnecessary recovery lock.
+- Verification: 169 frontend, 34 rendered UI and 29 regular native checks passed
+  (two opt-in checks skipped); Windows frontend production build, Mac app/DMG
+  build, formatting, Git whitespace, signature and DMG integrity passed. Privacy
+  scanner regressions and pattern-only audit passed. A temporary main-thread
+  native helper verified Unicode/multiline/rich/custom formats, multiple items,
+  empty clipboard, newer-copy preservation, promised-file refusal and explicit
+  replacement; removed the helper afterward. Native checks print no real clipboard
+  or destination content.
+- Packaged Copy/manual Command+V visibly inserted all three sample lines in a
+  disposable TextEdit document; Restore cleared its pending backup. UI automation
+  typed the base key without triggering the Carbon shortcut. Physical shortcut,
+  automatic target-app paste/refusals, Accessibility recovery and saved-output
+  retry checks are awaiting the user; probe 2 is not marked complete. The packaged
+  app remains open in Text insertion test mode. No provider requests were made.
+- DMG SHA-256: `5c2cd86097d8c87887df2230b2ae284f4a3355fc8cc1e95ba9266348e820161d`.
+
+
+## October 12, 2026 — probe 2 Accessibility recovery
+
+- The user physically exercised Control+Option+1. Packaged event history confirms
+  key-down/key-up delivery; insertion refused with the Accessibility guidance.
+  The user reported that permission had already been enabled, and System Settings
+  showed the YapYap switch on. This is a permission acceptance failure, not a
+  successful automatic paste.
+- Inspection found one running YapYap process and one Spotlight-registered bundle,
+  both using `desktop/src-tauri/target/release/bundle/macos/YapYap.app`. Its ad-hoc
+  designated requirement is `cdhash 475b86dc4340e8154b707c9ae9ed1d43d8d78fa8`.
+  No valid certificate signing identities are installed. A stale requirement/grant
+  from rebuilding is consistent with the evidence; no duplicate running build
+  was found. Keep the current package unchanged during permission acceptance.
+- Started refreshing only YapYap's existing Accessibility entry through System
+  Settings. The user authenticated with Touch ID and the stale entry was removed.
+  Automatic approval review of the Open click failed with a 429 rate limit before
+  executing the action; the user finished re-addition. Confirmed the new YapYap
+  entry is enabled and relaunched the same unchanged bundle. The user then
+  confirmed that the three-line sample pastes in TextEdit. Packaged event history
+  shows multiple successful pastes with previous-clipboard restoration and a
+  pointer-moved refusal. This resolves the reported stale-permission failure.
+  The user also confirmed normal VS Code/browser paste and refusal after caret
+  or pointer movement, app switching and target closure.
+  No global permission reset or signing-requirement weakening was performed.
+- Added targeted recovery and ad-hoc build-identity guidance to `desktop/README.md`.
+  Platform implementation remains isolated; no app rebuild or provider call was
+  needed for this recovery step. Probe 2 remains in progress.
+
+- The user initially reported paste after holding a modifier beyond 1.5 seconds,
+  with Key UP on main-key release. They clarified that paste occurs only after the
+  modifier is released. The latest event pair completed paste/restoration 1.378 s
+  after key-up, which does not establish a timeout failure. Requested a deliberate
+  three-second hold on the frozen package before deciding whether to replace it.
+
+- The user completed the deliberate three-second modifier hold and confirmed
+  the timeout warning without paste. The frozen package satisfies this check;
+  the shorter attempt was not a proven defect. No modifier timing change or
+  package rebuild is retained. Requested saved-output retry in normal dictation
+  with live-only text and cleanup off, using a fixed disposable spoken phrase,
+  a pointer-moved refusal and an explicit shortcut retry in a new destination.
+
+
+## October 13, 2026 — probe 2 continuation
+
+- Confirmed the same packaged DMG checksum and one running YapYap process after
+  the interrupted turn. No clipboard observer process was running. The prepared
+  external clipboard observer had only been compiled, never executed; removed
+  its source/binary without changing the clipboard.
+- Native app-control reads of YapYap timed out while app inventory remained
+  available. A menu-bar inspection also timed out. Requested the user to open
+  YapYap from its menu bar and report whether the pending saved-output retry
+  check passed. No app rebuild, permission change or provider call was made.
+- The physical three-second modifier timeout remains a confirmed pass. Native
+  saved-output retry and remaining packaged clipboard checks remain open; probe 2
+  is not marked complete.
+
+
+### October 13 — packaged saved-output and clipboard recovery
+
+- The user confirmed that retained output pastes after focusing a new editor and
+  pressing/releasing the shortcut. The packaged main window reports Inserted,
+  transcription/cleanup/preparation skipped, destination check 0.01 s, paste and
+  restore 0.28 s, and insertion retry total 0.29 s. This confirms native retry of
+  saved output through the existing recovery route without a new provider stage.
+- Native app control became available again. An external in-memory clipboard peer
+  supplied disposable RTF/plain/custom formats across two items. Packaged Copy
+  wrote the transcript; explicit Restore returned every format/item unchanged.
+  The peer then restored the original clipboard. A promised-file metadata fixture
+  was refused by safe Copy without any clipboard mutation. Explicit Replace wrote
+  plain text and the UI confirmed Restore unavailable; original clipboard restored.
+- Initial automatic-paste observers expired before recording the required
+  transitions; those attempts did not establish a failure. The extended observer
+  then passed both physical checks: automatic paste restored all rich/custom
+  formats and both items, and a disposable newer copy made during the second paste
+  remained intact. The user confirmed that the fixed multiline sample appeared
+  both times. Packaged diagnostics at 06:48:25Z and 06:48:28Z on October 14 UTC
+  (October 13 local) independently report restored clipboard and preserved newer
+  clipboard respectively. The observer restored the original clipboard without
+  writing clipboard data to disk; its temporary source and binary were removed.
+- Group 2 is passed. Returned Shortcut test mode to Dictate and insert. No app
+  rebuild or permission reset was performed during final acceptance. Group 3 and
+  Windows native regression/combined manual acceptance remain open.

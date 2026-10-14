@@ -327,3 +327,55 @@ Failed or malformed canonical transcription retains the original audio for **Ret
 Cancellation clears local session sources, immediately unlocks the local session, and suppresses late results. Native request guards can briefly refuse a new request until their bounded send/response work finishes; the app retains the new recording for retry and reports that condition. Paste cannot be cancelled after dispatch; an insertion wait timeout exposes an uncertain outcome for manual recovery. Exit or crash loses pending audio, transcripts and in-memory clipboard backups.
 
 See [Task 12 verification](scripts/task12-verification.md) for the recovery matrix and final checks. Milestone 2 implementation is complete; the full new combined Windows manual validation remains pending as recorded in Task 10.
+
+## macOS insertion and clipboard probe
+
+Settings → Developer diagnostics → **Text insertion test** uses the configured
+hold/release shortcut and a fixed Unicode, multiline sample. Focus a disposable
+TextEdit document, VS Code Untitled editor, or browser text field before holding
+and releasing it. Allow **YapYap** in **System Settings → Privacy & Security →
+Accessibility** first; denied access refuses paste without changing the clipboard.
+A rebuilt ad-hoc app may need approval again. If Accessibility is already enabled
+but insertion still reports denied access, quit YapYap, remove its existing entry
+from the Accessibility list, add the current packaged `YapYap.app` again, enable
+it, and relaunch that exact app. macOS may require Touch ID or your login password
+for the permission change. The current probe bundle is at
+`src-tauri/target/release/bundle/macos/YapYap.app`; avoid rebuilding between granting
+access and completing acceptance. Check the actual running bundle rather than
+assuming another app with the same display name is the granted build.
+
+The probe config uses ad-hoc signing (`signingIdentity: "-"`). Its designated
+requirement identifies an exact binary, so rebuilding can change the permission
+identity even with the same bundle identifier/path. See [Apple's code-signing
+requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
+Stable permission identity across updates requires consistent certificate signing;
+this is part of the trusted-distribution work after parity.
+
+VS Code may need its screen reader
+accessibility support enabled so it exposes the editor's text selection.
+
+The Mac adapter captures the foreground application's Accessibility window/input,
+selection offsets and pointer position, waits up to 1.5 seconds for modifiers,
+then rechecks before sending Command+V. Missing selection information, a changed
+window/input/caret/pointer, a closed target or held modifiers refuses insertion.
+Only selection offsets and element identities are read; destination text and
+window titles are not read. Like Windows, a switch away and back between checks
+cannot be proven, and sending paste events does not prove the target accepted them.
+
+NSPasteboard backups retain each item's data formats in memory, including rich
+text, images and file URLs when readable. Unreadable data, promised files, more
+than 128 items/formats, or more than 64 MiB refuses automatic paste and safe Copy.
+**Copy test text** saves a backup; **Copy without backup** explicitly replaces
+unsupported content. **Restore previous clipboard** explicitly restores the
+backup, replacing the current contents. Automatic restoration waits 250 ms after
+paste, checks the change count and our text, and preserves a newer copy.
+NSPasteboard provides no system-wide clipboard lock or atomic conditional write;
+the adapter checks ownership immediately before mutations and serializes its own
+operations. Saved-output retries use the existing session recovery flow, capture
+a newly chosen target and never request another transcription or cleanup. A paste
+that may already have been sent permits manual recovery only.
+
+Native adapters are selected at compile time. Mac AppKit/Accessibility/CGEvent
+code stays in `src-tauri/src/platform/insertion_macos.rs`; Windows continues to
+use `src-tauri/src/insertion.rs`. See [probe status](../MACOS_PROBES.md) for the
+observed packaged acceptance and remaining checks.

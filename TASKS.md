@@ -24,7 +24,13 @@ pipeline/settings/recovery. MP-00 passed on October 7, 2026; see the
 [build evidence](desktop/scripts/macos-mp-00-verification.md). Probe 1 passed on
 October 11: native recording/playback/stop/clear, shortcuts/cancellation/conflict
 recovery, permission/device recovery, Keychain setup, and floating-overlay checks.
-Groups 2 and 3 remain open; Windows native combined acceptance remains pending.
+Probe 2 passed on October 13: guarded Unicode/multiline insertion in
+TextEdit/VS Code/browser, destination-change and modifier-timeout refusals,
+saved-output retry, and packaged Copy/Replace/Restore. Physical paste checks also
+confirm rich/custom multi-item clipboard restoration and preservation of a newer
+copy. The original clipboard was restored and fixtures removed. Mac insertion is
+isolated; the Windows native adapter is unchanged. Group 3 remains open; Windows
+native regression and combined manual acceptance remain pending.
 The [scope assessment](MACOS_PORT_SCOPE.md) retains historical source evidence;
 historical Windows completion markers below do not establish Mac support.
 

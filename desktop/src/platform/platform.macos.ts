@@ -14,7 +14,7 @@ export const credentialHint = "Stored securely in macOS Keychain. Live transcrip
 export const showOverlayFixture = true;
 export const platformNotice = Object.freeze({
   title: "macOS feasibility probe",
-  text: "Recording and live overlay are under test. Full-audio transcription, cleanup, connection checking, automatic insertion and clipboard recovery are not available yet. Settings → Developer diagnostics includes microphone and live transcription tests.",
+  text: "Recording, live overlay, guarded insertion and clipboard recovery are under test. Automatic paste requires Accessibility access in macOS System Settings. Full-audio transcription, cleanup and connection checking are not available yet. Settings → Developer diagnostics includes microphone and live transcription tests.",
 });
 export const pasteShortcut = "Command+V";
 export const shortcutUseHint =
@@ -54,3 +54,5 @@ export function formatShortcut(shortcut: string) {
     Super: "Command",
   });
 }
+
+export const insertionTestText = "YapYap dictation insertion probe\n你好 😀 — café\nsecond line";

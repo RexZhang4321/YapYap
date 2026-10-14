@@ -41,3 +41,5 @@ export function credentialErrorMessage(code: string) {
 export function formatShortcut(shortcut: string) {
   return formatWithNames(shortcut, { Super: "Windows" });
 }
+
+export const insertionTestText = "YapYap dictation insertion probe";
