@@ -29,8 +29,9 @@ TextEdit/VS Code/browser, destination-change and modifier-timeout refusals,
 saved-output retry, and packaged Copy/Replace/Restore. Physical paste checks also
 confirm rich/custom multi-item clipboard restoration and preservation of a newer
 copy. The original clipboard was restored and fixtures removed. Mac insertion is
-isolated; the Windows native adapter is unchanged. Group 3 remains open; Windows
-native regression and combined manual acceptance remain pending.
+isolated; the Windows native adapter is unchanged. Group 3 passed on October 29.
+Windows native regression and combined manual acceptance remain pending; see the
+[Windows regression checklist](desktop/scripts/windows-regression-verification.md).
 The [scope assessment](MACOS_PORT_SCOPE.md) retains historical source evidence;
 historical Windows completion markers below do not establish Mac support.
 
