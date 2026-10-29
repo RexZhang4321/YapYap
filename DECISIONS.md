@@ -571,3 +571,7 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 ### Credential interface
 
 - Extracted the credential-store contract and platform modules. Mac tests passed, including a disposable Keychain save/read/unlock/replace/delete check; Windows native verification remains pending.
+
+### Overlay interface
+
+- Moved monitor selection and passive show/hide into platform modules; snapshot validation, placement and revision handling remain shared. Mac native and rendered UI tests passed; packaged focus and Windows native checks remain pending.
