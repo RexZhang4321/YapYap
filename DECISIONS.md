@@ -579,3 +579,7 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 ### Shortcut interface
 
 - Kept Tauri's common shortcut plugin contract and moved platform-specific Escape bindings behind the platform interface. Frontend and rendered UI tests pass; physical shortcut checks remain pending for the new build.
+
+### Insertion interface
+
+- Added a destination adapter contract and shared payload, session-latch and paste-outcome rules. Mac native tests pass; packaged insertion and Windows native checks remain pending.

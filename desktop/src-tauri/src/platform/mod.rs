@@ -4,6 +4,7 @@
 pub(crate) mod insertion;
 #[cfg(target_os = "macos")]
 pub(crate) mod insertion_macos;
+pub(crate) mod insertion_shared;
 #[cfg(target_os = "macos")]
 pub(crate) use insertion_macos as insertion;
 #[cfg(not(any(windows, target_os = "macos")))]

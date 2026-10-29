@@ -1,5 +1,9 @@
 //! macOS destination guards and multi-item clipboard recovery. AppKit work is
 //! dispatched to the main thread; modifier/consumer waits never block that thread.
+use crate::platform::insertion_shared::{
+    claim_paste, insertion_outcome, validate_text, DestinationAdapter, DictationTarget,
+    InsertionResult,
+};
 use core_foundation::{
     base::{CFEqual, CFGetTypeID, CFRelease, CFRetain, CFTypeRef, TCFType},
     string::CFString,
@@ -105,40 +109,17 @@ struct Recovery {
     ours: String,
     sequence: isize,
 }
-struct DictationTarget {
-    session_id: String,
-    target: Target,
-    paste_attempted: bool,
-}
+
 #[derive(Default)]
 struct ProbeData {
     target: Option<Target>,
-    dictation: Option<DictationTarget>,
+    dictation: Option<DictationTarget<Target>>,
     recovery: Option<Recovery>,
 }
 #[derive(Default)]
 pub struct ProbeState {
     data: Mutex<ProbeData>,
     operation: tokio::sync::Mutex<()>,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InsertionResult {
-    paste_attempted: bool,
-    paste_sent: bool,
-    clipboard_restored: bool,
-    message: String,
-}
-impl InsertionResult {
-    fn refused(message: impl Into<String>) -> Self {
-        Self {
-            paste_attempted: false,
-            paste_sent: false,
-            clipboard_restored: false,
-            message: message.into(),
-        }
-    }
 }
 
 async fn on_main<T: Send + 'static>(
@@ -177,6 +158,20 @@ fn ax_element(value: OwnedCf) -> Result<OwnedCf, String> {
     }
     Ok(value)
 }
+struct NativeDestination;
+impl DestinationAdapter for NativeDestination {
+    type Target = Target;
+    fn capture() -> Result<Target, String> {
+        target()
+    }
+    fn verify(original: &Target) -> Result<(), String> {
+        same_target(original)
+    }
+    fn dispatch_paste() -> Result<(), String> {
+        paste()
+    }
+}
+
 fn target() -> Result<Target, String> {
     if !unsafe { AXIsProcessTrusted() && CGPreflightPostEventAccess() } {
         return Err(ACCESS_HELP.into());
@@ -252,24 +247,6 @@ fn same_target(original: &Target) -> Result<(), String> {
         current.mouse,
         original.mouse,
     )
-}
-fn validate_text(text: &str) -> Result<(), String> {
-    if text.trim().is_empty() || text.contains('\0') || text.len() > 1024 * 1024 {
-        return Err("Text is empty, contains NUL, or exceeds the insertion limit. Use the transcript view to recover it.".into());
-    }
-    Ok(())
-}
-fn claim_paste(data: &mut ProbeData, session_id: &str) -> Result<(), String> {
-    let captured = data
-        .dictation
-        .as_mut()
-        .filter(|item| item.session_id == session_id)
-        .ok_or("This dictation destination is no longer available. Use Copy.")?;
-    if captured.paste_attempted {
-        return Err("Paste was already attempted. Use Copy to avoid duplicate insertion.".into());
-    }
-    captured.paste_attempted = true;
-    Ok(())
 }
 
 unsafe fn board() -> *mut AnyObject {
@@ -513,20 +490,7 @@ fn paste() -> Result<(), String> {
     }
     Ok(())
 }
-fn outcome(paste: Result<(), String>, restored: Result<bool, String>) -> InsertionResult {
-    let message = match (&paste, &restored) {
-        (Ok(()), Ok(true)) => "Paste keystrokes sent; previous clipboard restored. Check the target.",
-        (Ok(()), Ok(false)) => "Paste sent; newer clipboard contents were preserved. Check the target.",
-        (Ok(()), Err(_)) => "Paste sent; clipboard restore is pending. Use Restore previous clipboard; do not insert again.",
-        (Err(_), _) => "Paste outcome is uncertain. Check the target before using Copy. Automatic insertion will not repeat.",
-    };
-    InsertionResult {
-        paste_attempted: true,
-        paste_sent: paste.is_ok(),
-        clipboard_restored: matches!(restored, Ok(true)),
-        message: message.into(),
-    }
-}
+
 async fn insert_text(
     app: &AppHandle,
     original: Target,
@@ -551,7 +515,7 @@ async fn insert_text(
         return Err("Modifier keys remained down; text was kept for Copy.".into());
     }
     let result = on_main(app, move |app| {
-        same_target(&original)?;
+        NativeDestination::verify(&original)?;
         let state = app.state::<ProbeState>();
         // Verify the session is still current before changing the clipboard.
         if let Some(id) = &session_id {
@@ -572,7 +536,7 @@ async fn insert_text(
         }
         put_text(&state, &text, false)?;
         let preflight = (|| {
-            same_target(&original)?;
+            NativeDestination::verify(&original)?;
             if unsafe { CGEventSourceFlagsState(1) } & MODIFIERS != 0 {
                 return Err("Modifier keys changed; text was kept for Copy.".into());
             }
@@ -596,7 +560,7 @@ async fn insert_text(
                 return Err("Clipboard changed; newer contents were preserved.".into());
             }
             if let Some(id) = &session_id {
-                claim_paste(&mut data, id)?;
+                claim_paste(&mut data.dictation, id)?;
             }
             Ok(())
         })();
@@ -612,7 +576,7 @@ async fn insert_text(
                 ..InsertionResult::refused("")
             }));
         }
-        Ok(Ok(paste()))
+        Ok(Ok(NativeDestination::dispatch_paste()))
     })
     .await?;
     let paste_result = match result {
@@ -621,7 +585,7 @@ async fn insert_text(
     };
     tokio::time::sleep(Duration::from_millis(250)).await;
     let restored = on_main(app, |app| restore_automatic(&app.state::<ProbeState>())).await;
-    Ok(outcome(paste_result, restored))
+    Ok(insertion_outcome(paste_result, restored))
 }
 
 #[tauri::command]
@@ -640,7 +604,7 @@ pub async fn capture_target(app: AppHandle) -> Result<String, String> {
         if data.recovery.is_some() {
             return Err("Restore the previous clipboard before another insertion attempt.".into());
         }
-        data.target = Some(target()?);
+        data.target = Some(NativeDestination::capture()?);
         Ok("Target captured. Release the shortcut to insert the test text.".into())
     })
     .await
@@ -663,7 +627,7 @@ pub async fn capture_dictation_target(app: AppHandle, session_id: String) -> Res
         }
         data.dictation = Some(DictationTarget {
             session_id,
-            target: target()?,
+            target: NativeDestination::capture()?,
             paste_attempted: false,
         });
         Ok(())
@@ -891,12 +855,12 @@ mod tests {
             }),
             ..ProbeData::default()
         };
-        assert!(claim_paste(&mut data, "stale").is_err());
+        assert!(claim_paste(&mut data.dictation, "stale").is_err());
         assert!(!data.dictation.as_ref().unwrap().paste_attempted);
-        assert!(claim_paste(&mut data, "current").is_ok());
-        assert!(claim_paste(&mut data, "current").is_err());
+        assert!(claim_paste(&mut data.dictation, "current").is_ok());
+        assert!(claim_paste(&mut data.dictation, "current").is_err());
         data.dictation = None;
-        assert!(claim_paste(&mut data, "current").is_err());
+        assert!(claim_paste(&mut data.dictation, "current").is_err());
     }
     #[test]
     fn post_paste_failures_never_become_retryable_refusals() {
@@ -906,12 +870,12 @@ mod tests {
             (Ok(()), Err("restore failed".into()), true, false),
             (Err("post failed".into()), Ok(true), false, true),
         ] {
-            let result = outcome(paste, restore);
+            let result = insertion_outcome(paste, restore);
             assert!(result.paste_attempted);
             assert_eq!(result.paste_sent, sent);
             assert_eq!(result.clipboard_restored, restored);
         }
         assert!(!InsertionResult::refused("changed").paste_attempted);
-        assert!(claim_paste(&mut ProbeData::default(), "stale").is_err());
+        assert!(claim_paste(&mut ProbeData::default().dictation, "stale").is_err());
     }
 }

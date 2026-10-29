@@ -1,4 +1,8 @@
 //! Windows text destination capture, clipboard recovery, and guarded insertion.
+use crate::platform::insertion_shared::{
+    claim_paste, insertion_outcome, validate_text, DestinationAdapter, DictationTarget,
+    InsertionResult,
+};
 use std::{mem::size_of, ptr, sync::Mutex, thread, time::Duration};
 use tauri::State;
 
@@ -104,40 +108,28 @@ struct Target {
 #[derive(Default)]
 struct ProbeData {
     target: Option<Target>,
-    dictation: Option<DictationTarget>,
+    dictation: Option<DictationTarget<Target>>,
     clipboard_recovery: Option<ClipboardSnapshot>,
-}
-
-struct DictationTarget {
-    session_id: String,
-    target: Target,
-    paste_attempted: bool,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InsertionResult {
-    paste_attempted: bool,
-    paste_sent: bool,
-    clipboard_restored: bool,
-    message: String,
-}
-
-impl InsertionResult {
-    fn refused(message: impl Into<String>) -> Self {
-        Self {
-            paste_attempted: false,
-            paste_sent: false,
-            clipboard_restored: false,
-            message: message.into(),
-        }
-    }
 }
 
 pub struct ProbeState(Mutex<ProbeData>);
 impl Default for ProbeState {
     fn default() -> Self {
         Self(Mutex::new(ProbeData::default()))
+    }
+}
+
+struct NativeDestination;
+impl DestinationAdapter for NativeDestination {
+    type Target = Target;
+    fn capture() -> Result<Target, String> {
+        target()
+    }
+    fn verify(original: &Target) -> Result<(), String> {
+        same_target(*original, target()?)
+    }
+    fn dispatch_paste() -> Result<(), String> {
+        paste()
     }
 }
 
@@ -176,7 +168,7 @@ pub fn capture_target(state: State<'_, ProbeState>) -> Result<String, String> {
     }
     data.target = None;
     drop(data);
-    let found = target()?;
+    let found = NativeDestination::capture()?;
     state
         .0
         .lock()
@@ -412,13 +404,6 @@ fn paste() -> Result<(), String> {
     Ok(())
 }
 
-fn validate_text(text: &str) -> Result<(), String> {
-    if text.trim().is_empty() || text.contains('\0') || text.len() > 1024 * 1024 {
-        return Err("Text is empty, contains NUL, or exceeds the insertion limit. Use the transcript view to recover it.".into());
-    }
-    Ok(())
-}
-
 fn same_target(original: Target, current: Target) -> Result<(), String> {
     if current.window != original.window || current.focus != original.focus {
         return Err("Focused application or input changed; text was kept for Copy.".into());
@@ -429,22 +414,6 @@ fn same_target(original: Target, current: Target) -> Result<(), String> {
     if current.caret != original.caret {
         return Err("Text cursor moved; text was kept for Copy.".into());
     }
-    Ok(())
-}
-
-fn claim_paste(data: &mut ProbeData, session_id: &str) -> Result<(), String> {
-    let captured = data
-        .dictation
-        .as_mut()
-        .filter(|item| item.session_id == session_id)
-        .ok_or("This dictation destination is no longer available. Use Copy.")?;
-    if captured.paste_attempted {
-        return Err(
-            "Paste was already attempted for this session. Use Copy to avoid duplicate insertion."
-                .into(),
-        );
-    }
-    captured.paste_attempted = true;
     Ok(())
 }
 
@@ -481,7 +450,7 @@ fn insert_text(
 ) -> Result<InsertionResult, String> {
     validate_text(text)?;
     wait_for_modifiers()?;
-    same_target(original, target()?)?;
+    NativeDestination::verify(&original)?;
     let clipboard = OpenClipboardGuard::new(owner)?;
     let previous = read_clipboard_snapshot()?;
     {
@@ -508,13 +477,13 @@ fn insert_text(
     let our_sequence = unsafe { GetClipboardSequenceNumber() };
     // Recheck after acquiring/backing up the clipboard, immediately before paste.
     let preflight = (|| {
-        same_target(original, target()?)?;
+        NativeDestination::verify(&original)?;
         if let Some(id) = session_id {
             let mut data = state
                 .0
                 .lock()
                 .map_err(|_| "Insertion state is unavailable.")?;
-            claim_paste(&mut data, id)?;
+            claim_paste(&mut data.dictation, id)?;
         }
         Ok::<(), String>(())
     })();
@@ -530,30 +499,10 @@ fn insert_text(
             ..InsertionResult::refused("")
         });
     }
-    let paste_result = paste();
+    let paste_result = NativeDestination::dispatch_paste();
     thread::sleep(Duration::from_millis(250));
     let restore_result = restore_after_paste(owner, state, &previous, our_sequence, text);
     Ok(insertion_outcome(paste_result, restore_result))
-}
-
-fn insertion_outcome(
-    paste_result: Result<(), String>,
-    restore_result: Result<bool, String>,
-) -> InsertionResult {
-    let paste_sent = paste_result.is_ok();
-    let message = match (paste_result, &restore_result) {
-        (Ok(()), Ok(true)) => "Paste keystrokes sent; previous clipboard restored. Check the target.".into(),
-        (Ok(()), Ok(false)) => "Paste sent; newer clipboard contents were preserved. Check the target.".into(),
-        (Ok(()), Err(_)) => "Paste sent; clipboard restore is pending. Use Restore previous clipboard; do not insert again.".into(),
-        (Err(_), _) => "Paste outcome is uncertain. Check the target before using Copy. Automatic insertion will not repeat.".into(),
-    };
-    // No errors escape after SendInput: restoration failure cannot trigger a second paste.
-    InsertionResult {
-        paste_attempted: true,
-        paste_sent,
-        clipboard_restored: matches!(restore_result, Ok(true)),
-        message,
-    }
 }
 
 #[tauri::command]
@@ -571,7 +520,7 @@ pub fn capture_dictation_target(
     }
     data.dictation = Some(DictationTarget {
         session_id,
-        target: target()?,
+        target: NativeDestination::capture()?,
         paste_attempted: false,
     });
     Ok(())
@@ -822,12 +771,12 @@ mod tests {
             }),
             ..Default::default()
         };
-        assert!(claim_paste(&mut data, "old").is_err());
+        assert!(claim_paste(&mut data.dictation, "old").is_err());
         assert!(!data.dictation.as_ref().unwrap().paste_attempted);
-        assert!(claim_paste(&mut data, "current").is_ok());
-        assert!(claim_paste(&mut data, "current").is_err());
+        assert!(claim_paste(&mut data.dictation, "current").is_ok());
+        assert!(claim_paste(&mut data.dictation, "current").is_err());
         data.dictation = None;
-        assert!(claim_paste(&mut data, "current").is_err());
+        assert!(claim_paste(&mut data.dictation, "current").is_err());
     }
 
     #[test]
