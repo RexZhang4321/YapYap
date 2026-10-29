@@ -1,8 +1,9 @@
 //! Compile-time selection of native platform implementations.
 pub(crate) mod clipboard_shared;
 #[cfg(windows)]
-#[path = "../insertion.rs"]
-pub(crate) mod insertion;
+pub(crate) mod insertion_windows;
+#[cfg(windows)]
+pub(crate) use insertion_windows as insertion;
 #[cfg(target_os = "macos")]
 pub(crate) mod insertion_macos;
 pub(crate) mod insertion_shared;

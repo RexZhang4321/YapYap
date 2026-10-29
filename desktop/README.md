@@ -377,6 +377,6 @@ a newly chosen target and never request another transcription or cleanup. A past
 that may already have been sent permits manual recovery only.
 
 Native adapters are selected at compile time. Mac AppKit/Accessibility/CGEvent
-code stays in `src-tauri/src/platform/insertion_macos.rs`; Windows continues to
-use `src-tauri/src/insertion.rs`. See [probe status](../MACOS_PROBES.md) for the
+code stays in `src-tauri/src/platform/insertion_macos.rs`; Windows uses
+`src-tauri/src/platform/insertion_windows.rs`. See [probe status](../MACOS_PROBES.md) for the
 observed packaged acceptance and remaining checks.
