@@ -567,3 +567,7 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 - **Decision:** Prefer established cross-platform primitives behind shared interfaces; use platform-specific adapters only for concrete OS requirements. Test shared logic once, then validate adapters and representative packaged flows on each OS.
 - Replaced WinHTTP with reqwest for validation, transcription and cleanup on Mac and Windows. Native credential, shortcut, insertion and overlay adapters remain; insertion and overlay contain platform-specific logic worth reviewing.
 - Frontend, rendered UI and Mac native tests passed, along with two invalid-key OpenAI requests. Successful provider requests, packaged Mac acceptance, proxy compatibility and Windows native regression remain unverified; Probe 3 remains open.
+
+### Credential interface
+
+- Extracted the credential-store contract and platform modules. Mac tests passed, including a disposable Keychain save/read/unlock/replace/delete check; Windows native verification remains pending.
