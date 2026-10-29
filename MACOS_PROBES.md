@@ -73,3 +73,10 @@ is isolated by compile-time platform selection; the Windows native adapter is
 unchanged. Automated: 169 frontend, 34 rendered UI and 29 native checks; Windows
 frontend build, Mac signature and DMG integrity pass. Windows native regression
 and combined manual acceptance remain pending. Group 3 remains open.
+
+
+Transport update — October 28: full-audio transcription, cleanup and connection
+checking use the same cross-platform HTTPS client on Mac and Windows. Focused
+local HTTP tests and invalid-key OpenAI checks pass on Mac; these do not establish
+a successful saved-key request or packaged pipeline acceptance. Probe 3 remains
+open; Windows native transport regression remains pending.

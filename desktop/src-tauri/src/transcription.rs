@@ -14,26 +14,18 @@ struct OpenAiFinalSTT;
 impl FinalSTT for OpenAiFinalSTT {
     fn transcribe(&self, audio: &[u8]) -> Result<String, String> {
         let body = multipart(audio)?;
-        #[cfg(windows)]
-        {
-            let response = crate::credentials::with_api_key(|key| {
-                crate::openai::request(
-                    key,
-                    "POST",
-                    "/v1/audio/transcriptions",
-                    &body,
-                    Some(&format!("multipart/form-data; boundary={BOUNDARY}")),
-                    transcription_status,
-                    true,
-                )
-            })?;
-            parse_transcript(&response)
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = body;
-            Err("credential_platform_unsupported".into())
-        }
+        let response = crate::credentials::with_api_key(|key| {
+            crate::openai::request(
+                key,
+                "POST",
+                "/v1/audio/transcriptions",
+                &body,
+                Some(&format!("multipart/form-data; boundary={BOUNDARY}")),
+                transcription_status,
+                true,
+            )
+        })?;
+        parse_transcript(&response)
     }
 }
 
@@ -264,7 +256,6 @@ mod tests {
         }
     }
 
-    #[cfg(windows)]
     #[test]
     #[ignore = "Real OpenAI request with invalid fixture key and synthetic silence; reads no saved credential"]
     fn openai_rejects_invalid_transcription_key() {

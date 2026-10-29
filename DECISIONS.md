@@ -66,14 +66,14 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 - **Why:** Use the operating system's existing secure storage for the Windows-first probe. The generated Windows API bindings also support native HTTPS validation without adding a separate HTTP client stack.
 - **Revisit when:** macOS work begins, a credential migration is needed, or provider configuration expands. Memory wiping is limited to owned buffers and does not guarantee erasure of WebView/IPC/OS copies.
 
-### D009 — Explicit validation independent of saving
+### D009 — Explicit validation independent of saving (WinHTTP superseded October 28, 2026)
 
 - **Decision:** Saving and removing credentials are local operations. Validate only when explicitly requested, using native WinHTTP against OpenAI's models endpoint with certificate checks enabled, no redirects, and 10-second timeouts for each network phase. Surface fixed error codes and discard provider response bodies. Failed validation retains the saved credential.
 - **Alternative:** Validate on every launch or require successful network validation before saving.
 - **Why:** Secure storage must work offline. A restricted key may lack model-list permissions even when it has permission for another endpoint. Task 5 will verify actual transcription access and request format.
 - **Revisit when:** Additional provider settings or a more precise endpoint-specific connection check is introduced.
 
-### D010 — Explicit whole-recording transcription probe
+### D010 — Explicit whole-recording transcription probe (WinHTTP superseded October 28, 2026)
 
 - **Decision:** Task 5 uploads only when the user chooses Transcribe recording. Reuse the existing in-memory WAV encoder, binary Tauri IPC, Windows Credential Manager, and native WinHTTP. Keep final STT behind a small Rust interface with deterministic fakes. Use `gpt-transcribe` with a complete WAV and JSON response, preserving the exact returned canonical text.
 - **Alternative:** Upload automatically on hotkey release, add live streaming, or introduce a new HTTP client dependency.
@@ -96,7 +96,7 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 
 ## Decisions — 2026-10-02
 
-### D013 — Native cancellable streaming transport and an independent preview
+### D013 — Native cancellable streaming transport and an independent preview (WinHTTP retention superseded October 28, 2026)
 
 - **Decision:** Task 7 connects directly to `wss://api.openai.com/v1/realtime?intent=transcription` using `gpt-live-transcribe`, a transcription-only session, 24 kHz mono PCM16, `delay: low`, and no server turn detection. Use tokio-tungstenite with native-tls/Windows certificate validation. Keep credential retrieval and Authorization in Rust; the UI receives sanitized status and transcript events through a session-bound Tauri channel. Retain the existing WinHTTP transport for final file transcription.
 - **Alternative:** Add concurrent WinHTTP WebSocket send/receive workers or expose temporary authentication to a browser connection.
@@ -560,3 +560,10 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 - Group 2 is passed. Returned Shortcut test mode to Dictate and insert. No app
   rebuild or permission reset was performed during final acceptance. Group 3 and
   Windows native regression/combined manual acceptance remain open.
+
+
+## October 28, 2026 — shared HTTPS transport
+
+- **Decision:** Prefer established cross-platform primitives behind shared interfaces; use platform-specific adapters only for concrete OS requirements. Test shared logic once, then validate adapters and representative packaged flows on each OS.
+- Replaced WinHTTP with reqwest for validation, transcription and cleanup on Mac and Windows. Native credential, shortcut, insertion and overlay adapters remain; insertion and overlay contain platform-specific logic worth reviewing.
+- Frontend, rendered UI and Mac native tests passed, along with two invalid-key OpenAI requests. Successful provider requests, packaged Mac acceptance, proxy compatibility and Windows native regression remain unverified; Probe 3 remains open.

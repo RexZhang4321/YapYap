@@ -11,40 +11,9 @@ fn validation_status(status: u32) -> Result<(), String> {
     }
 }
 
-// A response that sends a trickle of bytes must not hold REQUEST_ACTIVE forever.
-// WinHTTP also bounds DNS/connect separately; the response/send budget is shared.
-#[cfg(any(windows, test))]
-const REQUEST_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
-#[cfg(any(windows, test))]
-fn remaining_timeout(started: std::time::Instant) -> Result<i32, String> {
-    let remaining = REQUEST_BUDGET.saturating_sub(started.elapsed());
-    if remaining.is_zero() {
-        return Err("validation_timeout".into());
-    }
-    Ok(remaining.as_millis().clamp(1, 60_000) as i32)
-}
+const MAX_RESPONSE_BYTES: u64 = 1024 * 1024;
+const PROVIDER_BASE: &str = "https://api.openai.com";
 
-#[cfg(any(windows, test))]
-fn request_headers(key: &str, content_type: Option<&str>) -> zeroize::Zeroizing<Vec<u16>> {
-    // Reserve the complete header before writing any secret: later Content-Type
-    // appends must not reallocate and leave an unwiped key in the old allocation.
-    let content_type_units = content_type.map_or(0, |value| 14 + value.encode_utf16().count() + 2);
-    let mut header = zeroize::Zeroizing::new(Vec::<u16>::with_capacity(
-        22 + key.encode_utf16().count() + 3 + content_type_units,
-    ));
-    header.extend("Authorization: Bearer ".encode_utf16());
-    header.extend(key.encode_utf16());
-    header.extend("\r\n".encode_utf16());
-    if let Some(content_type) = content_type {
-        header.extend("Content-Type: ".encode_utf16());
-        header.extend(content_type.encode_utf16());
-        header.extend("\r\n".encode_utf16());
-    }
-    header.push(0);
-    header
-}
-
-#[cfg(windows)]
 pub fn validate_key(key: &str) -> Result<(), String> {
     request(
         key,
@@ -58,7 +27,6 @@ pub fn validate_key(key: &str) -> Result<(), String> {
     .map(|_| ())
 }
 
-#[cfg(windows)]
 pub(crate) fn request(
     key: &str,
     method: &str,
@@ -68,189 +36,208 @@ pub(crate) fn request(
     check_status: fn(u32) -> Result<(), String>,
     read_body: bool,
 ) -> Result<Vec<u8>, String> {
-    use std::{ffi::c_void, mem::size_of, ptr};
-    use windows_sys::Win32::{Foundation::GetLastError, Networking::WinHttp::*};
-
-    struct Handle(*mut c_void);
-    impl Drop for Handle {
-        fn drop(&mut self) {
-            unsafe {
-                WinHttpCloseHandle(self.0);
-            }
-        }
+    // Callers supply only fixed, application-owned paths. Never expose a URL or
+    // allow a redirect to send credentials or dictation to another host.
+    if !path.starts_with("/v1/") || path.contains(['?', '#', '\\']) {
+        return Err("validation_network_failed".into());
     }
-    fn handle(raw: *mut c_void) -> Result<Handle, String> {
-        if raw.is_null() {
-            Err(network_error())
-        } else {
-            Ok(Handle(raw))
-        }
-    }
-    fn network_error() -> String {
-        // Return a fixed code only. URLs, headers and provider bodies stay private.
-        match unsafe { GetLastError() } {
-            ERROR_WINHTTP_TIMEOUT => "validation_timeout",
-            ERROR_WINHTTP_SECURE_FAILURE => "validation_tls_failed",
-            _ => "validation_network_failed",
-        }
-        .into()
-    }
-    fn check(result: i32) -> Result<(), String> {
-        if result == 0 {
-            Err(network_error())
-        } else {
-            Ok(())
-        }
-    }
-    fn wide(text: &str) -> Vec<u16> {
-        text.encode_utf16().chain(Some(0)).collect()
-    }
-
-    let agent = wide("YapYap/0.1");
-    let host = wide("api.openai.com");
-    let method = wide(method);
-    let path = wide(path);
-    let header = request_headers(key, content_type);
-
-    // The WinHTTP handles are synchronous and confined to this worker thread.
-    // TLS certificate checks remain enabled; redirects cannot move the credential.
-    unsafe {
-        let session = handle(WinHttpOpen(
-            agent.as_ptr(),
-            WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
-            ptr::null(),
-            ptr::null(),
-            0,
-        ))?;
-        check(WinHttpSetTimeouts(
-            session.0,
-            10_000,
-            10_000,
-            if read_body { 60_000 } else { 10_000 },
-            if read_body { 60_000 } else { 10_000 },
-        ))?;
-        let connection = handle(WinHttpConnect(session.0, host.as_ptr(), 443, 0))?;
-        let request = handle(WinHttpOpenRequest(
-            connection.0,
-            method.as_ptr(),
-            path.as_ptr(),
-            ptr::null(),
-            ptr::null(),
-            ptr::null(),
-            WINHTTP_FLAG_SECURE,
-        ))?;
-        let started = std::time::Instant::now();
-        let timeout = remaining_timeout(started)?.min(if read_body { 60_000 } else { 10_000 });
-        check(WinHttpSetTimeouts(
-            request.0, 10_000, 10_000, timeout, timeout,
-        ))?;
-        let redirect_policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
-        check(WinHttpSetOption(
-            request.0,
-            WINHTTP_OPTION_REDIRECT_POLICY,
-            (&redirect_policy as *const u32).cast(),
-            size_of::<u32>() as u32,
-        ))?;
-        check(WinHttpSendRequest(
-            request.0,
-            header.as_ptr(),
-            (header.len() - 1) as u32,
-            if body.is_empty() {
-                ptr::null()
-            } else {
-                body.as_ptr().cast()
-            },
-            body.len() as u32,
-            body.len() as u32,
-            0,
-        ))?;
-        let timeout = remaining_timeout(started)?.min(if read_body { 60_000 } else { 10_000 });
-        check(WinHttpSetTimeouts(
-            request.0, 10_000, 10_000, timeout, timeout,
-        ))?;
-        check(WinHttpReceiveResponse(request.0, ptr::null_mut()))?;
-        remaining_timeout(started)?;
-        let mut status = 0u32;
-        let mut bytes = size_of::<u32>() as u32;
-        check(WinHttpQueryHeaders(
-            request.0,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            ptr::null(),
-            (&mut status as *mut u32).cast(),
-            &mut bytes,
-            ptr::null_mut(),
-        ))?;
-        // Reject failures before reading their potentially sensitive bodies.
-        check_status(status)?;
-        let mut result = Vec::new();
-        if read_body {
-            let mut chunk = [0u8; 8192];
-            loop {
-                let timeout = remaining_timeout(started)?;
-                check(WinHttpSetTimeouts(
-                    request.0, 10_000, 10_000, timeout, timeout,
-                ))?;
-                let mut received = 0u32;
-                check(WinHttpReadData(
-                    request.0,
-                    chunk.as_mut_ptr().cast(),
-                    chunk.len() as u32,
-                    &mut received,
-                ))?;
-                if received == 0 {
-                    break;
-                }
-                if result.len() + received as usize > 1024 * 1024 {
-                    return Err("transcription_response_too_large".into());
-                }
-                result.extend_from_slice(&chunk[..received as usize]);
-            }
-        }
-        Ok(result)
-    }
+    let url = format!("{PROVIDER_BASE}{path}");
+    request_url(
+        &url,
+        key,
+        method,
+        body,
+        content_type,
+        check_status,
+        read_body,
+        std::time::Duration::from_secs(if read_body { 60 } else { 10 }),
+    )
 }
 
-#[cfg(not(windows))]
-pub fn validate_key(_: &str) -> Result<(), String> {
-    Err("credential_platform_unsupported".into())
+fn network_error(error: reqwest::Error) -> String {
+    if error.is_timeout() {
+        "validation_timeout"
+    } else {
+        "validation_network_failed"
+    }
+    .into()
+}
+
+fn request_url(
+    url: &str,
+    key: &str,
+    method: &str,
+    body: &[u8],
+    content_type: Option<&str>,
+    check_status: fn(u32) -> Result<(), String>,
+    read_body: bool,
+    timeout: std::time::Duration,
+) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let client = reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(timeout)
+        .user_agent("YapYap/0.1")
+        .build()
+        .map_err(network_error)?;
+    let method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|_| "validation_network_failed".to_string())?;
+    let auth = zeroize::Zeroizing::new(format!("Bearer {key}"));
+    let mut header = reqwest::header::HeaderValue::from_str(&auth)
+        .map_err(|_| "validation_network_failed".to_string())?;
+    header.set_sensitive(true);
+    let mut request = client
+        .request(method, url)
+        .header(reqwest::header::AUTHORIZATION, header);
+    if let Some(value) = content_type {
+        request = request.header(reqwest::header::CONTENT_TYPE, value);
+    }
+    if !body.is_empty() {
+        request = request.body(body.to_vec());
+    }
+    let response = request.send().map_err(network_error)?;
+    check_status(u32::from(response.status().as_u16()))?;
+    if !read_body {
+        return Ok(Vec::new());
+    }
+    let mut result = Vec::new();
+    response
+        .take(MAX_RESPONSE_BYTES + 1)
+        .read_to_end(&mut result)
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::TimedOut
+                || error
+                    .get_ref()
+                    .and_then(|source| source.downcast_ref::<reqwest::Error>())
+                    .is_some_and(reqwest::Error::is_timeout)
+            {
+                "validation_timeout".to_string()
+            } else {
+                "validation_network_failed".to_string()
+            }
+        })?;
+    if result.len() as u64 > MAX_RESPONSE_BYTES {
+        return Err("transcription_response_too_large".into());
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn total_response_budget_expires_even_when_bytes_keep_arriving() {
-        let now = std::time::Instant::now();
-        assert!((1..=60_000).contains(&remaining_timeout(now).unwrap()));
-        assert_eq!(
-            remaining_timeout(now - REQUEST_BUDGET).unwrap_err(),
-            "validation_timeout"
-        );
-        assert_eq!(
-            remaining_timeout(now - REQUEST_BUDGET - std::time::Duration::from_secs(1))
-                .unwrap_err(),
-            "validation_timeout"
-        );
+
+    // A local peer exercises the real HTTP client without credentials or provider calls.
+    fn fixture(
+        response: Vec<u8>,
+        delay: std::time::Duration,
+    ) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let thread = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0u8; 4096];
+            let count = stream.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..count]).to_lowercase();
+            assert!(request.contains("authorization: bearer sk-fixture-only"));
+            std::thread::sleep(delay);
+            let _ = stream.write_all(&response);
+        });
+        (format!("http://{address}/v1/test"), thread)
     }
+
     #[test]
-    fn secret_headers_reserve_the_full_buffer_before_copying_the_key() {
-        let large_content_type = format!("multipart/form-data; boundary={}", "x".repeat(4096));
-        for content_type in [
-            None,
-            Some("audio/wav"),
-            Some(large_content_type.as_str()),
-            Some("fixture-☃"),
+    fn shared_http_client_bounds_response_and_does_not_follow_redirects() {
+        for (response, expected) in [
+            (
+                b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec(),
+                Ok(b"ok".to_vec()),
+            ),
+            (
+                b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\n\r\n"
+                    .to_vec(),
+                Err("validation_redirect".to_string()),
+            ),
+            (
+                {
+                    let mut r = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+                        MAX_RESPONSE_BYTES + 1
+                    )
+                    .into_bytes();
+                    r.extend(vec![b'x'; MAX_RESPONSE_BYTES as usize + 1]);
+                    r
+                },
+                Err("transcription_response_too_large".to_string()),
+            ),
         ] {
-            let header = request_headers("sk-fixture-only", content_type);
-            // Growing a too-small buffer would leave spare capacity here.
-            assert_eq!(header.len(), header.capacity());
-            assert_eq!(header.last(), Some(&0));
-            let text = String::from_utf16(&header[..header.len() - 1]).unwrap();
-            assert!(text.starts_with("Authorization: Bearer sk-fixture-only\r\n"));
-            if let Some(content_type) = content_type {
-                assert!(text.ends_with(&format!("Content-Type: {content_type}\r\n")));
-            }
+            let (url, peer) = fixture(response, std::time::Duration::ZERO);
+            let result = request_url(
+                &url,
+                "sk-fixture-only",
+                "GET",
+                &[],
+                None,
+                validation_status,
+                true,
+                std::time::Duration::from_secs(5),
+            );
+            peer.join().unwrap();
+            assert_eq!(result, expected);
         }
+    }
+
+    #[test]
+    fn shared_http_client_times_out_slow_responses() {
+        let (url, peer) = fixture(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_vec(),
+            std::time::Duration::from_millis(250),
+        );
+        let result = request_url(
+            &url,
+            "sk-fixture-only",
+            "GET",
+            &[],
+            None,
+            validation_status,
+            true,
+            std::time::Duration::from_millis(100),
+        );
+        peer.join().unwrap();
+        assert_eq!(result.unwrap_err(), "validation_timeout");
+    }
+
+    #[test]
+    fn shared_http_client_times_out_stalled_response_body() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/v1/test", listener.local_addr().unwrap());
+        let peer = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8; 4096];
+            stream.read(&mut request).unwrap();
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\no")
+                .unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let _ = stream.write_all(b"k");
+        });
+        let result = request_url(
+            &url,
+            "sk-fixture-only",
+            "GET",
+            &[],
+            None,
+            validation_status,
+            true,
+            std::time::Duration::from_millis(100),
+        );
+        peer.join().unwrap();
+        assert_eq!(result.unwrap_err(), "validation_timeout");
     }
     #[test]
     fn validation_distinguishes_auth_permissions_rate_limits_and_provider_failure() {
@@ -267,7 +254,6 @@ mod tests {
         }
     }
 
-    #[cfg(windows)]
     #[test]
     #[ignore = "Real API request using a deliberately invalid fixture key; no saved key is read"]
     fn openai_rejects_invalid_fixture_key() {

@@ -8,10 +8,11 @@ Run `npm install` and `npm run tauri dev` from this directory. The initial relea
 
 ## macOS feasibility shell
 
-The first Mac probe builds and launches on Apple Silicon. It is a shell for
-capability testing; dictation, API-key storage, provider requests, automatic
-insertion and clipboard recovery remain unavailable. See the
-[Mac checklist](../MACOS_PROBES.md) and [MP-00 evidence](scripts/macos-mp-00-verification.md).
+The Mac probe builds and launches on Apple Silicon. Recording, Keychain, live
+streaming, guarded insertion and clipboard recovery have been developed; the
+shared HTTPS client now enables full-audio transcription, cleanup and connection
+checking on Mac. Full packaged pipeline acceptance remains open. See the
+[Mac checklist](../MACOS_PROBES.md) and historical [MP-00 evidence](scripts/macos-mp-00-verification.md).
 
 Install Node, Rust and Xcode tools, then run from `desktop/`:
 
@@ -261,7 +262,7 @@ WebView2 process-local browser flags follow [Microsoft's documentation](https://
 
 Enter your OpenAI API key in the masked field and choose **Save key**. The field clears immediately after submission. The app stores a generic credential at `app.byokdictation.hotkeyprobe/openai-api-key` in Windows Credential Manager for the current Windows user on this machine. The saved key is never returned to the UI; the UI requests only its presence. **Remove key** deletes the credential, and saving another key replaces it.
 
-Saving does not require internet access. **Check connection** explicitly reads the saved credential in Rust and sends an authenticated `GET https://api.openai.com/v1/models` using Windows WinHTTP. Certificate verification is enabled, redirects are disabled, and resolve/connect/send/receive timeouts are each 10 seconds. No recording or transcript is sent. There are no background validation requests, and a failed request keeps the saved key. Validation uses fixed error codes; headers, secrets, and provider response bodies are not displayed or logged. Temporary Rust secret buffers are wiped on drop; this does not guarantee erasure of every WebView/IPC/OS memory copy.
+Saving does not require internet access. **Check connection** explicitly reads the saved credential in Rust and sends an authenticated `GET https://api.openai.com/v1/models` using the shared Rust HTTP client. Certificate verification is enabled, redirects are disabled, and connection checking has a 10-second overall timeout. No recording or transcript is sent. There are no background validation requests, and a failed request keeps the saved key. Validation uses fixed error codes; headers, secrets, and provider response bodies are not displayed or logged. Temporary Rust secret buffers are wiped on drop; this does not guarantee erasure of every WebView/IPC/OS memory copy.
 
 The request follows the [OpenAI models API](https://developers.openai.com/api/reference/resources/models/methods/list). Success establishes access to the models endpoint, while transcription model access remains Task 5. A permission error may mean a restricted key cannot list models; it does not prove the key is invalid.
 

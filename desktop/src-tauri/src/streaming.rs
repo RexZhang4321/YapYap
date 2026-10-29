@@ -246,7 +246,7 @@ impl StreamingSTT for OpenAiStreamingSTT {
         let mut config = WebSocketConfig::default();
         config.max_message_size = Some(MAX_EVENT);
         config.max_frame_size = Some(MAX_EVENT);
-        // native-tls validates the hostname and certificate using Windows trust.
+        // native-tls validates the hostname and certificate using the platform trust store.
         // This client does not follow redirects. Never render a handshake error.
         timeout(
             NETWORK_TIMEOUT,

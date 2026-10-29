@@ -15,27 +15,19 @@ struct OpenAiCleanup;
 impl CleanupModel for OpenAiCleanup {
     fn clean(&self, text: &str) -> Result<String, String> {
         let body = request_body(text)?;
-        #[cfg(windows)]
-        {
-            let response = crate::credentials::with_api_key(|key| {
-                crate::openai::request(
-                    key,
-                    "POST",
-                    "/v1/responses",
-                    &body,
-                    Some("application/json"),
-                    cleanup_status,
-                    true,
-                )
-                .map_err(sanitize_transport_error)
-            })?;
-            parse_response(&response)
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = body;
-            Err("credential_platform_unsupported".into())
-        }
+        let response = crate::credentials::with_api_key(|key| {
+            crate::openai::request(
+                key,
+                "POST",
+                "/v1/responses",
+                &body,
+                Some("application/json"),
+                cleanup_status,
+                true,
+            )
+            .map_err(sanitize_transport_error)
+        })?;
+        parse_response(&response)
     }
 }
 
@@ -488,7 +480,6 @@ mod tests {
         );
     }
 
-    #[cfg(windows)]
     #[test]
     #[ignore = "Real Responses request using the saved key and synthetic text; may incur API cost"]
     fn saved_key_cleanup_probe() {

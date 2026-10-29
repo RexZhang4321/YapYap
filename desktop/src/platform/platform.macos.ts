@@ -14,7 +14,7 @@ export const credentialHint = "Stored securely in macOS Keychain. Live transcrip
 export const showOverlayFixture = true;
 export const platformNotice = Object.freeze({
   title: "macOS feasibility probe",
-  text: "Recording, live overlay, guarded insertion and clipboard recovery are under test. Automatic paste requires Accessibility access in macOS System Settings. Full-audio transcription, cleanup and connection checking are not available yet. Settings → Developer diagnostics includes microphone and live transcription tests.",
+  text: "Recording, live overlay, guarded insertion and clipboard recovery are under test. Automatic paste requires Accessibility access in macOS System Settings. Settings → Developer diagnostics includes microphone and live transcription tests.",
 });
 export const pasteShortcut = "Command+V";
 export const shortcutUseHint =
@@ -42,7 +42,7 @@ const credentialMessages = {
   credential_delete_failed:
     "Could not remove the key. Try again or remove it in Keychain.",
   credential_platform_unsupported:
-    "Connection checking is unavailable in this Mac probe. Your saved key is unchanged.",
+    "This credential operation is unavailable. Your saved key is unchanged.",
 };
 export function credentialErrorMessage(code: string) {
   return knownMessage(credentialMessages, code);
