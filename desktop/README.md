@@ -141,7 +141,10 @@ fixtures, make no provider requests, and
 do not establish packaged microphone, OS shortcut, or external paste behavior.
 Add `-- --native-probes` to also exercise the host's credential store with a
 disposable item and the HTTPS client against OpenAI with an invalid fixture
-key; these read no saved key and make no billable request.
+key; these read no saved key and make no billable request. On Mac it also
+records from the default microphone through a disposable aggregate device,
+selects it by name, unplugs it mid-capture and checks that capture ends,
+flushes and restarts; the terminal needs microphone permission.
 
 Open **Settings → Developer diagnostics** for the optional live/transcription and insertion test modes, microphone level/metadata, latency, and fixed event logs. This area is closed by default. Leave **Shortcut test mode** on **Dictate and insert** for normal use; live test mode intentionally retains audio and does not insert on release.
 

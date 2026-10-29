@@ -36,11 +36,16 @@ const quick = process.argv.includes("--quick");
 if (!quick) {
   run("rendered UI fixtures", process.execPath, ["scripts/run-ui-tests.mjs"]);
 }
-// Host primitives use disposable credentials and invalid fixture keys only:
-// no saved key, microphone, paste, or billable provider request.
+// Host primitives use disposable credentials, invalid fixture keys and, on Mac, a
+// disposable aggregate microphone that is unplugged mid-capture: no saved key,
+// paste, or billable provider request. The microphone probe needs the terminal's
+// microphone permission.
 if (process.argv.includes("--native-probes")) {
   const hostCredential = {
-    darwin: ["credentials::tests::macos_keychain_lifecycle"],
+    darwin: [
+      "credentials::tests::macos_keychain_lifecycle",
+      "audio_capture::macos::tests::macos_native_capture_device_lifecycle",
+    ],
     win32: ["credentials::tests::windows_credential_restart_probe"],
   }[process.platform] ?? [];
   run("host primitive probes", "cargo", [

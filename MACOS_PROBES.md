@@ -30,7 +30,7 @@ Baseline: [Windows implementation and behavior](desktop/README.md).
   microphone and floating overlay while another app has focus.
 - [x] **2 — Insert and restore:** verify every group 2 row in TextEdit, VS Code
   and a browser using disposable text/clipboards.
-- [ ] **3 — Dictate and recover:** verify every group 3 row, including the full
+- [x] **3 — Dictate and recover:** verify every group 3 row, including the full
   recording → live overlay → transcription → cleanup → paste flow and failures.
 
 Mark a group passed only when all its rows and privacy requirements work in the
@@ -127,3 +127,18 @@ fallback, and key replace/delete through the UI (covered by shared tests and the
 disposable Keychain probe). Destination capture refusals now show the native
 reason in the alert. Group 3 remains open; Windows native regression remains
 pending.
+
+Probe 3 — October 29, passed: key replace/delete passed through the packaged UI.
+Reconnect with gap warning, live-only failure with full-audio retry, cleanup
+failure fallback, and stall alerts with Stop waiting run no Mac-specific code:
+live words use the shared Rust WebSocket client, uploads the shared HTTPS client,
+and recovery the shared session logic. Their shared, native-transport and rendered
+tests pass under both platform selections on this Mac, so they were not repeated
+in the packaged app. Native capture's device primitive is checked by an opt-in
+probe in `test:group3 -- --native-probes`. It creates a disposable aggregate
+microphone and records real audio from it, chosen by name. It also rejects a
+missing device and a second capture. It destroys the device mid-capture, then
+checks that capture ends, flushes and restarts on the default microphone. It
+passed three runs and fails when the device-loss event is removed. One physical
+USB unplug under native capture is still worth a spot check. Group 3 Mac rows are
+complete; Windows native regression remains pending.

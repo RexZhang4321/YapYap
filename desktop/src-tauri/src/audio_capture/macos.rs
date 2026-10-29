@@ -106,8 +106,12 @@ fn property_size(object: AudioObjectId, address: &PropertyAddress) -> Option<u32
 }
 
 fn device_name(device: AudioObjectId) -> Option<String> {
+    string_property(device, NAME)
+}
+
+fn string_property(device: AudioObjectId, selector: u32) -> Option<String> {
     let address = PropertyAddress {
-        selector: NAME,
+        selector,
         scope: SCOPE_GLOBAL,
         element: 0,
     };
@@ -167,7 +171,7 @@ fn input_devices() -> Vec<(AudioObjectId, String)> {
         .collect()
 }
 
-fn default_input_name() -> String {
+fn default_input() -> Option<AudioObjectId> {
     let address = PropertyAddress {
         selector: DEFAULT_INPUT,
         scope: SCOPE_GLOBAL,
@@ -185,9 +189,12 @@ fn default_input_name() -> String {
             (&mut device as *mut AudioObjectId).cast(),
         )
     };
-    (status == 0)
-        .then(|| device_name(device))
-        .flatten()
+    (status == 0 && device != 0).then_some(device)
+}
+
+fn default_input_name() -> String {
+    default_input()
+        .and_then(device_name)
         .unwrap_or_else(|| "System default microphone".into())
 }
 
@@ -386,4 +393,155 @@ pub fn stop() -> Result<NativeCaptureStopped, String> {
         }
     }
     Ok(NativeCaptureStopped { callbacks })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core_foundation::{
+        array::CFArray,
+        base::CFType,
+        dictionary::{CFDictionary, CFDictionaryRef},
+        number::CFNumber,
+    };
+    use std::time::Instant;
+
+    #[link(name = "CoreAudio", kind = "framework")]
+    extern "C" {
+        fn AudioHardwareCreateAggregateDevice(
+            description: CFDictionaryRef,
+            device: *mut AudioObjectId,
+        ) -> i32;
+        fn AudioHardwareDestroyAggregateDevice(device: AudioObjectId) -> i32;
+    }
+    const UID: u32 = code(b"uid ");
+
+    /// A process-private aggregate wrapping the default microphone. Destroying
+    /// it removes the device from Core Audio, like unplugging a USB microphone.
+    struct Aggregate {
+        id: Option<AudioObjectId>,
+        name: String,
+    }
+
+    impl Aggregate {
+        fn create() -> Self {
+            let input = default_input().expect("a default microphone is available");
+            let input_uid = string_property(input, UID).expect("the microphone has a UID");
+            let name = format!("YapYap probe {}", std::process::id());
+            let key = |key: &str| CFString::new(key);
+            let subdevice = CFDictionary::from_CFType_pairs(&[(
+                key("uid"),
+                CFString::new(&input_uid).as_CFType(),
+            )]);
+            let description = CFDictionary::<CFString, CFType>::from_CFType_pairs(&[
+                (key("name"), CFString::new(&name).as_CFType()),
+                (
+                    key("uid"),
+                    CFString::new(&format!("com.jingxuan-zhang.yapyap.{name}")).as_CFType(),
+                ),
+                (key("private"), CFNumber::from(1).as_CFType()),
+                (key("master"), CFString::new(&input_uid).as_CFType()),
+                (
+                    key("subdevices"),
+                    CFArray::from_CFTypes(&[subdevice]).as_CFType(),
+                ),
+            ]);
+            let mut id: AudioObjectId = 0;
+            let status = unsafe {
+                AudioHardwareCreateAggregateDevice(description.as_concrete_TypeRef(), &mut id)
+            };
+            assert_eq!(status, 0, "aggregate device is created");
+            // Core Audio publishes the new device asynchronously.
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while !input_devices().iter().any(|(_, device)| *device == name) {
+                assert!(Instant::now() < deadline, "aggregate device is listed");
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Self { id: Some(id), name }
+        }
+
+        fn unplug(&mut self) {
+            if let Some(id) = self.id.take() {
+                assert_eq!(unsafe { AudioHardwareDestroyAggregateDevice(id) }, 0);
+            }
+        }
+    }
+
+    impl Drop for Aggregate {
+        fn drop(&mut self) {
+            if let Some(id) = self.id.take() {
+                unsafe { AudioHardwareDestroyAggregateDevice(id) };
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct Events {
+        bytes: usize,
+        // Denied or muted input arrives as exact zeros; a live microphone never does.
+        signal: bool,
+        json: Vec<String>,
+    }
+
+    fn recorder() -> (Channel<InvokeResponseBody>, Arc<Mutex<Events>>) {
+        let events = Arc::new(Mutex::new(Events::default()));
+        let sink = events.clone();
+        let channel = Channel::new(move |body| {
+            let mut events = sink.lock().unwrap();
+            match body {
+                InvokeResponseBody::Raw(bytes) => {
+                    events.bytes += bytes.len();
+                    events.signal |= bytes.chunks_exact(4).any(|sample| sample != [0; 4]);
+                }
+                InvokeResponseBody::Json(json) => events.json.push(json),
+            }
+            Ok(())
+        });
+        (channel, events)
+    }
+
+    fn wait_for(events: &Mutex<Events>, what: &str, done: impl Fn(&Events) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !done(&events.lock().unwrap()) {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    #[ignore = "Records from the default microphone through a disposable aggregate device"]
+    fn macos_native_capture_device_lifecycle() {
+        let mut device = Aggregate::create();
+        assert_eq!(
+            start(Some("Unplugged probe microphone".into()), recorder().0).err(),
+            Some("microphone_device_missing".to_string())
+        );
+
+        let (channel, events) = recorder();
+        let started = start(Some(device.name.clone()), channel).expect("chosen device starts");
+        assert_eq!(started.device_name, device.name);
+        assert!(started.sample_rate > 0.0 && started.channel_count > 0);
+        let (busy, _) = recorder();
+        assert_eq!(start(None, busy).err(), Some("microphone_busy".to_string()));
+        wait_for(&events, "audio from the chosen device", |e| e.signal);
+
+        device.unplug();
+        wait_for(&events, "the ended event", |e| {
+            e.json.iter().any(|json| json.contains(r#""ended""#))
+        });
+        let stopped = stop().expect("stop after device loss releases the engine");
+        assert!(stopped.callbacks > 0);
+        assert!(events
+            .lock()
+            .unwrap()
+            .json
+            .last()
+            .is_some_and(|json| json.contains(r#""flushed""#)));
+        assert_eq!(stop().err(), Some("microphone_not_recording".to_string()));
+
+        let (channel, events) = recorder();
+        start(None, channel).expect("default microphone restarts after device loss");
+        wait_for(&events, "audio from the default microphone", |e| e.signal);
+        stop().expect("default capture stops");
+    }
 }
