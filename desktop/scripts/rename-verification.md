@@ -11,9 +11,11 @@ Date: October 6, 2026. Windows x64 candidate: 0.1.0.
 - Release commands, signature examples, smoke helpers, and current documentation
   refer to the renamed artifacts. Source stays in `desktop/`.
 
-The app identifier, Credential Manager target, and preference storage key retain
-their original values for compatibility. Earlier verification records keep the
-original artifact names and observed titles.
+At this rename the app identifier, Credential Manager target, and preference
+storage key kept their original values for compatibility. On October 29, 2026
+all three moved to `com.jingxuan-zhang.yapyap` names; see
+[the release guide](../RELEASE.md#upgrading-from-byok-dictation). Earlier
+verification records keep the original artifact names and observed titles.
 
 ## Automated build evidence
 

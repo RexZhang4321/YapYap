@@ -2,7 +2,7 @@
 use zeroize::Zeroizing;
 
 // Keep the original credential target so existing saved keys survive the rename.
-const TARGET: &str = "app.byokdictation.hotkeyprobe/openai-api-key";
+const TARGET: &str = "com.jingxuan-zhang.yapyap/openai-api-key";
 const MAX_KEY_BYTES: usize = 2560;
 
 // Validate only the token's transport/storage constraints, not a changing prefix.

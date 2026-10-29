@@ -6,6 +6,7 @@ use tauri::{
 
 mod cleanup;
 mod credentials;
+mod recording_export;
 #[cfg(target_os = "macos")]
 mod macos_shortcuts;
 use platform::insertion;
@@ -50,6 +51,7 @@ pub fn run() {
         credentials::delete_api_key,
         credentials::validate_api_key,
         transcription::transcribe_recording,
+        recording_export::download_recording,
         cleanup::cleanup_transcript,
         streaming::start_live_stream,
         streaming::append_live_audio,

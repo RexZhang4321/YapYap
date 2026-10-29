@@ -11,7 +11,7 @@ import re
 import subprocess
 import sys
 
-TARGET = "app.byokdictation.hotkeyprobe/openai-api-key"
+TARGET = "com.jingxuan-zhang.yapyap/openai-api-key"
 KEY_PATTERN = re.compile(rb"sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}")
 # Invalid test markers can concatenate with adjacent strings in native binaries.
 # Exact saved-key matching is independent of this fixture allowlist.
@@ -213,7 +213,7 @@ def main():
         if args.check_app_data:
             if os.name != "nt":
                 raise RuntimeError("App data comparison requires Windows")
-            app_data = Path(os.environ["LOCALAPPDATA"]) / "app.byokdictation.hotkeyprobe"
+            app_data = Path(os.environ["LOCALAPPDATA"]) / "com.jingxuan-zhang.yapyap"
             if app_data.exists():
                 paths.extend(directory_files(app_data))
                 print("App-owned local data comparison: enabled.")

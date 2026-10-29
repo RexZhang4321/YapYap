@@ -28,6 +28,7 @@ import { selectProvisionalText } from "./provisionalRecovery";
 import { shortcutFromKey, ShortcutBinding, ScopedShortcut } from "./shortcuts";
 import { confirmRecoveryCopy, type RecoveryCopyChoice } from "./recoveryCopy";
 import { processingStages } from "./processingTimings";
+import { amplifyQuietWav } from "./transcriptionGain";
 
 import { application as app, preferencesKey } from "./applicationModel";
 import { preferencesSaveFailed, cancelShortcuts, openApp, formatShortcut, showOverlayFixture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
@@ -63,6 +64,7 @@ export function initializeDictation(ports: {
   const recordingMetadata = ui.control("recording-metadata");
   const playRecordingButton = ui.control("play-recording");
   const stopPlaybackButton = ui.control("stop-playback");
+  const downloadRecordingButton = ui.control("download-recording");
   const clearRecordingButton = ui.control("clear-recording");
   const transcribeButton = ui.control("transcribe-recording");
   const discardButton = ui.control("discard-transcription");
@@ -260,6 +262,7 @@ export function initializeDictation(ports: {
     playRecordingButton.disabled =
       locked || !recorder.hasPlayableRecording || !ports.playback().paused;
     stopPlaybackButton.disabled = locked || ports.playback().paused;
+    downloadRecordingButton.disabled = locked || !transcription.audio;
     clearRecordingButton.disabled = locked || !recorder.hasRecording;
     transcribeButton.disabled =
       locked || !transcription.audio || !ports.playback().paused;
@@ -732,6 +735,7 @@ export function initializeDictation(ports: {
       return;
     }
     if (playbackUrl) URL.revokeObjectURL(playbackUrl);
+    ui.control("download-recording-status").text = "";
     playbackUrl = null;
 
     const duration = recording.durationSeconds.toFixed(2);
@@ -792,7 +796,7 @@ export function initializeDictation(ports: {
   );
 
   const transcription = new TranscriptionSession(
-    (audio) => invoke<string>("transcribe_recording", audio),
+    (audio) => invoke<string>("transcribe_recording", amplifyQuietWav(audio)),
     () => {
       showState();
       void refreshRestoreButton();
@@ -1381,6 +1385,18 @@ export function initializeDictation(ports: {
       .catch((error: unknown) => {
         recordingStatus.text = "Playback failed: " + String(error);
       });
+  });
+
+  ui.on("download-recording", "click", () => {
+    const audio = transcription.audio;
+    if (!audio) return;
+    downloadRecordingButton.disabled = true;
+    ui.control("download-recording-status").text = "Saving recording…";
+    void audio.arrayBuffer()
+      .then((bytes) => invoke<string>("download_recording", bytes))
+      .then((path) => { ui.control("download-recording-status").text = `Saved recording to ${path}`; })
+      .catch(() => { ui.control("download-recording-status").text = "Could not save the recording to Downloads."; })
+      .finally(showState);
   });
 
   ui.on("stop-playback", "click", () => {

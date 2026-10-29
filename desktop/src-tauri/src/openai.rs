@@ -239,6 +239,54 @@ mod tests {
         peer.join().unwrap();
         assert_eq!(result.unwrap_err(), "validation_timeout");
     }
+
+    #[test]
+    fn shared_http_client_sends_exact_post_body_and_authorization_header() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/v1/test", listener.local_addr().unwrap());
+        let peer = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 1024];
+            let end = loop {
+                let read = stream.read(&mut buffer).unwrap();
+                assert_ne!(read, 0);
+                request.extend_from_slice(&buffer[..read]);
+                if let Some(index) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break index + 4;
+                }
+            };
+            let headers = String::from_utf8_lossy(&request[..end]).to_lowercase();
+            assert!(headers.starts_with("post /v1/test http/1.1\r\n"));
+            assert!(headers.contains("authorization: bearer sk-fixture-only\r\n"));
+            assert!(headers.contains("content-type: application/json\r\n"));
+            while request.len() - end < 16 {
+                let read = stream.read(&mut buffer).unwrap();
+                assert_ne!(read, 0);
+                request.extend_from_slice(&buffer[..read]);
+            }
+            assert_eq!(&request[end..], br#"{"fixture":true}"#);
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+                .unwrap();
+        });
+        let result = request_url(
+            &url,
+            "sk-fixture-only",
+            "POST",
+            br#"{"fixture":true}"#,
+            Some("application/json"),
+            validation_status,
+            true,
+            std::time::Duration::from_secs(5),
+        );
+        peer.join().unwrap();
+        assert_eq!(result.unwrap(), b"ok");
+    }
     #[test]
     fn validation_distinguishes_auth_permissions_rate_limits_and_provider_failure() {
         assert!(validation_status(200).is_ok());

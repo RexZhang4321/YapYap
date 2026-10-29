@@ -91,7 +91,9 @@ export function SessionRecovery() {
           />
           <View as="button" id="play-recording" type="button" />
           <View as="button" id="stop-playback" type="button" />
+          <View as="button" id="download-recording" type="button" />
         </div>
+        <View as="p" id="download-recording-status" role="status" />
         <p className="hint">
           {
             "Your recording stays in memory for retry until you discard it or quit."

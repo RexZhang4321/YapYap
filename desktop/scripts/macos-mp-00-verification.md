@@ -76,8 +76,9 @@ storage or transport implementation has been added. The Mac UI labels the shell
 as a feasibility probe and disables key entry on the unsupported backend.
 
 `tauri.macos.conf.json` selects app/DMG bundles; Info.plist adds microphone usage
-text and Entitlements.plist declares audio input. The bundle identifier remains
-`app.byokdictation.hotkeyprobe`; Windows NSIS settings remain in the base config.
+text and Entitlements.plist declares audio input. The bundle identifier was then
+`app.byokdictation.hotkeyprobe` (now `com.jingxuan-zhang.yapyap`); Windows NSIS
+settings remain in the base config.
 Minimum supported macOS remains unverified; no new minimum is claimed.
 
 The first app bundle had only a linker ad-hoc signature, without the configured

@@ -35,7 +35,7 @@ export interface Recovery {
 }
 
 // Keep the original storage key so existing preferences survive the rename.
-export const preferencesKey = "byok-dictation-preferences";
+export const preferencesKey = "com.jingxuan-zhang.yapyap/preferences";
 const defaults: Readonly<Preferences> = Object.freeze({
   shortcut: "Ctrl+Alt+F8",
   microphone: "",

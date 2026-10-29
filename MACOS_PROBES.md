@@ -80,3 +80,23 @@ checking use the same cross-platform HTTPS client on Mac and Windows. Focused
 local HTTP tests and invalid-key OpenAI checks pass on Mac; these do not establish
 a successful saved-key request or packaged pipeline acceptance. Probe 3 remains
 open; Windows native transport regression remains pending.
+
+Probe 3 — October 28, in progress: the isolated ad-hoc packaged candidate passed
+signature verification and, after Keychain unlock, its OpenAI connection check.
+`npm run test:group3 -- --ui --privacy` adds repeatable shared/native fixture,
+rendered Mac/Windows and pattern-only privacy checks; these do not prove native
+paste or a successful transcription. Standalone saved-key live and cleanup tests
+were denied Keychain access. A physical dictation produced an empty transcription;
+the user reported unusually quiet playback. Microphone input level is under
+investigation: normal speech was reported below 1% RMS at the original macOS
+input setting, and about 1% after raising it; playback was intelligible at
+60–80% output volume. At the higher input setting, live words appeared but a
+full-audio attempt again returned empty; a later attempt produced a transcript
+and cleanup, but destination capture failed and saved-output recovery is pending.
+A retained 3.5 s recording measured 0.02% RMS (0.4% peak). Full-audio uploads now
+apply shared peak-limited gain toward 5% RMS (at most 256×); the retained and
+downloaded WAV stay unmodified. The rebuilt packaged app's bundle contains the
+gain on the upload path, and its first physical full-audio dictation produced a
+transcript. Capture level remains near the gain cap; Windows has the shared gain
+but is untested. Saved-output recovery and the remaining group 3 rows are open.
+Windows native regression remains pending.

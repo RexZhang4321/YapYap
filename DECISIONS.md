@@ -61,7 +61,7 @@ Record decisions with alternatives, rationale, and revisit conditions. Append da
 
 ### D008 — Windows Credential Manager for API-key storage
 
-- **Decision:** Store the user's OpenAI key as a generic Windows credential using `CredWriteW`, `CredReadW`, and `CredDeleteW`, with local-machine persistence for the current Windows user. Keep the target identifier stable: `app.byokdictation.hotkeyprobe/openai-api-key`. The UI receives presence and operation status only; API requests read the key in Rust. Wipe owned Rust secret buffers and the native read allocation before release.
+- **Decision:** Store the user's OpenAI key as a generic Windows credential using `CredWriteW`, `CredReadW`, and `CredDeleteW`, with local-machine persistence for the current Windows user. Keep the target identifier stable: `com.jingxuan-zhang.yapyap/openai-api-key` (renamed from the probe-era target on 2026-10-29 to match the app identifier; saved keys must be entered again). The UI receives presence and operation status only; API requests read the key in Rust. Wipe owned Rust secret buffers and the native read allocation before release.
 - **Alternative:** Introduce an encrypted app-owned vault or a cross-platform keyring wrapper.
 - **Why:** Use the operating system's existing secure storage for the Windows-first probe. The generated Windows API bindings also support native HTTPS validation without adding a separate HTTP client stack.
 - **Revisit when:** macOS work begins, a credential migration is needed, or provider configuration expands. Memory wiping is limited to owned buffers and does not guarantee erasure of WebView/IPC/OS copies.

@@ -110,6 +110,11 @@ export const initialControls = {
     text: "Stop playback",
     disabled: true,
   },
+  "download-recording": {
+    text: "Download WAV",
+    disabled: true,
+  },
+  "download-recording-status": {},
   "current-result": {
     hidden: true,
   },

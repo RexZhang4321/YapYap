@@ -31,7 +31,7 @@ test("Mac build supports key setup and uses Mac labels and overlay fixtures", as
   await expect(page.locator("#shortcut")).toHaveValue("Control+Option+F8");
   await page.locator("#shortcut-form").evaluate(form => form.requestSubmit());
   await expect(page.locator("#status")).toHaveText("Shortcut saved: Control+Option+F8");
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("byok-dictation-preferences")).shortcut)).toBe("Ctrl+Alt+F8");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("com.jingxuan-zhang.yapyap/preferences")).shortcut)).toBe("Ctrl+Alt+F8");
   expect((await snapshot(page)).commands).toContain("has_api_key");
   expect((await snapshot(page)).commands).not.toContain("platform_info");
   await page.locator("#diagnostics").evaluate(element => { element.open = true; });
@@ -87,6 +87,20 @@ for (const port of [1424, 1425]) {
     const state = await snapshot(page);
     expect(state.session.audioRetained).toBe(true);
     expect(state.insertions).toHaveLength(0);
+    await page.evaluate(() => {
+      const invoke = window.__TAURI_INTERNALS__.invoke;
+      window.__TAURI_INTERNALS__.invoke = (command, args) => {
+        if (command === "download_recording") {
+          window.__exportedRecording = Array.from(new Uint8Array(args));
+          return Promise.resolve("/Downloads/recording.wav");
+        }
+        return invoke(command, args);
+      };
+    });
+    await page.locator("#download-recording").click();
+    await expect(page.locator("#download-recording-status")).toContainText("/Downloads/recording.wav");
+    expect(await page.evaluate(() => window.__exportedRecording.slice(0, 4))).toEqual([82, 73, 70, 70]);
+    expect((await snapshot(page)).session.audioRetained).toBe(true);
     for (const command of ["capture_dictation_target", "start_live_stream", "transcribe_recording", "cleanup_transcript"])
       expect(state.commands).not.toContain(command);
     const phases = await page.evaluate(() => window.__fixtureIPC.state.calls
@@ -264,8 +278,8 @@ for (const port of [1424, 1425]) {
 const original =
   "Original words: send 42 to user_id\n你好 😀 https://example.test/a?q=2";
 const provisional = "Provisional, possibly incomplete words 17 😀";
-async function ready(page, query = "") {
-  await page.goto(`/recovery-fixture.html${query}`);
+async function ready(page, query = "", port = 1424) {
+  await page.goto(`http://localhost:${port}/recovery-fixture.html${query}`);
   await expect(page.locator("#dictation-status")).toHaveText(
     query ? "Setup needed" : "Ready to dictate",
   );
@@ -278,8 +292,8 @@ async function snapshot(page) {
   return page.evaluate(() => window.__recoveryFixture.snapshot());
 }
 
-async function dictate(page, live = "immediate") {
-  await page.evaluate(async live => {
+async function dictate(page, live = "immediate", cleanup = "immediate") {
+  await page.evaluate(async ({ live, cleanup }) => {
     const { recorder } = window.__recoveryFixture;
     recorder.start = async () => {
       recorder.active = true;
@@ -291,18 +305,19 @@ async function dictate(page, live = "immediate") {
         channelCount: 1, frameCount: 128, deviceId: "fixture-mic", deviceLabel: "Fixture",
         durationSeconds: 128 / 48000 };
     };
-    window.__fixtureIPC.state.cleanup = "immediate";
+    window.__fixtureIPC.state.cleanup = cleanup;
     window.__fixtureIPC.state.live = live;
     window.__recoveryFixture.shortcut("Pressed");
     await new Promise(resolve => setTimeout(resolve, 0));
     window.__recoveryFixture.shortcut("Released");
-  }, live);
+  }, { live, cleanup });
 }
 
-for (const fullAudio of [true, false]) {
-  for (const cleanup of [true, false]) {
-    test(`main app controls skip selected requests: full audio ${fullAudio}, cleanup ${cleanup}`, async ({ page }) => {
-      await ready(page);
+for (const port of [1424, 1425]) {
+  for (const fullAudio of [true, false]) {
+    for (const cleanup of [true, false]) {
+    test(`main app controls skip selected requests: port ${port}, full audio ${fullAudio}, cleanup ${cleanup}`, async ({ page }) => {
+      await ready(page, "", port);
       await page.locator("#open-settings").click();
       await page.locator("#live-enabled").uncheck();
       await page.locator("#settings-close").click();
@@ -326,11 +341,13 @@ for (const fullAudio of [true, false]) {
       if (!fullAudio) await expect(page.locator("#timing-transcription")).toHaveText("Skipped");
       if (!cleanup) await expect(page.locator("#timing-cleanup")).toHaveText("Skipped");
     });
+    }
   }
 }
 
-test("main phase controls persist and cleanup stays synchronized with settings", async ({ page }) => {
-  await ready(page);
+for (const port of [1424, 1425]) {
+test(`main phase controls persist and synchronize with settings on ${port}`, async ({ page }) => {
+  await ready(page, "", port);
   await page.locator("#full-audio-enabled").uncheck();
   await page.locator("#main-cleanup-enabled").uncheck();
   await page.reload();
@@ -345,9 +362,11 @@ test("main phase controls persist and cleanup stays synchronized with settings",
   await page.locator("#settings-close").click();
   await expect(page.locator("#main-cleanup-enabled")).toBeChecked();
 });
+}
 
-test("live-only dictation waits for completion and retains recording on failure without an automatic upload", async ({ page }) => {
-  await ready(page);
+for (const port of [1424, 1425]) {
+test(`live-only dictation retains recording and retries full audio on ${port}`, async ({ page }) => {
+  await ready(page, "", port);
   await page.locator("#full-audio-enabled").uncheck();
   await page.locator("#main-cleanup-enabled").uncheck();
   await dictate(page, "pending");
@@ -366,6 +385,40 @@ test("live-only dictation waits for completion and retains recording on failure 
   await expect(page.locator("#dictation-status")).toHaveText("Inserted");
   expect((await snapshot(page)).commands.filter(command => command === "transcribe_recording")).toHaveLength(1);
 });
+
+test(`cleanup failure inserts the original and retains it on ${port}`, async ({ page }) => {
+  await ready(page, "", port);
+  await page.locator("#full-audio-enabled").check();
+  await page.locator("#main-cleanup-enabled").check();
+  await dictate(page, "immediate", "error");
+  await expect(page.locator("#dictation-status")).toHaveText("Inserted");
+  const state = await snapshot(page);
+  expect(state.commands.filter(command => command === "cleanup_transcript")).toHaveLength(1);
+  expect(state.session.transcript).toBe(original);
+  expect(state.session.cleanedTranscript).toBeNull();
+  expect(state.insertions).toHaveLength(1);
+  expect(state.insertions[0].text).toBe(original);
+  await expect(page.locator("#cleanup-status")).toContainText("original words are used instead");
+});
+
+test(`event log excludes fixture transcripts and can be cleared on ${port}`, async ({ page }) => {
+  await ready(page, "", port);
+  await page.locator("#full-audio-enabled").check();
+  await page.locator("#main-cleanup-enabled").check();
+  await dictate(page);
+  await expect(page.locator("#dictation-status")).toHaveText("Inserted");
+  await page.locator("#open-settings").click();
+  await page.getByText("Developer diagnostics", { exact: true }).click();
+  const log = page.locator("#events");
+  expect(await log.locator("li").count()).toBeGreaterThan(0);
+  const events = await log.innerText();
+  expect(events).not.toContain(original);
+  expect(events).not.toContain(provisional);
+  expect(events).not.toContain("Send 42 to user_id");
+  await page.locator("#clear-log").click();
+  await expect(log.locator("li")).toHaveCount(0);
+});
+}
 
 test("dictation consumes application preferences even when presentation controls are changed directly", async ({ page }) => {
   await ready(page);
@@ -630,10 +683,11 @@ test("failed dictation discard returns to readiness and clears recovery", async 
   expect((await snapshot(page)).session.audioRetained).toBe(false);
 });
 
-test("retained originals preserve expanded rows and focus across subsequent dictations", async ({
+for (const port of [1424, 1425]) {
+test(`retained originals preserve rows and focus across dictations on ${port}`, async ({
   page,
 }) => {
-  await ready(page);
+  await ready(page, "", port);
   await seed(page, "startSuccessful");
   await seed(page, "startSuccessful");
   const row = page.locator("#retained-results details").first();
@@ -650,6 +704,7 @@ test("retained originals preserve expanded rows and focus across subsequent dict
   await expect(page.locator("#retained-results details")).toHaveCount(1);
   await expect(page.locator("#retained-results summary")).toBeFocused();
 });
+}
 
 test("overlay renders literal text, ignores stale revisions, scrolls to the tail, and clears on hide", async ({
   page,

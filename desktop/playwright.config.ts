@@ -5,7 +5,7 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: "http://localhost:1424",
-    channel: process.env.YAPYAP_UI_CHANNEL ?? "msedge",
+    channel: process.env.YAPYAP_UI_CHANNEL ?? "chrome",
     viewport: { width: 600, height: 640 },
     headless: true,
   },

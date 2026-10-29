@@ -1,6 +1,6 @@
 # YapYap for Windows
 
-YapYap's npm and Rust packages are `yapyap`, its native library is `yapyap_lib`, and its Windows executable is `yapyap.exe`. Install the generated `YapYap_0.1.0_x64-setup.exe` and launch **YapYap** from Start. If upgrading from BYOK Dictation, follow the [upgrade instructions](RELEASE.md#upgrading-from-byok-dictation) to retain preferences and your saved API key.
+YapYap's npm and Rust packages are `yapyap`, its native library is `yapyap_lib`, and its Windows executable is `yapyap.exe`. Install the generated `YapYap_0.1.0_x64-setup.exe` and launch **YapYap** from Start. If upgrading from BYOK Dictation, follow the [upgrade instructions](RELEASE.md#upgrading-from-byok-dictation); you will save your API key and choose preferences again.
 
 For the Windows installer, required permissions, release checks and signing workflow, see [Windows release guide](RELEASE.md). Run `npm.cmd run release:windows` for an unsigned local test installer; installed-app acceptance and trusted signing remain separate release gates.
 
@@ -22,6 +22,16 @@ npm run dev:macos
 # Quit the development app before launching a packaged build.
 npm run build:macos -- --ci
 ```
+
+For probing, run `npm run install:macos` instead of copying builds around. It
+builds the app, quits any running YapYap, replaces `/Applications/YapYap.app`,
+verifies the signature and launches it, so Accessibility, Microphone and
+Keychain always refer to one copy. It signs with `YAPYAP_SIGNING_IDENTITY`,
+else a valid Developer ID Application, else Apple Development identity, so
+grants survive rebuilds; with no
+valid identity it falls back to ad-hoc signing, which macOS treats as a new
+app after every rebuild. `--skip-build` installs the existing build and
+`--no-launch` leaves it closed.
 
 The local app and DMG are in `src-tauri/target/release/bundle/macos/` and
 `src-tauri/target/release/bundle/dmg/`. These use ad-hoc signing for local probes;
@@ -86,12 +96,11 @@ Both windows use React 19 and TypeScript, built with Vite. `index.html` and `ove
 
 API-key drafts stay in an uncontrolled password input and are cleared synchronously before IPC. They never enter shared view snapshots or persisted preferences.
 
-Use `npm run dev` for browser development, `npm run build` for TypeScript checking and both production entry points, and `npm test` for the session and view-store regressions. `npm run test:ui` runs 21 rendered React checks using installed Microsoft Edge and a local fixture server on port 1424. These checks stub credentials, microphone, provider, clipboard, shortcuts, and insertion; they make no provider requests or native paste operations. Windows tray, physical-microphone, focus preservation, and real insertion acceptance still require the native checks below. `npm run format:ui` formats the React UI sources.
+Use `npm run dev` for browser development, `npm run build` for TypeScript checking and both production entry points, and `npm test` for the session and view-store regressions. `npm run test:ui` runs 21 rendered React checks using installed Google Chrome and a local fixture server on port 1424. These checks stub credentials, microphone, provider, clipboard, shortcuts, and insertion; they make no provider requests or native paste operations. Windows tray, physical-microphone, focus preservation, and real insertion acceptance still require the native checks below. `npm run format:ui` formats the React UI sources.
 
 The rendered suite uses separately compiled Windows/Mac fixtures on ports
-1424/1425 with independent Vite aliases and caches. Edge remains the
-default browser; on a Mac with Chrome installed use
-`YAPYAP_UI_CHANNEL=chrome npm run test:ui`. These platform builds prove view
+1424/1425 with independent Vite aliases and caches. Set `YAPYAP_UI_CHANNEL`
+to choose another Playwright browser channel. These platform builds prove view
 behavior, not native Windows execution or physical Mac input.
 
 ## Set up once
@@ -111,7 +120,7 @@ Press **Esc** while recording or finalizing to cancel before insertion is dispat
 
 ## Recover your words
 
-The main window shows the specific issue and recovery actions while processing, after failure, and when clipboard restoration fails. Failed transcription retains audio for **Retry transcription** and playback. If insertion is refused before any paste, or destination capture fails, focus your intended text field and press and release your shortcut again. This explicitly chooses that input and pastes the saved output without recording, retranscribing, or repeating cleanup. The input must remain unchanged during this retry's native checks. The alert includes the native refusal reason. An uncertain or partially dispatched paste cannot be retried with the shortcut; check the destination and use Copy for manual recovery. **Discard dictation** clears the current sources and dismisses its floating alert; it cannot retract an existing paste.
+The main window shows the specific issue and recovery actions while processing, after failure, and when clipboard restoration fails. Failed transcription retains audio for **Retry transcription** and playback. **Download WAV** explicitly saves the current recording to Downloads; the file remains there after the session ends. If insertion is refused before any paste, or destination capture fails, focus your intended text field and press and release your shortcut again. This explicitly chooses that input and pastes the saved output without recording, retranscribing, or repeating cleanup. The input must remain unchanged during this retry's native checks. The alert includes the native refusal reason. An uncertain or partially dispatched paste cannot be retried with the shortcut; check the destination and use Copy for manual recovery. **Discard dictation** clears the current sources and dismisses its floating alert; it cannot retract an existing paste or remove a downloaded file.
 
 While processing, **Stop waiting · keep recovery** immediately unlocks the local session and preserves the recording or original transcript. **Skip cleanup · review original…** shows the exact canonical original with an unpolished-text warning. **Use live words · review…** shows the exact provisional snapshot and warns that it may be incomplete, contain gaps or recognition errors, and is not the final transcript. **Confirm and copy** stops waiting and copies only the displayed text. Return to the intended field and press Ctrl+V to paste manually. Dismissing the dialog keeps waiting and does not copy or cancel anything. Provisional text is never promoted to canonical text or passed to automatic insertion. **Copy live words** after failure uses the same confirmation.
 
@@ -122,6 +131,17 @@ After 12 seconds, a stalled stage shows an actionable alert. Final transcription
 Copy preserves supported clipboard contents for **Restore previous clipboard**. If preservation fails, **Clipboard options** offers an explicit **Replace clipboard** action. A newer user copy is not overwritten by automatic clipboard restoration.
 
 ## Developer diagnostics and verification
+
+Run `npm run test:group3` for the deterministic Group 3 session tests under
+both platform selections, the host's native tests, rendered Windows and Mac
+fixture checks, and the pattern-only key audit with its scanner tests. Add
+`-- --quick` to run only the session and native tests. Native tests use the
+locked Cargo dependencies offline and local loopback peers. These checks use
+fixtures, make no provider requests, and
+do not establish packaged microphone, OS shortcut, or external paste behavior.
+Add `-- --native-probes` to also exercise the host's credential store with a
+disposable item and the HTTPS client against OpenAI with an invalid fixture
+key; these read no saved key and make no billable request.
 
 Open **Settings → Developer diagnostics** for the optional live/transcription and insertion test modes, microphone level/metadata, latency, and fixed event logs. This area is closed by default. Leave **Shortcut test mode** on **Dictate and insert** for normal use; live test mode intentionally retains audio and does not insert on release.
 
@@ -228,7 +248,7 @@ Failed transcription keeps PCM/WAV/playback for **Retry transcription**. A usabl
 
 Copy transcript backs up supported clipboard formats. **Restore previous clipboard** is available afterward. If the clipboard cannot be backed up, **Replace clipboard with text** explicitly replaces it. Automatic paste restores its temporary clipboard only if no newer copy occurred. A successful paste and failed clipboard restore are reported separately; use Restore rather than inserting again. Sending paste keystrokes does not prove the destination accepted them. Target checks cannot prove that the user switched away and back or moved and restored a cursor between checks.
 
-Audio is never written to disk. WAV bytes cross binary Tauri IPC; Rust reads the key directly from Credential Manager. No credential is returned to the UI. Uploads are limited to 25,000,000 bytes and successful responses to 1 MiB. Native HTTPS verifies certificates and disables redirects. Resolve/connect timeouts are 10 seconds each. Native send/response work shares a 60-second elapsed budget; remaining time is applied before response receipt and each body read, so a trickling response cannot hold the request lock forever. DNS/connect retain their separate bounds, so the budget is not an exact wall-clock maximum for all OS phases. Ordinary logs contain no credentials, audio, or dictated text. HTTP 401 does not distinguish invalid, expired, and revoked keys. App exit/crash loses pending audio and transcripts.
+Audio is held in memory unless you explicitly choose **Download WAV**. WAV bytes cross binary Tauri IPC; Rust reads the key directly from Credential Manager. No credential is returned to the UI. Uploads are limited to 25,000,000 bytes and successful responses to 1 MiB. Native HTTPS verifies certificates and disables redirects. Resolve/connect timeouts are 10 seconds each. Native send/response work shares a 60-second elapsed budget; remaining time is applied before response receipt and each body read, so a trickling response cannot hold the request lock forever. DNS/connect retain their separate bounds, so the budget is not an exact wall-clock maximum for all OS phases. Ordinary logs contain no credentials, audio, or dictated text. HTTP 401 does not distinguish invalid, expired, and revoked keys. App exit/crash loses pending audio and transcripts.
 
 Manual Windows checks:
 
@@ -260,7 +280,7 @@ WebView2 process-local browser flags follow [Microsoft's documentation](https://
 
 ## API-key storage probe
 
-Enter your OpenAI API key in the masked field and choose **Save key**. The field clears immediately after submission. The app stores a generic credential at `app.byokdictation.hotkeyprobe/openai-api-key` in Windows Credential Manager for the current Windows user on this machine. The saved key is never returned to the UI; the UI requests only its presence. **Remove key** deletes the credential, and saving another key replaces it.
+Enter your OpenAI API key in the masked field and choose **Save key**. The field clears immediately after submission. The app stores a generic credential at `com.jingxuan-zhang.yapyap/openai-api-key` in Windows Credential Manager for the current Windows user on this machine. The saved key is never returned to the UI; the UI requests only its presence. **Remove key** deletes the credential, and saving another key replaces it.
 
 Saving does not require internet access. **Check connection** explicitly reads the saved credential in Rust and sends an authenticated `GET https://api.openai.com/v1/models` using the shared Rust HTTP client. Certificate verification is enabled, redirects are disabled, and connection checking has a 10-second overall timeout. No recording or transcript is sent. There are no background validation requests, and a failed request keeps the saved key. Validation uses fixed error codes; headers, secrets, and provider response bodies are not displayed or logged. Temporary Rust secret buffers are wiped on drop; this does not guarantee erasure of every WebView/IPC/OS memory copy.
 
@@ -283,7 +303,7 @@ The original Task 3 recording/playback, permission denial, clearing, and disconn
 
 Choose the input device in Settings or leave System default microphone selected. Access is checked automatically; use Allow microphone only to recover blocked access. The input meter should move while speaking. Capture uses mono Float32 PCM in memory and reports duration, sample rate, device, and AudioWorklet diagnostics for empty recordings. A stopped capture is encoded as in-memory PCM16 WAV.
 
-For current checks, follow the Task 6 matrix above. Confirm the live meter, successful transcription/insertion, and audio release. On microphone disconnect, confirm partial audio remains for playback and explicit Retry transcription; discard it, reconnect/refresh, and prepare again before another session. Permission errors should remain visible and the empty/failed session must be discardable. Quitting releases pending audio; no microphone recording is saved to disk.
+For current checks, follow the Task 6 matrix above. Confirm the live meter, successful transcription/insertion, and audio release. On microphone disconnect, confirm partial audio remains for playback and explicit Retry transcription; discard it, reconnect/refresh, and prepare again before another session. Permission errors should remain visible and the empty/failed session must be discardable. Quitting releases pending audio; explicitly downloaded files remain on disk.
 
 ## Text insertion probe
 
