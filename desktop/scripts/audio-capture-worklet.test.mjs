@@ -4,7 +4,6 @@ import test from "node:test";
 import vm from "node:vm";
 import { encodeWav } from "../src/audioCapture.ts";
 import { Pcm16Resampler } from "../src/liveTranscription.ts";
-import { amplifyQuietWav } from "../src/transcriptionGain.ts";
 
 test("microphone worklet preserves quiet input samples across blocks and flush", () => {
   let Processor;
@@ -29,21 +28,6 @@ test("microphone worklet preserves quiet input samples across blocks and flush",
   assert.deepEqual(chunks.map(chunk => chunk.length), [4096, 904]);
   assert.deepEqual([...chunks[0], ...chunks[1]], [...input]);
   assert.ok(output.every(sample => sample === 0));
-});
-
-test("final transcription gain boosts quiet WAVs without modifying originals or clipping", async () => {
-  const samples = Float32Array.from({ length: 4800 }, (_, i) => 0.001 * Math.sin(i * 2 * Math.PI / 100));
-  const original = new Uint8Array(await encodeWav({ samples: [samples], sampleRate: 48000, channelCount: 1, frameCount: samples.length }).arrayBuffer());
-  const before = original.slice();
-  const amplified = amplifyQuietWav(original);
-  assert.deepEqual(original, before);
-  assert.deepEqual(amplified.slice(0, 44), original.slice(0, 44));
-  const view = new DataView(amplified.buffer, amplified.byteOffset, amplified.byteLength);
-  const pcm = Array.from({ length: samples.length }, (_, i) => view.getInt16(44 + i * 2, true));
-  const rms = Math.sqrt(pcm.reduce((sum, n) => sum + n * n, 0) / pcm.length) / 32768;
-  assert.ok(Math.abs(rms - 0.05) < 0.001);
-  assert.ok(Math.max(...pcm.map(Math.abs)) <= 0.95 * 32768);
-  assert.deepEqual(amplifyQuietWav(new Uint8Array(48)), new Uint8Array(48));
 });
 
 test("quiet speech-like PCM reaches the live and whole-audio encoders at comparable levels", async () => {

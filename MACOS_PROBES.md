@@ -100,3 +100,30 @@ gain on the upload path, and its first physical full-audio dictation produced a
 transcript. Capture level remains near the gain cap; Windows has the shared gain
 but is untested. Saved-output recovery and the remaining group 3 rows are open.
 Windows native regression remains pending.
+
+Probe 3 — October 29, in progress: `npm run install:macos` now installs the single
+Developer ID–signed `/Applications/YapYap.app` (`com.jingxuan-zhang.yapyap`), so
+privacy grants survive rebuilds. With the main window closed, WebKit capture
+recorded nothing (zero AudioWorklet callbacks); `backgroundThrottling` did not
+help. Mac capture now uses AVAudioEngine behind the shared recorder contract:
+hidden-window dictation records and inserts, and speech measured 5.6% RMS versus
+0.02–0.03% through WebKit. The shared upload gain was removed: it no longer
+applied to Mac speech, Windows never needed it, and boosting near-silent
+recordings risks transcribing amplified noise. Passed in the
+packaged app, window open and closed: live words on/off, full-audio and live-only
+sources, cleanup on/off with separate originals, direct paste and shortcut retry
+of saved output (0.29 s, no provider calls), Esc cancel during finalizing with
+late results ignored, network failure keeping the recording and live words,
+confirmed copy of provisional words, retry after reconnecting, five retained
+results with copy/discard, connection check, key and preference persistence
+across Quit, close to background, menu-bar Open/Quit, minimize restore, single
+instance, and Dock reopen (fixed). The overlay updated while hidden; macOS logs
+and app data held no dictated text or key. A long-running process once reported
+unreadable clipboard data that a fresh process read normally; the Mac message
+now names the format, matching Windows. Not yet seen on Mac: the manual Reconnect
+preview gap warning, a stall alert under a slow (not refused) connection with
+Stop waiting, live-only failure offering full-audio retry, cleanup failure
+fallback, and key replace/delete through the UI (covered by shared tests and the
+disposable Keychain probe). Capture refusals still show a generic message
+instead of the native reason. Group 3 remains open; Windows native regression
+remains pending.

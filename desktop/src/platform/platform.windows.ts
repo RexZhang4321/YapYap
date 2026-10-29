@@ -11,6 +11,7 @@ export function cancelShortcuts(_shortcut: string | null): string[] {
 }
 export const supportsCredentialStorage = true;
 export const showOverlayFixture = false;
+export const nativeMicrophoneCapture = false;
 export const platformNotice = null;
 export const credentialHint =
   "Stored securely in Windows Credential Manager. Checking the connection sends no recording. Dictation sends audio directly to OpenAI.";

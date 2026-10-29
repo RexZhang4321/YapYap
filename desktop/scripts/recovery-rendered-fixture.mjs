@@ -46,6 +46,15 @@ const bridge = `
     resetCalls() { state.copies.length = 0; state.insertions.length = 0; state.calls.length = 0; state.lastPendingName = ""; gates.clear(); },
     resolve(name, value) { gate(name).resolve(value); },
     reject(name, error) { gate(name).reject(error); },
+    // Hold microphone startup on whichever capture path the build uses;
+    // window[name]() finishes opening it and lateReleased records its release.
+    holdMicrophone(name = "__lateMic") {
+      state.lateReleased = false;
+      state.holdNative = name;
+      navigator.mediaDevices.getUserMedia = () => new Promise(resolve => {
+        window[name] = () => resolve({ getTracks: () => [{ stop() { state.lateReleased = true; } }] });
+      });
+    },
     emitLive(event) {
       const start = state.calls.findLast(call => call.command === "start_live_stream");
       if (!start) throw new Error("No live stream started.");
@@ -111,6 +120,20 @@ const bridge = `
         return Promise.resolve(state.insertion ?? { pasteAttempted: true, pasteSent: true, clipboardRestored: true, message: "Fixture insertion" });
       }
       if (command === "list_audio_inputs") return Promise.resolve([]);
+      if (command === "start_native_capture") {
+        const started = { sampleRate: 48000, channelCount: 1, deviceName: "Fixture microphone" };
+        if (!state.holdNative) return Promise.resolve(started);
+        const pending = deferred();
+        window[state.holdNative] = () => pending.resolve(started);
+        state.holdNative = "";
+        return pending.promise;
+      }
+      if (command === "stop_native_capture") {
+        state.lateReleased = true;
+        const start = state.calls.findLast(call => call.command === "start_native_capture");
+        setTimeout(() => start?.args.events.onmessage({ type: "flushed", callbacks: 0 }), 0);
+        return Promise.resolve({ callbacks: 0 });
+      }
       if (command === "finish_live_stream" && state.live === "immediate") {
         setTimeout(() => {
           window.__fixtureIPC.emitLive({ kind: "completed", itemId: "fixture-item", text: ${JSON.stringify(provisionalText)} });

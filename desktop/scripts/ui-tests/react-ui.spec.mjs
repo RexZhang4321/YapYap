@@ -114,7 +114,7 @@ for (const port of [1424, 1425]) {
   });
 }
 
-test("cancel pending microphone access disposes a late stream without recording", async ({ page }) => {
+test("cancel pending microphone access releases late capture without recording", async ({ page }) => {
   await page.goto("http://localhost:1425/recovery-fixture.html?key=missing");
   await expect(page.locator("#dictation-status")).toHaveText("Setup needed");
   await page.locator("#open-settings").click();
@@ -122,18 +122,16 @@ test("cancel pending microphone access disposes a late stream without recording"
   await page.locator("#hotkey-action").selectOption("capture");
   await page.locator("#settings-close").click();
   await page.evaluate(() => {
-    navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__lateMic = resolve; });
+    window.__fixtureIPC.holdMicrophone();
     window.__recoveryFixture.shortcut("Pressed");
   });
   await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
   await page.locator("#cancel-dictation").click();
   await page.evaluate(() => {
-    window.__lateTrackStopped = false;
-    const track = { stop() { window.__lateTrackStopped = true; } };
-    window.__lateMic({ getTracks: () => [track] });
+    window.__lateMic();
     window.__recoveryFixture.shortcut("Released");
   });
-  await expect.poll(() => page.evaluate(() => window.__lateTrackStopped)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.lateReleased)).toBe(true);
   expect((await snapshot(page)).session.audioRetained).toBe(false);
   expect((await snapshot(page)).commands).not.toContain("start_live_stream");
 });
@@ -188,7 +186,7 @@ for (const port of [1424, 1425]) {
     await page.locator("#hotkey-action").selectOption("capture");
     await page.locator("#settings-close").click();
     await page.evaluate(() => {
-      navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__lateMic = resolve; });
+      window.__fixtureIPC.holdMicrophone();
       window.__recoveryFixture.shortcut("Pressed");
     });
     await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
@@ -200,11 +198,10 @@ for (const port of [1424, 1425]) {
         call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes(escape));
       binding.args.handler.onmessage({ shortcut: escape, state: "Pressed" });
       window.__recoveryFixture.shortcut("Released");
-      window.__lateTrackStopped = false;
-      window.__lateMic({ getTracks: () => [{ stop() { window.__lateTrackStopped = true; } }] });
+      window.__lateMic();
     }, escape);
     await expect(page.locator("#dictation-status")).toHaveText("Ready to test microphone");
-    await expect.poll(() => page.evaluate(() => window.__lateTrackStopped)).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.lateReleased)).toBe(true);
     await expect.poll(() => page.evaluate(escape => window.__fixtureIPC.state.calls.some(call =>
       call.command === "plugin:global-shortcut|unregister" && call.args.shortcuts.includes("Escape") &&
       call.args.shortcuts.includes(escape)), escape)).toBe(true);
@@ -230,7 +227,7 @@ test("Windows keeps plain Escape independent of modified-Esc conflicts", async (
         return Promise.reject("shortcut_already_registered");
       return invoke(command, args);
     };
-    navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__lateMic = resolve; });
+    window.__fixtureIPC.holdMicrophone();
     window.__recoveryFixture.shortcut("Pressed");
   });
   await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
@@ -241,7 +238,7 @@ test("Windows keeps plain Escape independent of modified-Esc conflicts", async (
       call.command === "plugin:global-shortcut|register" && call.args.shortcuts.includes("Escape"));
     binding.args.handler.onmessage({ shortcut: "Escape", state: "Pressed" });
     window.__recoveryFixture.shortcut("Released");
-    window.__lateMic({ getTracks: () => [{ stop() {} }] });
+    window.__lateMic();
   });
   await expect(page.locator("#dictation-status")).toHaveText("Ready to test microphone");
 });
@@ -266,12 +263,12 @@ for (const port of [1424, 1425]) {
     await page.evaluate(() => window.__finishCopy("Fixture copy complete"));
     await expect.poll(() => page.evaluate(() => window.__recoveryFixture.application.interaction.operationBusy)).toBe(false);
     await page.evaluate(() => {
-      navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.__nextMic = resolve; });
+      window.__fixtureIPC.holdMicrophone("__nextMic");
       window.__recoveryFixture.shortcut("Pressed");
     });
     await expect(page.locator("#dictation-status")).toHaveText("Opening microphone…");
     await page.locator("#cancel-dictation").click();
-    await page.evaluate(() => window.__nextMic({ getTracks: () => [{ stop() {} }] }));
+    await page.evaluate(() => window.__nextMic());
   });
 }
 

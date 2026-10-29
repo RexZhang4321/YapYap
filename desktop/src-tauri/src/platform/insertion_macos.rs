@@ -277,6 +277,33 @@ fn unsupported_clipboard_type(name: &str) -> bool {
         || name.contains("file-promise")
         || name.starts_with("com.apple.pasteboard.promised-file-")
 }
+// Type names are app-chosen metadata, never contents; show only plain identifiers.
+fn display_type(name: &str) -> String {
+    if name.len() <= 80
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+    {
+        name.into()
+    } else {
+        "(unnamed)".into()
+    }
+}
+// macOS 15.4+ withholds clipboard data from apps the user has not allowed.
+fn access_note() -> &'static str {
+    unsafe {
+        let responds: bool = msg_send![board(), respondsToSelector: objc2::sel!(accessBehavior)];
+        if !responds {
+            return "";
+        }
+        let behavior: isize = msg_send![board(), accessBehavior];
+        match behavior {
+            2 => "",
+            3 => " Clipboard access for YapYap is set to Deny in System Settings → Privacy & Security.",
+            _ => " macOS may be withholding clipboard data until YapYap's clipboard access is allowed.",
+        }
+    }
+}
 fn read_clipboard() -> Result<ClipboardSnapshot, String> {
     unsafe {
         let before = sequence();
@@ -338,7 +365,11 @@ fn read_clipboard() -> Result<ClipboardSnapshot, String> {
                 }
                 let data: *mut AnyObject = msg_send![item, dataForType: kind];
                 if data.is_null() {
-                    return Err("A clipboard format could not be backed up. Use Replace clipboard explicitly.".into());
+                    return Err(format!(
+                        "Clipboard format {} could not be backed up.{} Use Replace clipboard explicitly.",
+                        display_type(&name),
+                        access_note()
+                    ));
                 }
                 let length: usize = msg_send![data, length];
                 total = total.saturating_add(length);

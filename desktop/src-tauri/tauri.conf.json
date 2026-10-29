@@ -16,7 +16,8 @@
         "width": 600,
         "height": 640,
         "minWidth": 380,
-        "minHeight": 430
+        "minHeight": 430,
+        "backgroundThrottling": "disabled"
       },
       {
         "label": "overlay",

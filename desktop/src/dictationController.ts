@@ -28,10 +28,10 @@ import { selectProvisionalText } from "./provisionalRecovery";
 import { shortcutFromKey, ShortcutBinding, ScopedShortcut } from "./shortcuts";
 import { confirmRecoveryCopy, type RecoveryCopyChoice } from "./recoveryCopy";
 import { processingStages } from "./processingTimings";
-import { amplifyQuietWav } from "./transcriptionGain";
+import { NativePcmRecorder } from "./nativeCapture";
 
 import { application as app, preferencesKey } from "./applicationModel";
-import { preferencesSaveFailed, cancelShortcuts, openApp, formatShortcut, showOverlayFixture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
+import { preferencesSaveFailed, cancelShortcuts, openApp, formatShortcut, showOverlayFixture, nativeMicrophoneCapture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
 
 let initialized = false;
 export function initializeDictation(ports: {
@@ -771,7 +771,7 @@ export function initializeDictation(ports: {
     showState();
   }
 
-  const recorder = new PcmRecorder(
+  const recorder = new (nativeMicrophoneCapture ? NativePcmRecorder : PcmRecorder)(
     (recording, message) => {
       void live.finish();
       if (transcription.discarded) {
@@ -796,7 +796,7 @@ export function initializeDictation(ports: {
   );
 
   const transcription = new TranscriptionSession(
-    (audio) => invoke<string>("transcribe_recording", amplifyQuietWav(audio)),
+    (audio) => invoke<string>("transcribe_recording", audio),
     () => {
       showState();
       void refreshRestoreButton();

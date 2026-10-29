@@ -4,11 +4,12 @@ use tauri::{
     Manager, WindowEvent,
 };
 
+mod audio_capture;
 mod cleanup;
 mod credentials;
-mod recording_export;
 #[cfg(target_os = "macos")]
 mod macos_shortcuts;
+mod recording_export;
 use platform::insertion;
 mod openai;
 mod overlay;
@@ -56,7 +57,9 @@ pub fn run() {
         streaming::start_live_stream,
         streaming::append_live_audio,
         streaming::finish_live_stream,
-        streaming::cancel_live_stream
+        streaming::cancel_live_stream,
+        audio_capture::start_native_capture,
+        audio_capture::stop_native_capture
     ];
     let builder = tauri::Builder::default();
     // Register first so duplicate launches exit before creating windows,
@@ -120,8 +123,16 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // Clicking the Dock icon reopens the main window. The overlay can be
+            // the only visible window, so `has_visible_windows` is not consulted.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                let _ = show_main_window(_app);
+            }
+        });
 }
 
 #[cfg(test)]

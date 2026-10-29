@@ -16,6 +16,9 @@ export function cancelShortcuts(shortcut: string | null): string[] {
 export const supportsCredentialStorage = true;
 export const credentialHint = "Stored securely in macOS Keychain. Live transcription sends audio directly to OpenAI.";
 export const showOverlayFixture = true;
+// WebKit withholds microphone audio from a hidden window; AVAudioEngine keeps
+// recording while YapYap is closed to the menu bar.
+export const nativeMicrophoneCapture = true;
 export const platformNotice = Object.freeze({
   title: "macOS feasibility probe",
   text: "Recording, live overlay, guarded insertion and clipboard recovery are under test. Automatic paste requires Accessibility access in macOS System Settings. Settings → Developer diagnostics includes microphone and live transcription tests.",

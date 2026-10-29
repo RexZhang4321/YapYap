@@ -41,6 +41,10 @@ test("selected modules preserve platform labels, supported features and canonica
   assert.equal(windows.formatShortcut(canonical), "Ctrl+Alt+Windows+F8");
   assert.equal(unsupported.supportsCredentialStorage, false);
   assert.equal(unsupported.showOverlayFixture, false);
+  // Only the Mac WebView withholds microphone audio from a hidden window.
+  assert.equal(macos.nativeMicrophoneCapture, true);
+  assert.equal(windows.nativeMicrophoneCapture, false);
+  assert.equal(unsupported.nativeMicrophoneCapture, false);
   for (const implementation of [windows, macos, unsupported]) {
     for (const code of ["__proto__", "constructor", "private-fixture-marker"])
       assert.equal(implementation.credentialErrorMessage(code), undefined);

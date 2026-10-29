@@ -10,6 +10,7 @@ export function cancelShortcuts(_shortcut: string | null): string[] {
 }
 export const supportsCredentialStorage = false;
 export const showOverlayFixture = false;
+export const nativeMicrophoneCapture = false;
 export const platformNotice = Object.freeze({
   title: "Native features unavailable",
   text: "Native dictation capabilities could not be enabled. Check that you are running a supported native build.",

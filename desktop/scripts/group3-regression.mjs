@@ -7,6 +7,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const tests = [
   "scripts/application-model.test.mjs",
   "scripts/audio-capture-worklet.test.mjs",
+  "scripts/native-capture.test.mjs",
   "scripts/transcription-session.test.mjs",
   "scripts/live-transcription.test.mjs",
   "scripts/recovery-audit.test.mjs",
