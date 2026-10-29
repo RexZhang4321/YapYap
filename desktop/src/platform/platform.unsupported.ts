@@ -5,6 +5,9 @@ export {
 } from "./shared.ts";
 
 export const platformName = "unsupported";
+export function cancelShortcuts(_shortcut: string | null): string[] {
+  return ["Escape"];
+}
 export const supportsCredentialStorage = false;
 export const showOverlayFixture = false;
 export const platformNotice = Object.freeze({

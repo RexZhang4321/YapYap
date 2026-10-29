@@ -6,6 +6,9 @@ import {
 export { preferencesSaveFailed } from "./shared.ts";
 
 export const platformName = "windows";
+export function cancelShortcuts(_shortcut: string | null): string[] {
+  return ["Escape"];
+}
 export const supportsCredentialStorage = true;
 export const showOverlayFixture = false;
 export const platformNotice = null;

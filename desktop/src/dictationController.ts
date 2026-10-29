@@ -30,7 +30,7 @@ import { confirmRecoveryCopy, type RecoveryCopyChoice } from "./recoveryCopy";
 import { processingStages } from "./processingTimings";
 
 import { application as app, preferencesKey } from "./applicationModel";
-import { preferencesSaveFailed, platformName, openApp, formatShortcut, showOverlayFixture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
+import { preferencesSaveFailed, cancelShortcuts, openApp, formatShortcut, showOverlayFixture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
 
 let initialized = false;
 export function initializeDictation(ports: {
@@ -124,9 +124,7 @@ export function initializeDictation(ports: {
   const escapeBinding = new ScopedShortcut(
     async () => {
       // Global shortcuts match modifiers too, including those still held to talk.
-      const modifiers = shortcutBinding.active?.split("+").slice(0, -1).join("+");
-      const shortcuts = platformName === "macos" && modifiers
-        ? ["Escape", `${modifiers}+Escape`] : ["Escape"];
+      const shortcuts = cancelShortcuts(shortcutBinding.active);
       try {
         for (const shortcut of shortcuts) {
           await register(shortcut, (event) => {

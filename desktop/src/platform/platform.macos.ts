@@ -7,6 +7,10 @@ export {
 } from "./shared.ts";
 
 export const platformName = "macos";
+export function cancelShortcuts(shortcut: string | null): string[] {
+  const modifiers = shortcut?.split("+").slice(0, -1).join("+");
+  return modifiers ? ["Escape", `${modifiers}+Escape`] : ["Escape"];
+}
 // These describe the current probe build, not OS permission grants. Enable
 // storage only after the native Keychain implementation is available.
 export const supportsCredentialStorage = true;

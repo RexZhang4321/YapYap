@@ -575,3 +575,7 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 ### Overlay interface
 
 - Moved monitor selection and passive show/hide into platform modules; snapshot validation, placement and revision handling remain shared. Mac native and rendered UI tests passed; packaged focus and Windows native checks remain pending.
+
+### Shortcut interface
+
+- Kept Tauri's common shortcut plugin contract and moved platform-specific Escape bindings behind the platform interface. Frontend and rendered UI tests pass; physical shortcut checks remain pending for the new build.
