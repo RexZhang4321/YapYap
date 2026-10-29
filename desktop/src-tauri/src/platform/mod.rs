@@ -1,4 +1,5 @@
 //! Compile-time selection of native platform implementations.
+pub(crate) mod clipboard_shared;
 #[cfg(windows)]
 #[path = "../insertion.rs"]
 pub(crate) mod insertion;

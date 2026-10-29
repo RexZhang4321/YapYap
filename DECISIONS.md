@@ -583,3 +583,7 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 ### Insertion interface
 
 - Added a destination adapter contract and shared payload, session-latch and paste-outcome rules. Mac native tests pass; packaged insertion and Windows native checks remain pending.
+
+### Clipboard interface
+
+- Added a shared clipboard snapshot/change-marker/guarded-restore contract. Native adapters retain format, locking and write handling. Frontend and Mac native tests pass; packaged clipboard and Windows native checks remain pending.

@@ -1,4 +1,5 @@
 //! Windows text destination capture, clipboard recovery, and guarded insertion.
+use crate::platform::clipboard_shared::{restore_if_owned, ClipboardAdapter};
 use crate::platform::insertion_shared::{
     claim_paste, insertion_outcome, validate_text, DestinationAdapter, DictationTarget,
     InsertionResult,
@@ -256,6 +257,27 @@ fn read_clipboard_snapshot() -> Result<ClipboardSnapshot, String> {
     }
 }
 
+struct NativeClipboard;
+impl ClipboardAdapter for NativeClipboard {
+    type Snapshot = ClipboardSnapshot;
+    type Revision = u32;
+    fn snapshot() -> Result<Self::Snapshot, String> {
+        read_clipboard_snapshot()
+    }
+    fn revision() -> Self::Revision {
+        unsafe { GetClipboardSequenceNumber() }
+    }
+    fn contains_text(expected: &str) -> bool {
+        clipboard_contains_text(expected)
+    }
+    fn restore(snapshot: &Self::Snapshot, revision: Self::Revision) -> Result<(), String> {
+        if Self::revision() != revision {
+            return Err("Clipboard changed; newer contents were preserved.".into());
+        }
+        set_clipboard_snapshot(snapshot)
+    }
+}
+
 fn clipboard_contains_text(expected: &str) -> bool {
     unsafe {
         let handle = GetClipboardData(CF_UNICODETEXT);
@@ -427,11 +449,7 @@ fn restore_after_paste(
     let mut restored = false;
     if unsafe { GetClipboardSequenceNumber() } == our_sequence {
         let _clipboard = OpenClipboardGuard::new(owner)?;
-        if unsafe { GetClipboardSequenceNumber() } == our_sequence && clipboard_contains_text(text)
-        {
-            set_clipboard_snapshot(previous)?;
-            restored = true;
-        }
+        restored = restore_if_owned::<NativeClipboard>(previous, our_sequence, text)?;
     }
     state
         .0
@@ -452,7 +470,7 @@ fn insert_text(
     wait_for_modifiers()?;
     NativeDestination::verify(&original)?;
     let clipboard = OpenClipboardGuard::new(owner)?;
-    let previous = read_clipboard_snapshot()?;
+    let previous = NativeClipboard::snapshot()?;
     {
         let mut data = state
             .0
@@ -627,7 +645,7 @@ pub fn copy_dictation_text(
         set_plain_clipboard(Some(&text))?;
         return Ok("Transcript copied without a backup; Restore is unavailable.".into());
     }
-    let previous = read_clipboard_snapshot().map_err(|_| "The clipboard cannot be backed up. Use Copy transcript without backup to replace it explicitly.")?;
+    let previous = NativeClipboard::snapshot().map_err(|_| "The clipboard cannot be backed up. Use Copy transcript without backup to replace it explicitly.")?;
     data.clipboard_recovery = Some(previous.clone());
     if let Err(error) = set_plain_clipboard(Some(&text)) {
         if set_clipboard_snapshot(&previous).is_ok() {
@@ -672,7 +690,7 @@ pub fn copy_test_text(
     }
     let owner = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
     let _clipboard = OpenClipboardGuard::new(owner)?;
-    let previous = read_clipboard_snapshot()
+    let previous = NativeClipboard::snapshot()
         .map_err(|reason| format!("{reason} Use Copy without backup to replace it explicitly."))?;
     data.clipboard_recovery = Some(previous.clone());
     if let Err(error) = set_plain_clipboard(Some(TEST_TEXT)) {

@@ -1,5 +1,6 @@
 //! macOS destination guards and multi-item clipboard recovery. AppKit work is
 //! dispatched to the main thread; modifier/consumer waits never block that thread.
+use crate::platform::clipboard_shared::{restore_if_owned, ClipboardAdapter};
 use crate::platform::insertion_shared::{
     claim_paste, insertion_outcome, validate_text, DestinationAdapter, DictationTarget,
     InsertionResult,
@@ -405,6 +406,24 @@ fn write_clipboard_with_status(
         Ok(sequence())
     }
 }
+struct NativeClipboard;
+impl ClipboardAdapter for NativeClipboard {
+    type Snapshot = ClipboardSnapshot;
+    type Revision = isize;
+    fn snapshot() -> Result<Self::Snapshot, String> {
+        read_clipboard()
+    }
+    fn revision() -> Self::Revision {
+        sequence()
+    }
+    fn contains_text(expected: &str) -> bool {
+        clipboard_contains_text(expected)
+    }
+    fn restore(snapshot: &Self::Snapshot, revision: Self::Revision) -> Result<(), String> {
+        write_clipboard(snapshot, revision).map(|_| ())
+    }
+}
+
 fn clipboard_contains_text(expected: &str) -> bool {
     unsafe {
         let value: *mut AnyObject =
@@ -430,7 +449,7 @@ fn put_text(state: &ProbeState, text: &str, without_backup: bool) -> Result<(), 
     let previous = if without_backup {
         None
     } else {
-        Some(read_clipboard()?)
+        Some(NativeClipboard::snapshot()?)
     };
     if let Some(previous) = previous {
         data.recovery = Some(Recovery {
@@ -466,13 +485,10 @@ fn restore_automatic(state: &ProbeState) -> Result<bool, String> {
         .recovery
         .as_ref()
         .ok_or("No clipboard backup is pending.")?;
-    if sequence() != saved.sequence || !clipboard_contains_text(&saved.ours) {
-        data.recovery = None;
-        return Ok(false);
-    }
-    write_clipboard(&saved.previous, saved.sequence)?;
+    let restored =
+        restore_if_owned::<NativeClipboard>(&saved.previous, saved.sequence, &saved.ours)?;
     data.recovery = None;
-    Ok(true)
+    Ok(restored)
 }
 fn paste() -> Result<(), String> {
     if !unsafe { AXIsProcessTrusted() && CGPreflightPostEventAccess() } {
