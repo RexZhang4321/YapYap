@@ -321,6 +321,28 @@ test("failed destination capture keeps usable text and frees audio for Copy", as
   assert.equal(session.canRetryInsertion, true);
 });
 
+test("destination capture failures keep the native reason for the alert", async () => {
+  const refusals = ["Restore the previous clipboard before another dictation."];
+  const session = new TranscriptionSession(async () => "keep text", () => {}, () => {}, {
+    ...destination(async () => assert.fail("Unavailable target pasted")),
+    capture: async () => { throw refusals.shift(); },
+  });
+  session.begin(); session.capture(recording()); await session.transcribe();
+  assert.equal(session.error, "insertion_target_unavailable");
+  assert.equal(session.targetIssue, "Restore the previous clipboard before another dictation.");
+  refusals.push("Focus your intended text field before pressing the shortcut.");
+  await session.retryInsertion();
+  assert.equal(session.targetIssue, "Focus your intended text field before pressing the shortcut.");
+  // Internal codes, multi-line or oversized values never become alert text.
+  for (const value of ["insertion_target_unavailable", "line\nbreak", "x ".repeat(200), new Error("boom")]) {
+    refusals.push(value);
+    await session.retryInsertion();
+    assert.equal(session.targetIssue, null);
+  }
+  session.discard();
+  assert.equal(session.targetIssue, null);
+});
+
 test("only a confirmed refusal before paste permits insertion retry, without retranscription", async () => {
   let requests = 0, insertions = 0, focus = "original";
   const captures = [], targets = [];

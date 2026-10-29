@@ -398,6 +398,20 @@ test(`cleanup failure inserts the original and retains it on ${port}`, async ({ 
   await expect(page.locator("#cleanup-status")).toContainText("original words are used instead");
 });
 
+test(`destination capture refusal shows the native reason on ${port}`, async ({ page }) => {
+  await ready(page, "", port);
+  await page.evaluate(() => {
+    const invoke = window.__TAURI_INTERNALS__.invoke;
+    window.__TAURI_INTERNALS__.invoke = (command, args) => command === "capture_dictation_target"
+      ? Promise.reject("Restore the previous clipboard before another dictation.")
+      : invoke(command, args);
+  });
+  await dictate(page);
+  await expect(page.locator("#dictation-alert-text")).toContainText(
+    "could not be captured. Restore the previous clipboard before another dictation. Focus your intended text field");
+  expect((await snapshot(page)).insertions).toHaveLength(0);
+});
+
 test(`event log excludes fixture transcripts and can be cleared on ${port}`, async ({ page }) => {
   await ready(page, "", port);
   await page.locator("#full-audio-enabled").check();

@@ -40,6 +40,13 @@ function validCleanup(text: unknown): text is string {
     && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(text);
 }
 
+// A native capture refusal is a short sentence the user can act on; internal
+// codes and anything else fall back to the generic destination message.
+function refusalReason(error: unknown): string | null {
+  return typeof error === "string" && error.length <= 300 && /\s/.test(error)
+    && !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(error) ? error : null;
+}
+
 // Cancellation releases the local session immediately. Native responses can
 // arrive later, but every await and finalizer belongs to one generation.
 export class TranscriptionSession {
@@ -54,6 +61,8 @@ export class TranscriptionSession {
   state: SessionState = "idle";
   sessionId = "";
   insertion: InsertionResult | null = null;
+  // Why the destination could not be captured, when the native side said so.
+  targetIssue: string | null = null;
   inserting = false;
   stalled = false;
   metrics: ProcessingTimings | null = null;
@@ -179,6 +188,7 @@ export class TranscriptionSession {
     this.metrics.skip("cleanup");
     this.metrics.start("destination");
     this.busy = true;
+    this.targetIssue = null;
     const generation = this.generation;
     this.changed();
     try {
@@ -189,8 +199,9 @@ export class TranscriptionSession {
       if (generation !== this.generation) return;
       this.metrics.end("destination");
       await this.insert();
-    } catch {
+    } catch (error: unknown) {
       if (generation === this.generation) {
+        this.targetIssue = refusalReason(error);
         this.insertion = null; // No insertion command was sent during this retry.
         this.error = "insertion_target_unavailable";
         this.state = "failed";
@@ -218,6 +229,7 @@ export class TranscriptionSession {
     this.cleanedTranscript = null;
     this.cleanupWarning = null;
     this.insertion = null;
+    this.targetIssue = null;
     this.audio = null;
     this.state = "recording";
     this.automaticInsertion = captureTarget;
@@ -225,8 +237,12 @@ export class TranscriptionSession {
     this.fullAudioEnabled = fullAudioEnabled;
     // Capture before microphone startup. An unavailable destination uses Copy.
     try {
+      const sessionId = this.sessionId;
       this.targetReady = this.destination && captureTarget
-        ? this.destination.capture(this.sessionId).then(() => true, () => false)
+        ? this.destination.capture(sessionId).then(() => true, (error: unknown) => {
+          if (sessionId === this.sessionId) this.targetIssue = refusalReason(error);
+          return false;
+        })
         : Promise.resolve(false);
     } catch { this.targetReady = Promise.resolve(false); }
     this.changed();
@@ -266,6 +282,7 @@ export class TranscriptionSession {
     this.discarded = true;
     this.state = "discarded";
     this.insertion = null;
+    this.targetIssue = null;
     this.releaseAudio();
     this.changed();
     return true;

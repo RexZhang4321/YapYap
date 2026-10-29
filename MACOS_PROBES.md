@@ -124,6 +124,6 @@ now names the format, matching Windows. Not yet seen on Mac: the manual Reconnec
 preview gap warning, a stall alert under a slow (not refused) connection with
 Stop waiting, live-only failure offering full-audio retry, cleanup failure
 fallback, and key replace/delete through the UI (covered by shared tests and the
-disposable Keychain probe). Capture refusals still show a generic message
-instead of the native reason. Group 3 remains open; Windows native regression
-remains pending.
+disposable Keychain probe). Destination capture refusals now show the native
+reason in the alert. Group 3 remains open; Windows native regression remains
+pending.

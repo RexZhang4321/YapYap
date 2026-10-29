@@ -367,7 +367,7 @@ export function initializeDictation(ports: {
           : " Your original words remain here until you discard them or quit.");
     } else if (transcription.transcript && transcription.error) {
       transcriptionStatus.text = transcription.canRetryInsertion
-        ? "The destination could not be captured. Focus your intended text field, then press and release your shortcut to paste the saved text there, or use Copy."
+        ? `The destination could not be captured.${targetIssue()} Focus your intended text field, then press and release your shortcut to paste the saved text there, or use Copy.`
         : "Check the destination before pasting again. Your text is safe here; use Copy if needed.";
     } else if (transcription.error) {
       transcriptionStatus.text =
@@ -573,7 +573,7 @@ export function initializeDictation(ports: {
           : transcription.state === "failed"
             ? transcription.transcript
               ? transcription.error === "insertion_target_unavailable"
-                ? "Your transcript is ready, but the destination could not be captured. Focus your intended text field, then press and release your shortcut to paste the saved text there. You can also copy your text below or discard this dictation."
+                ? `Your transcript is ready, but the destination could not be captured.${targetIssue()} Focus your intended text field, then press and release your shortcut to paste the saved text there. You can also copy your text below or discard this dictation.`
                 : transcription.canRetryInsertion
                   ? `Text was not pasted. ${transcription.insertion?.message ?? ""} Focus your intended text field, then press and release your shortcut to paste the saved text there. You can also copy your text below or discard this dictation.`
                   : "The paste outcome is uncertain. Check the destination before pasting again. Copy your saved text below if needed, or discard this dictation."
@@ -794,6 +794,12 @@ export function initializeDictation(ports: {
     },
     (samples, sampleRate) => live.push(samples, sampleRate),
   );
+
+  // The native refusal reason for a failed destination capture, if any.
+  function targetIssue(): string {
+    return transcription.error === "insertion_target_unavailable" && transcription.targetIssue
+      ? ` ${transcription.targetIssue}` : "";
+  }
 
   const transcription = new TranscriptionSession(
     (audio) => invoke<string>("transcribe_recording", audio),
