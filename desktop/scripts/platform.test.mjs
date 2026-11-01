@@ -30,7 +30,7 @@ test("selected modules preserve platform labels, supported features and canonica
   assert.equal(windows.pasteShortcut, "Ctrl+V");
   assert.equal(macos.supportsCredentialStorage, true);
   assert.match(macos.credentialHint, /macOS Keychain/);
-  assert.equal(macos.platformNotice.title, "Accessibility access");
+  assert.equal(macos.platformNotice, null);
   assert.equal(macos.pasteShortcut, "Command+V");
   assert.equal(windows.insertionTestText, "YapYap dictation insertion probe");
   assert.match(macos.insertionTestText, /你好 😀.*\nsecond line/);

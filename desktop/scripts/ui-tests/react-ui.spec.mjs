@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-test("Windows build keeps credential setup and omits the Mac notice", async ({ page }) => {
+test("Windows build keeps credential setup and shows no platform notice", async ({ page }) => {
   await ready(page);
-  await expect(page.locator('[aria-label="Accessibility access"]')).toHaveCount(0);
+  await expect(page.locator('.setup-callout:not(#setup-callout)')).toHaveCount(0);
   await expect(page.locator("#shortcut-display")).toHaveText("Ctrl+Alt+F8");
   await page.locator("#open-settings").click();
   await expect(page.locator("#api-key")).toBeEnabled();
@@ -13,7 +13,7 @@ test("Windows build keeps credential setup and omits the Mac notice", async ({ p
 test("Mac build supports key setup and uses Mac labels", async ({ page }) => {
   await page.goto("http://localhost:1425/recovery-fixture.html");
   await expect(page.locator("#dictation-status")).toHaveText("Ready to dictate");
-  await expect(page.locator('[aria-label="Accessibility access"]')).toBeVisible();
+  await expect(page.locator('.setup-callout:not(#setup-callout)')).toHaveCount(0);
   await expect(page.locator("#shortcut-display")).toHaveText("Control+Option+F8");
   await expect(page.locator(".app-footer")).toContainText("menu bar");
   await page.locator("#open-settings").click();

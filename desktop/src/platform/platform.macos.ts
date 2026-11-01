@@ -16,10 +16,7 @@ export const credentialHint = "Stored securely in macOS Keychain. Live transcrip
 // WebKit withholds microphone audio from a hidden window; AVAudioEngine keeps
 // recording while YapYap is closed to the menu bar.
 export const nativeMicrophoneCapture = true;
-export const platformNotice = Object.freeze({
-  title: "Accessibility access",
-  text: "Automatic paste requires Accessibility access in macOS System Settings.",
-});
+export const platformNotice = null;
 export const pasteShortcut = "Command+V";
 export const shortcutUseHint =
   "Use Control, Option, or Command with another key.";
