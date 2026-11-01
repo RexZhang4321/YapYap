@@ -1,6 +1,5 @@
 import { View, EventLog } from "./View";
 import { ApiKeySettings } from "./ApiKeySettings";
-import { showOverlayFixture } from "#platform";
 
 export function SettingsContent() {
   return (
@@ -120,12 +119,6 @@ export function SettingsContent() {
         <View as="p" id="recording-metadata" className="metadata" />
         <View as="button" id="clear-recording" type="button" />
         <View as="p" id="overlay-status" className="hint" role="status" />
-        {showOverlayFixture && (
-          <div className="row">
-            <View as="button" id="probe-overlay-show" type="button" />
-            <View as="button" id="probe-overlay-hide" type="button" />
-          </div>
-        )}
         <View as="p" id="live-latency" className="metadata" />
         <h3>{"Text insertion test"}</h3>
         <p>

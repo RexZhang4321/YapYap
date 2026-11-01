@@ -36,9 +36,7 @@ app after every rebuild. `--skip-build` installs the existing build and
 The local app and DMG are in `src-tauri/target/release/bundle/macos/` and
 `src-tauri/target/release/bundle/dmg/`. These use ad-hoc signing for local probes;
 Developer ID signing, notarization and downloaded-app acceptance are pending.
-Settings → Developer diagnostics → Show/Hide overlay fixture exercises the
-second window with fixed Unicode text and no provider request. Microphone and
-physical-shortcut acceptance are separate probes.
+Microphone and physical-shortcut acceptance are separate probes.
 
 ## Native development
 
@@ -152,7 +150,7 @@ The main window shows **Processing time** after release: audio preparation, fina
 
 Regular checks are `npm test`, `npm run build`, and, from `src-tauri/`, `cargo test --lib --offline` plus `cargo fmt --check`. Regular tests use local fixtures and make no provider requests. The recovery follow-up passes all 140 deterministic frontend tests and the production build, plus 26 native tests (seven opt-in tests ignored). The earlier rendered browser checks passed setup/settings focus, shortcut-capture Escape cancellation, closed diagnostics, and 380 × 430 layout without horizontal overflow. That browser had no Tauri IPC; native tray, microphone, global shortcut/cancellation, preference restoration, and complete paste/recovery acceptance remain pending. See [UX verification](scripts/ux-verification.md) and [TASKS.md](../TASKS.md). Task 10's earlier combined Windows gap remains open. No Milestone 3 processing work is included.
 
-The references below retain detailed capability implementation and opt-in development checks. Historical task notes describe the UI used at that time; current controls are grouped under Settings, recovery, or Developer diagnostics as described above. Real-provider checks are opt-in and may incur API usage.
+The references below retain detailed capability implementation and opt-in development checks. Historical task notes describe the UI and the WebView2 integration helpers used at that time; those helpers were removed on November 1, 2026 and remain in git history. Current controls are grouped under Settings, recovery, or Developer diagnostics as described above. Real-provider checks are opt-in and may incur API usage.
 
 ## Floating live overlay (Tasks 8–9)
 
@@ -162,40 +160,12 @@ The overlay has its own frontend entry point and event-subscription capability. 
 
 Task 9 manual Windows check: choose **Live transcription test (no insertion)**, enable live words, prepare the actual microphone, and focus a disposable Notepad/VS Code/browser input. Hold the shortcut for 8–15 seconds and confirm provisional words appear before release while focus/input contents stay unchanged. Release retains audio and performs no automatic insertion in this mode. Test preview failure/reconnect while capturing, then cancel/discard and confirm no late text reappears. For the original Task 9 baseline, bypass cleanup in normal dictate mode and confirm canonical insertion, Finalizing status, clipboard restoration, and success hiding. Real provider requests occur with live preview enabled. See [Task 9 verification](scripts/task9-verification.md) for observed scope.
 
-### Task 9 integration checks
-
-Use the existing synthetic-microphone/debugger launch setup below. From `desktop/`, run:
-
-```powershell
-node scripts/task9-webview-check.mjs prepare
-powershell -NoProfile -ExecutionPolicy Bypass -STA -File scripts/task9-window-check.ps1
-```
-
-This local pass uses fixed live/final-STT fixtures, real synthetic microphone capture, both WebViews, native overlay commands, and a disposable Windows input. It checks Unicode, literal markup, long previews, failure/reconnect, processing cancellation, stale events, disabled-preview reset, native payload rejection, focus preservation, and unchanged input. It cancels before any canonical paste. The helper temporarily clicks its own disposable input to establish focus and restores the pointer afterward. Summaries print booleans/counts only; screenshots of synthetic content are saved under ignored `src-tauri/target/task9/`.
-
-Restart the test app to remove fixture patches before opting into real streaming:
-
-```powershell
-node scripts/task9-webview-check.mjs prepare --live
-powershell -NoProfile -ExecutionPolicy Bypass -STA -File scripts/task9-window-check.ps1 -Live
-```
-
-The explicit live mode uploads the fixed synthetic speech through the native transport using the saved key. It verifies words before release, focus/no-edit behavior, retained original audio, discard, and startup cancellation. Preview failure/reconnect and delayed processing are covered by the local pass. Run `node scripts/task8-webview-check.mjs security` to confirm overlay command restrictions. Quit the test process before normal use; fake-device/debugger flags and provider patches must not persist.
-
 Manual Windows checks:
 
 1. Prepare the microphone, focus a disposable input, hold the shortcut and release. Confirm Listening then Processing, no focus change, canonical insertion, and overlay hiding. This normal flow can make existing provider requests.
 2. Cause a transcription or destination failure. Confirm the warning persists and audio/text recovery remains available through the tray. Retry or discard; verify that the warning clears when resolved.
 3. Cancel during recording/startup/finalization; confirm the panel hides and no late response brings it back. Confirm an unresolved clipboard restoration keeps recovery visible even after paste dispatch.
 4. Check multiple monitors and Windows display scales; verify the panel stays within the selected monitor's work area and ignores pointer input. Multi-monitor placement was observed, but a full DPI matrix remains a follow-up.
-
-### Local-only Task 8 integration fixture
-
-Use the Task 6 synthetic WebView2 microphone/debugger launch setup below. With that separate development app running, run `node scripts/task8-webview-check.mjs prepare slow` from this directory. This helper verifies a Fake microphone, disables live streaming, captures the registered shortcut callback, and replaces final STT with a fixed local fixture in that test WebView only. It makes no provider requests and never retrieves or prints credentials.
-
-Focus a **disposable blank external input** before running `node scripts/task8-webview-check.mjs press`. Inspect Listening, then run `node scripts/task8-webview-check.mjs release` to inspect Processing. `complete` releases the delayed fixture and dispatches a real native paste of fixed test text; `cancel` discards and suppresses the delayed result. Discard before another session. `prepare failure` injects a fixed final-STT failure; `retry` uses the success fixture with the retained original audio. `prepare success` completes normally. `status` prints states/booleans only; `security` verifies the overlay cannot invoke app credential-presence commands. Immediate status reads may precede completion of the queued native window update.
-
-The read-only native observer is opt-in: `cargo test --lib --offline overlay::tests::windows_overlay_observation -- --ignored --exact --nocapture` in `src-tauri/`. It reports window handles, visibility, native styles, and geometry without changing focus. It needs the same Windows desktop/user context as the test app; sandboxed processes may not see those windows. Quit the synthetic app before normal use so fake-device/debugger flags and frontend fixture patches are removed. See [Task 8 verification](scripts/task8-verification.md).
 
 ## Live transcription (Task 7)
 
@@ -217,25 +187,6 @@ Manual Windows check:
 2. Repeat while temporarily disconnecting the network after words appear. Confirm a visible live error, continued capture and retained provisional text. Restore the connection and reconnect while still recording; confirm the gap is marked. Release, play the complete recording and choose Retry transcription. Confirm canonical text covers the recording and audio is released only after usable canonical text exists.
 3. Cancel both shortly after press and after live words appear. Confirm local text/audio clear and late events do not restore them; start another session after capture stops.
 4. In normal dictate mode, focus a disposable external input and confirm release still inserts only canonical text. Test the existing changed-target/Copy recovery checks independently of the live view.
-
-### Opt-in Task 7 integration checks
-
-Use the synthetic-microphone launch below, then run from `desktop/`:
-
-```powershell
-node scripts/task7-webview-check.mjs prepare
-node scripts/task7-webview-check.mjs record --live
-node scripts/task7-webview-check.mjs discard
-node scripts/task7-webview-check.mjs interrupt --live
-node scripts/task7-webview-check.mjs retry --live
-node scripts/task7-webview-check.mjs discard
-node scripts/task7-webview-check.mjs reconnect --live
-node scripts/task7-webview-check.mjs discard
-node scripts/task7-webview-check.mjs cancel --live --after-words
-node scripts/task7-webview-check.mjs cancel --live
-```
-
-These helpers require a verified fake microphone. They replay shortcut events through the registered handler and print only fixed statuses, counters, durations and synthetic-phrase recognition booleans. The interrupt/reconnect checks terminate the real native connection and inject a fixed disconnect notification at the transport seam; they do not disconnect the physical network. See [Task 7 verification](scripts/task7-verification.md) for observed results and boundaries. Quit the synthetic app before launching normally without debugger/fake-device flags.
 
 For configuration/account access without uploading audio, run the explicit opt-in probe from `src-tauri/`: `cargo test --lib --offline streaming::tests::saved_key_live_configuration_probe -- --ignored --exact`. It reads the saved credential only in Rust and returns fixed failures. Regular `npm test` and Rust tests use deterministic fakes/in-memory peers and make no API calls.
 
@@ -262,24 +213,6 @@ Manual Windows checks:
 5. Test Unicode, newlines, URLs, filenames, identifiers, numbers, and technical vocabulary. Check that repeated release/retry events cannot duplicate text, including a clipboard restoration failure.
 
 Automated checks: `npm test` and `npm run build` here; `cargo test --lib --offline` and `cargo fmt --check` in `src-tauri/`. Regular tests use deterministic fakes and make no API calls. If Windows linker temporary-file access is restricted, create `target/task6-temp` and set process-local `TEMP` and `TMP` to its absolute path before Cargo.
-
-### Opt-in synthetic-microphone check
-
-This development check uses local Windows speech synthesis instead of paid TTS. The generated WAV contains only a fixed synthetic phrase and lives under ignored `src-tauri/target/task6/`; it is not a real recording. Start Vite with `npm run dev`, build the native app, then launch a separate app process with these process-local variables (do not persist them in Windows settings):
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-task6-speech.ps1
-$fixtureWav = (Resolve-Path 'src-tauri/target/task6/speech.wav').Path
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--use-fake-device-for-media-stream --use-file-for-fake-audio-capture=`"$fixtureWav`" --remote-debugging-port=9223"
-Start-Process -FilePath 'src-tauri/target/debug/yapyap.exe' -WindowStyle Hidden
-node scripts/task6-webview-check.mjs prepare
-```
-
-Focus a disposable blank editor, then from a separate terminal run `node scripts/task6-webview-check.mjs record --live`. The explicit flag authorizes uploading synthetic audio using the saved key. The helper prints state/recognition/resource checks without printing credentials or transcripts. `status` and `discard` are also supported. Avoid source edits/Vite reloads during a recording. Quit the test process afterward and launch normally, with the test flags absent.
-
-The debugger replays Pressed/Released events through the actual registered shortcut handler. Capture, encoding, IPC, OpenAI transcription, target checks, Windows paste, and clipboard restoration are real. This verifies the pipeline with a simulated microphone; physical microphone behavior and the full Windows hold duration are separate checks. A real Windows shortcut was also verified for insertion retry. See [Task 6 verification](scripts/task6-verification.md) for observations.
-
-WebView2 process-local browser flags follow [Microsoft's documentation](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/webview-features-flags); the audio fixture flag is implemented in [Chromium's media switches](https://chromium.googlesource.com/chromium/src/+/b45be0604d27b3e644978e57f581e810a65edca5/media/base/media_switches.cc).
 
 ## API-key storage probe
 
@@ -332,7 +265,7 @@ To check that a newer clipboard copy is preserved, run `powershell -NoProfile -E
 
 Normal **Dictate and insert** combines provisional overlay words with complete-original-audio final transcription and guarded canonical insertion. The overlay says **Finalizing** on release and hides immediately after successful paste/clipboard restoration; **Completed** and the retained canonical result remain in the main window. Live probe mode intentionally retains audio and does not paste.
 
-The combined regression and optional Windows helper are documented in [Task 10 verification](scripts/task10-verification.md). The new combined native/live check remains unverified because desktop automation timed out before the test started. Earlier platform checks and regular deterministic tests pass. With a fresh synthetic test app, run `node scripts/task10-webview-check.mjs prepare` (add `--live` only to opt into provider requests), focus the disposable input from `task10-window-check.ps1`, and create the ignored `src-tauri/target/task10/start.txt` trigger. The helper adds an observation delay and is not a latency benchmark. Quit the synthetic app before normal use.
+The combined regression is documented in [Task 10 verification](scripts/task10-verification.md). The combined native/live check remains unverified because desktop automation timed out before the test started; the combined-flow row of the [Windows regression checklist](scripts/windows-regression-verification.md) covers it. Earlier platform checks and regular deterministic tests pass.
 
 ## Conservative cleanup (Task 11)
 
@@ -340,7 +273,7 @@ The combined regression and optional Windows helper are documented in [Task 10 v
 
 The guard permits only conservative edits and rejects changed lexical content/order or protected values. It may fall back on text that could have been acceptably cleaned. Neither the prompt nor the guard proves meaning preservation; the original and bypass remain available. No foreground application content is collected. Cleanup uses native saved-key access, fixed HTTPS endpoints, bounded payloads and `store: false`; dictated text is not written to app logs/files. Provider-side retention is governed by the account/provider policy.
 
-See [Task 11 verification](scripts/task11-verification.md) for deterministic/API checks and the manual comparison/cancellation checklist. Existing local-only Task 8–10 helpers explicitly bypass cleanup so their fixtures do not cause new provider requests.
+See [Task 11 verification](scripts/task11-verification.md) for deterministic/API checks and the manual comparison/cancellation checklist.
 
 ## Failure recovery (Task 12)
 

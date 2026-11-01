@@ -1,10 +1,10 @@
 //! Fail-closed shell for platforms whose destination/clipboard adapters are unproven.
 use tauri::State;
 
-const UNAVAILABLE: &str = "Automatic insertion and clipboard recovery are unavailable in this platform probe. No paste or clipboard change was made.";
+const UNAVAILABLE: &str = "Automatic insertion and clipboard recovery are unavailable in this build. No paste or clipboard change was made.";
 
 #[derive(Default)]
-pub struct ProbeState;
+pub struct InsertionState;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +16,7 @@ pub struct InsertionResult {
 }
 
 #[tauri::command]
-pub fn capture_target(state: State<'_, ProbeState>) -> Result<String, String> {
+pub fn capture_target(state: State<'_, InsertionState>) -> Result<String, String> {
     let _ = state;
     Err(UNAVAILABLE.into())
 }
@@ -24,7 +24,7 @@ pub fn capture_target(state: State<'_, ProbeState>) -> Result<String, String> {
 #[tauri::command]
 pub fn capture_dictation_target(
     session_id: String,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<(), String> {
     let _ = (session_id, state);
     Err(UNAVAILABLE.into())
@@ -33,7 +33,7 @@ pub fn capture_dictation_target(
 #[tauri::command]
 pub fn discard_dictation_target(
     session_id: String,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<(), String> {
     // There can be no captured destination or pending clipboard backup here.
     let _ = (session_id, state);
@@ -54,7 +54,7 @@ pub fn insert_dictation_text(
     session_id: String,
     text: String,
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> InsertionResult {
     let _ = (session_id, text, window, state);
     refused()
@@ -63,7 +63,7 @@ pub fn insert_dictation_text(
 #[tauri::command]
 pub fn insert_test_text(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     let _ = (window, state);
     Err(UNAVAILABLE.into())
@@ -74,7 +74,7 @@ pub fn copy_dictation_text(
     text: String,
     without_backup: bool,
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     let _ = (text, without_backup, window, state);
     Err(UNAVAILABLE.into())
@@ -83,7 +83,7 @@ pub fn copy_dictation_text(
 #[tauri::command]
 pub fn copy_test_text(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     let _ = (window, state);
     Err(UNAVAILABLE.into())
@@ -92,7 +92,7 @@ pub fn copy_test_text(
 #[tauri::command]
 pub fn copy_test_text_without_backup(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     let _ = (window, state);
     Err(UNAVAILABLE.into())
@@ -101,14 +101,14 @@ pub fn copy_test_text_without_backup(
 #[tauri::command]
 pub fn restore_previous_clipboard(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     let _ = (window, state);
     Err(UNAVAILABLE.into())
 }
 
 #[tauri::command]
-pub fn has_clipboard_backup(state: State<'_, ProbeState>) -> Result<bool, String> {
+pub fn has_clipboard_backup(state: State<'_, InsertionState>) -> Result<bool, String> {
     let _ = state;
     Ok(false)
 }

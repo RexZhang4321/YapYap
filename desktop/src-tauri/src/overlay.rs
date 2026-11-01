@@ -239,34 +239,4 @@ mod tests {
             }
         ));
     }
-
-    #[cfg(windows)]
-    #[test]
-    #[ignore = "Read-only window metadata; requires the development app to be running"]
-    fn windows_overlay_observation() {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{
-            FindWindowW, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, IsWindowVisible,
-            GWL_EXSTYLE, WS_EX_NOACTIVATE, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
-        };
-        let title: Vec<u16> = "YapYap — Overlay".encode_utf16().chain(Some(0)).collect();
-        let hwnd = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
-        assert!(!hwnd.is_null(), "Development overlay window not found");
-        let style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
-        let mut rect = windows_sys::Win32::Foundation::RECT::default();
-        unsafe {
-            GetWindowRect(hwnd, &mut rect);
-        }
-        println!(
-            "TASK8_WINDOW {}",
-            serde_json::json!({
-                "foreground": unsafe { GetForegroundWindow() } as usize,
-                "overlay": hwnd as usize,
-                "visible": unsafe { IsWindowVisible(hwnd) } != 0,
-                "noActivate": style & WS_EX_NOACTIVATE != 0,
-                "topmost": style & WS_EX_TOPMOST != 0,
-                "mouseThrough": style & WS_EX_TRANSPARENT != 0,
-                "rect": [rect.left, rect.top, rect.right, rect.bottom],
-            })
-        );
-    }
 }

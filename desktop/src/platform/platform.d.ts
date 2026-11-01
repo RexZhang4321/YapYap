@@ -1,7 +1,6 @@
 // Every selected module implements these ordinary named exports.
 export declare const platformName: "windows" | "macos" | "unsupported";
 export declare const supportsCredentialStorage: boolean;
-export declare const showOverlayFixture: boolean;
 /** Record with the native microphone API instead of the WebView. */
 export declare const nativeMicrophoneCapture: boolean;
 export declare const platformNotice: Readonly<{

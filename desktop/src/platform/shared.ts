@@ -1,9 +1,9 @@
 export const preferencesSaveFailed =
   "Settings work for this session. Your system could not save them for next time.";
 export const unsupportedCredentialMessage =
-  "Secure API-key storage and provider requests are unavailable in this platform probe.";
+  "Secure API-key storage and provider requests are unavailable in this build.";
 export const unsupportedCredentialHint =
-  "Key storage is unavailable in this probe. API-key entry is disabled.";
+  "Key storage is unavailable in this build. API-key entry is disabled.";
 
 export function knownMessage(
   messages: Readonly<Record<string, string>>,

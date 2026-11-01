@@ -25,14 +25,12 @@ test("build target selection honors Tauri's target, rejects conflicts and suppor
 
 test("selected modules preserve platform labels, supported features and canonical shortcut inputs", () => {
   assert.equal(windows.supportsCredentialStorage, true);
-  assert.equal(windows.showOverlayFixture, false);
   assert.equal(windows.platformNotice, null);
   assert.match(windows.credentialHint, /Windows Credential Manager/);
   assert.equal(windows.pasteShortcut, "Ctrl+V");
   assert.equal(macos.supportsCredentialStorage, true);
   assert.match(macos.credentialHint, /macOS Keychain/);
-  assert.equal(macos.showOverlayFixture, true);
-  assert.equal(macos.platformNotice.title, "macOS feasibility probe");
+  assert.equal(macos.platformNotice.title, "Accessibility access");
   assert.equal(macos.pasteShortcut, "Command+V");
   assert.equal(windows.insertionTestText, "YapYap dictation insertion probe");
   assert.match(macos.insertionTestText, /你好 😀.*\nsecond line/);
@@ -40,7 +38,6 @@ test("selected modules preserve platform labels, supported features and canonica
   assert.equal(macos.formatShortcut(canonical), "Control+Option+Command+F8");
   assert.equal(windows.formatShortcut(canonical), "Ctrl+Alt+Windows+F8");
   assert.equal(unsupported.supportsCredentialStorage, false);
-  assert.equal(unsupported.showOverlayFixture, false);
   // Only the Mac WebView withholds microphone audio from a hidden window.
   assert.equal(macos.nativeMicrophoneCapture, true);
   assert.equal(windows.nativeMicrophoneCapture, false);
@@ -77,11 +74,11 @@ test("both entry points bundle only their selected platform, with no capability-
     const source = chunks.map(chunk => chunk.code).join("\n");
     assert.equal(source.includes("platform_info"), false);
     if (target === "windows") {
-      for (const marker of ["macOS feasibility probe", "macOS System Settings", "Keychain", "End of overlay check"])
+      for (const marker of ["macOS System Settings", "Keychain"])
         assert.equal(source.includes(marker), false, `${marker} must not ship in the Windows frontend`);
     } else {
       assert.equal(source.includes("Windows Credential Manager"), false);
-      assert.ok(source.includes("macOS feasibility probe"));
+      assert.ok(source.includes("macOS Keychain"));
     }
   }
 });

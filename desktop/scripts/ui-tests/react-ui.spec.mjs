@@ -1,28 +1,19 @@
 import { test, expect } from "@playwright/test";
 
-test("Windows build keeps credential setup and omits Mac probe controls", async ({ page }) => {
+test("Windows build keeps credential setup and omits the Mac notice", async ({ page }) => {
   await ready(page);
-  await expect(page.locator('[aria-label="macOS feasibility probe"]')).toHaveCount(0);
+  await expect(page.locator('[aria-label="Accessibility access"]')).toHaveCount(0);
   await expect(page.locator("#shortcut-display")).toHaveText("Ctrl+Alt+F8");
   await page.locator("#open-settings").click();
   await expect(page.locator("#api-key")).toBeEnabled();
   await expect(page.locator("#api-key-hint")).toContainText("Windows Credential Manager");
-  await page.locator("#diagnostics").evaluate(element => { element.open = true; });
-  await expect(page.locator("#probe-overlay-show")).toHaveCount(0);
-  await page.evaluate(async () => {
-    window.__fixtureIPC.resetCalls();
-    const { ui } = await import("/src/ui/store.ts");
-    ui.dispatch("probe-overlay-show", "click", new Event("click"));
-    ui.dispatch("probe-overlay-hide", "click", new Event("click"));
-  });
-  expect((await snapshot(page)).commands).not.toContain("update_overlay");
   expect((await snapshot(page)).commands).not.toContain("platform_info");
 });
 
-test("Mac build supports key setup and uses Mac labels and overlay fixtures", async ({ page }) => {
+test("Mac build supports key setup and uses Mac labels", async ({ page }) => {
   await page.goto("http://localhost:1425/recovery-fixture.html");
   await expect(page.locator("#dictation-status")).toHaveText("Ready to dictate");
-  await expect(page.locator('[aria-label="macOS feasibility probe"]')).toBeVisible();
+  await expect(page.locator('[aria-label="Accessibility access"]')).toBeVisible();
   await expect(page.locator("#shortcut-display")).toHaveText("Control+Option+F8");
   await expect(page.locator(".app-footer")).toContainText("menu bar");
   await page.locator("#open-settings").click();
@@ -34,13 +25,6 @@ test("Mac build supports key setup and uses Mac labels and overlay fixtures", as
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("com.jingxuan-zhang.yapyap/preferences")).shortcut)).toBe("Ctrl+Alt+F8");
   expect((await snapshot(page)).commands).toContain("has_api_key");
   expect((await snapshot(page)).commands).not.toContain("platform_info");
-  await page.locator("#diagnostics").evaluate(element => { element.open = true; });
-  await page.locator("#probe-overlay-show").click();
-  await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
-    .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("recording");
-  await page.locator("#probe-overlay-hide").click();
-  await expect.poll(() => page.evaluate(() => window.__fixtureIPC.state.calls
-    .filter(call => call.command === "update_overlay").at(-1)?.args.snapshot.phase)).toBe("hidden");
 });
 
 for (const port of [1424, 1425]) {

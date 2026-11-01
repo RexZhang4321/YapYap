@@ -75,7 +75,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
 
     builder
-        .manage(insertion::ProbeState::default())
+        .manage(insertion::InsertionState::default())
         .manage(streaming::LiveState::default())
         .manage(overlay::OverlayState::default())
         .invoke_handler(move |invoke| {

@@ -107,16 +107,16 @@ struct Target {
 }
 
 #[derive(Default)]
-struct ProbeData {
+struct InsertionData {
     target: Option<Target>,
     dictation: Option<DictationTarget<Target>>,
     clipboard_recovery: Option<ClipboardSnapshot>,
 }
 
-pub struct ProbeState(Mutex<ProbeData>);
-impl Default for ProbeState {
+pub struct InsertionState(Mutex<InsertionData>);
+impl Default for InsertionState {
     fn default() -> Self {
-        Self(Mutex::new(ProbeData::default()))
+        Self(Mutex::new(InsertionData::default()))
     }
 }
 
@@ -162,8 +162,11 @@ fn target() -> Result<Target, String> {
 }
 
 #[tauri::command]
-pub fn capture_target(state: State<'_, ProbeState>) -> Result<String, String> {
-    let mut data = state.0.lock().map_err(|_| "Probe state is unavailable.")?;
+pub fn capture_target(state: State<'_, InsertionState>) -> Result<String, String> {
+    let mut data = state
+        .0
+        .lock()
+        .map_err(|_| "Insertion state is unavailable.")?;
     if data.clipboard_recovery.is_some() {
         return Err("Restore the previous clipboard before another insertion attempt.".into());
     }
@@ -173,7 +176,7 @@ pub fn capture_target(state: State<'_, ProbeState>) -> Result<String, String> {
     state
         .0
         .lock()
-        .map_err(|_| "Probe state is unavailable.")?
+        .map_err(|_| "Insertion state is unavailable.")?
         .target = Some(found);
     Ok("Target captured. Release the shortcut to insert the test text.".into())
 }
@@ -441,7 +444,7 @@ fn same_target(original: Target, current: Target) -> Result<(), String> {
 
 fn restore_after_paste(
     owner: isize,
-    state: &ProbeState,
+    state: &InsertionState,
     previous: &ClipboardSnapshot,
     our_sequence: u32,
     text: &str,
@@ -461,7 +464,7 @@ fn restore_after_paste(
 
 fn insert_text(
     owner: isize,
-    state: &ProbeState,
+    state: &InsertionState,
     original: Target,
     text: &str,
     session_id: Option<&str>,
@@ -526,7 +529,7 @@ fn insert_text(
 #[tauri::command]
 pub fn capture_dictation_target(
     session_id: String,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<(), String> {
     let mut data = state
         .0
@@ -547,7 +550,7 @@ pub fn capture_dictation_target(
 #[tauri::command]
 pub fn discard_dictation_target(
     session_id: String,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<(), String> {
     let mut data = state
         .0
@@ -568,7 +571,7 @@ pub fn insert_dictation_text(
     session_id: String,
     text: String,
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> InsertionResult {
     let attempt = (|| {
         let owner = window
@@ -603,13 +606,13 @@ pub fn insert_dictation_text(
 #[tauri::command]
 pub fn insert_test_text(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     let owner = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
     let original = state
         .0
         .lock()
-        .map_err(|_| "Probe state is unavailable.")?
+        .map_err(|_| "Insertion state is unavailable.")?
         .target
         .take()
         .ok_or("No captured target; text was kept for Copy.")?;
@@ -626,7 +629,7 @@ pub fn copy_dictation_text(
     text: String,
     without_backup: bool,
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     validate_text(&text)?;
     let owner = window
@@ -659,13 +662,13 @@ pub fn copy_dictation_text(
 #[tauri::command]
 pub fn restore_previous_clipboard(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
     let owner = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
     let previous = state
         .0
         .lock()
-        .map_err(|_| "Probe state is unavailable.")?
+        .map_err(|_| "Insertion state is unavailable.")?
         .clipboard_recovery
         .clone()
         .ok_or("No clipboard backup is pending.")?;
@@ -674,7 +677,7 @@ pub fn restore_previous_clipboard(
     state
         .0
         .lock()
-        .map_err(|_| "Probe state is unavailable.")?
+        .map_err(|_| "Insertion state is unavailable.")?
         .clipboard_recovery = None;
     Ok("Previous clipboard restored.".into())
 }
@@ -682,9 +685,12 @@ pub fn restore_previous_clipboard(
 #[tauri::command]
 pub fn copy_test_text(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
-    let mut data = state.0.lock().map_err(|_| "Probe state is unavailable.")?;
+    let mut data = state
+        .0
+        .lock()
+        .map_err(|_| "Insertion state is unavailable.")?;
     if data.clipboard_recovery.is_some() {
         return Err("Restore the previous clipboard before copying again.".into());
     }
@@ -705,9 +711,12 @@ pub fn copy_test_text(
 #[tauri::command]
 pub fn copy_test_text_without_backup(
     window: tauri::WebviewWindow,
-    state: State<'_, ProbeState>,
+    state: State<'_, InsertionState>,
 ) -> Result<String, String> {
-    let data = state.0.lock().map_err(|_| "Probe state is unavailable.")?;
+    let data = state
+        .0
+        .lock()
+        .map_err(|_| "Insertion state is unavailable.")?;
     if data.clipboard_recovery.is_some() {
         return Err("Restore the previous clipboard before copying again.".into());
     }
@@ -719,11 +728,11 @@ pub fn copy_test_text_without_backup(
 }
 
 #[tauri::command]
-pub fn has_clipboard_backup(state: State<'_, ProbeState>) -> Result<bool, String> {
+pub fn has_clipboard_backup(state: State<'_, InsertionState>) -> Result<bool, String> {
     Ok(state
         .0
         .lock()
-        .map_err(|_| "Probe state is unavailable.")?
+        .map_err(|_| "Insertion state is unavailable.")?
         .clipboard_recovery
         .is_some())
 }
@@ -781,7 +790,7 @@ mod tests {
 
     #[test]
     fn session_token_and_paste_latch_prevent_duplicate_or_stale_insertion() {
-        let mut data = ProbeData {
+        let mut data = InsertionData {
             dictation: Some(DictationTarget {
                 session_id: "current".into(),
                 target: fixture_target(),

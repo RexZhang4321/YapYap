@@ -297,8 +297,6 @@ export const initialControls = {
     disabled: true,
   },
   "overlay-status": {},
-  "probe-overlay-show": { text: "Show overlay fixture" },
-  "probe-overlay-hide": { text: "Hide overlay fixture" },
   "live-latency": {
     text: "First visible text: waiting",
   },

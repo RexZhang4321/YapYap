@@ -12,6 +12,8 @@ The existing normal dictate action owns the complete flow: key-down captures the
 
 ## Integration helper and remaining gap
 
+The helpers described here were removed on November 1, 2026; they remain in git history.
+
 `task10-webview-check.mjs prepare` and `check` use a fresh synthetic-microphone app. Local fixtures exercise preview failure, final failure/retry and cancelled late final responses. `--live` opts into native live/final requests with fixed synthetic speech and the saved key. The helper compares uploaded WAV bytes/duration with the retained original and checks canonical-only insertion and success hiding. It adds a 450 ms observation delay, so it is not a latency benchmark. Output contains fixed statuses, counts and hashes of synthetic text; screenshots/build artifacts stay in ignored target output.
 
 `task10-window-check.ps1` supplies a disposable input and read-only focus/text observer. Focus it normally, then create `src-tauri/target/task10/start.txt` to start the check. `task10-input.cs` is an alternative standalone WinForms host for environments that exclude PowerShell windows from desktop automation.

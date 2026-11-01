@@ -39,7 +39,8 @@ and upload before release; it did not move model inference before release.
 
 - Generate fixed synthetic System.Speech audio saying: "Hello from the dictation
   test. The meeting starts at three thirty. Please save the project tomorrow."
-  Use the existing `make-task6-speech.ps1`, normalize its WAV header, and resample
+  Synthesize it as 16 kHz PCM16 mono (the former `make-task6-speech.ps1`, now in
+  git history), normalize its WAV header, and resample
   once from 16 kHz to 24 kHz with linear interpolation. Give both arms identical
   24 kHz PCM16 mono audio; do not compare differently resampled inputs.
 - Short recording: 7.690 seconds, 369164 WAV bytes, SHA256

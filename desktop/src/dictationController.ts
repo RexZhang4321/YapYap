@@ -31,7 +31,7 @@ import { processingStages } from "./processingTimings";
 import { NativePcmRecorder } from "./nativeCapture";
 
 import { application as app, preferencesKey } from "./applicationModel";
-import { preferencesSaveFailed, cancelShortcuts, openApp, formatShortcut, showOverlayFixture, nativeMicrophoneCapture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
+import { preferencesSaveFailed, cancelShortcuts, openApp, formatShortcut, nativeMicrophoneCapture, supportsCredentialStorage, credentialHint, microphoneSettingsHelp, microphoneAccessHelp, noMicrophone, shortcutUseHint, shortcutCaptureHint, pasteShortcut } from "#platform";
 
 let initialized = false;
 export function initializeDictation(ports: {
@@ -237,8 +237,6 @@ export function initializeDictation(ports: {
     void escapeBinding.setActive(cancellable);
     holdState.text = app.interaction.held ? "DOWN" : "UP";
     const locked = app.active;
-    ui.control("probe-overlay-show").disabled = locked || !showOverlayFixture;
-    ui.control("probe-overlay-hide").disabled = locked || !showOverlayFixture;
     app.publish();
     showConfiguration();
     restoreButton.disabled = !app.canRestoreClipboard;
@@ -665,32 +663,15 @@ export function initializeDictation(ports: {
   }
 
   const live = new LiveTranscription(nativeStreamingSTT, showLiveState);
-  if (showOverlayFixture) {
-    let overlayFixtureStep = 0;
-    ui.on("probe-overlay-show", "click", () => {
-      if (app.active) return;
-      const phases = ["recording", "processing", "ready", "error"] as const;
-      const phase = phases[overlayFixtureStep++ % phases.length];
-      overlay.update(phase, {
-        state: phase === "processing" ? "finishing" : phase === "ready" ? "completed" : phase === "error" ? "failed" : "listening",
-        text: Array.from({ length: 12 }, (_, i) =>
-          `Line ${i + 1}: long overlay text should wrap inside the window and scroll to the latest words.`
-        ).join("\n") + "\nEnd of overlay check · 你好 😀",
-        hasGap: phase === "ready",
-      });
-    });
-    ui.on("probe-overlay-hide", "click", () => {
-      if (!app.active) {
-        overlayFixtureStep = 0;
-        overlay.update("hidden");
-      }
-    });
-  }
   ui.on("hotkey-action", "change", () => {
     const mode = actionSelect.value;
     app.updateInteraction({
       testMode: mode === "live" || mode === "insert" || mode === "capture" ? mode : "record",
     });
+    insertionStatus.text =
+      app.interaction.testMode === "insert"
+        ? "Ready. The target will be captured on key-down."
+        : "Choose Text insertion test to check a destination.";
     showState();
   });
   ui.on("cleanup-enabled", "change", () => {
@@ -1678,15 +1659,6 @@ export function initializeDictation(ports: {
   });
   ui.on("copy-provisional-without-backup", "click", () => {
     void copySessionText(true, "provisional");
-  });
-
-  ui.on("hotkey-action", "change", () => {
-    if (app.interaction.testMode === "insert") {
-      insertionStatus.text = "Ready. The target will be captured on key-down.";
-    } else {
-      insertionStatus.text =
-        "Choose “Run text insertion probe” as the hotkey action to test a target.";
-    }
   });
 
   const onDeviceChange = () => {

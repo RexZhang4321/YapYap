@@ -14,7 +14,7 @@ const messages: Record<string, string> = {
   transcription_audio_invalid: "No valid, nonempty recording is available for transcription. Discard and record again.",
   transcription_audio_too_large: "The WAV exceeds the 25 MB upload limit. Discard and make a shorter recording.",
   transcription_response_invalid: "OpenAI returned an unreadable transcript. Retry the recording.",
-  transcription_response_too_large: "The response exceeded the probe's limit. The recording is still available.",
+  transcription_response_too_large: "The response exceeded the size limit. The recording is still available.",
   transcription_empty: "No speech transcript was returned. Listen to the recording, then retry or discard.",
   transcription_busy: "The previous OpenAI request is still finishing after you stopped waiting. Your new recording is saved. Retry shortly, or discard it; the previous response will be ignored.",
   transcription_stopped: "You stopped waiting for final transcription. Retry your saved recording, review and copy the provisional live words, or discard this dictation. The pending response will be ignored.",

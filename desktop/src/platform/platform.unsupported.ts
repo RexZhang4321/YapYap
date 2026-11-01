@@ -9,7 +9,6 @@ export function cancelShortcuts(_shortcut: string | null): string[] {
   return ["Escape"];
 }
 export const supportsCredentialStorage = false;
-export const showOverlayFixture = false;
 export const nativeMicrophoneCapture = false;
 export const platformNotice = Object.freeze({
   title: "Native features unavailable",

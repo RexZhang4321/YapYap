@@ -112,14 +112,14 @@ struct Recovery {
 }
 
 #[derive(Default)]
-struct ProbeData {
+struct InsertionData {
     target: Option<Target>,
     dictation: Option<DictationTarget<Target>>,
     recovery: Option<Recovery>,
 }
 #[derive(Default)]
-pub struct ProbeState {
-    data: Mutex<ProbeData>,
+pub struct InsertionState {
+    data: Mutex<InsertionData>,
     operation: tokio::sync::Mutex<()>,
 }
 
@@ -468,7 +468,7 @@ fn plain_text(text: &str) -> ClipboardSnapshot {
         text.as_bytes().to_vec(),
     )]])
 }
-fn put_text(state: &ProbeState, text: &str, without_backup: bool) -> Result<(), String> {
+fn put_text(state: &InsertionState, text: &str, without_backup: bool) -> Result<(), String> {
     let mut data = state
         .data
         .lock()
@@ -507,7 +507,7 @@ fn put_text(state: &ProbeState, text: &str, without_backup: bool) -> Result<(), 
         }
     }
 }
-fn restore_automatic(state: &ProbeState) -> Result<bool, String> {
+fn restore_automatic(state: &InsertionState) -> Result<bool, String> {
     let mut data = state
         .data
         .lock()
@@ -545,7 +545,7 @@ async fn insert_text(
     session_id: Option<String>,
 ) -> Result<InsertionResult, String> {
     validate_text(&text)?;
-    let state = app.state::<ProbeState>();
+    let state = app.state::<InsertionState>();
     let _operation = state
         .operation
         .try_lock()
@@ -563,7 +563,7 @@ async fn insert_text(
     }
     let result = on_main(app, move |app| {
         NativeDestination::verify(&original)?;
-        let state = app.state::<ProbeState>();
+        let state = app.state::<InsertionState>();
         // Verify the session is still current before changing the clipboard.
         if let Some(id) = &session_id {
             let data = state
@@ -631,14 +631,14 @@ async fn insert_text(
         Err(refused) => return Ok(refused),
     };
     tokio::time::sleep(Duration::from_millis(250)).await;
-    let restored = on_main(app, |app| restore_automatic(&app.state::<ProbeState>())).await;
+    let restored = on_main(app, |app| restore_automatic(&app.state::<InsertionState>())).await;
     Ok(insertion_outcome(paste_result, restored))
 }
 
 #[tauri::command]
 pub async fn capture_target(app: AppHandle) -> Result<String, String> {
     on_main(&app, |app| {
-        let state = app.state::<ProbeState>();
+        let state = app.state::<InsertionState>();
         let _operation = state
             .operation
             .try_lock()
@@ -659,7 +659,7 @@ pub async fn capture_target(app: AppHandle) -> Result<String, String> {
 #[tauri::command]
 pub async fn capture_dictation_target(app: AppHandle, session_id: String) -> Result<(), String> {
     on_main(&app, move |app| {
-        let state = app.state::<ProbeState>();
+        let state = app.state::<InsertionState>();
         let _operation = state
             .operation
             .try_lock()
@@ -684,7 +684,7 @@ pub async fn capture_dictation_target(app: AppHandle, session_id: String) -> Res
 #[tauri::command]
 pub async fn discard_dictation_target(app: AppHandle, session_id: String) -> Result<(), String> {
     on_main(&app, move |app| {
-        let state = app.state::<ProbeState>();
+        let state = app.state::<InsertionState>();
         let mut data = state
             .data
             .lock()
@@ -708,7 +708,7 @@ pub async fn insert_dictation_text(
 ) -> InsertionResult {
     let id = session_id.clone();
     let original = on_main(&app, move |app| {
-        let state = app.state::<ProbeState>();
+        let state = app.state::<InsertionState>();
         let data = state
             .data
             .lock()
@@ -740,7 +740,7 @@ pub async fn insert_dictation_text(
 #[tauri::command]
 pub async fn insert_test_text(app: AppHandle) -> Result<String, String> {
     let original = on_main(&app, |app| {
-        app.state::<ProbeState>()
+        app.state::<InsertionState>()
             .data
             .lock()
             .map_err(|_| "Insertion state is unavailable.")?
@@ -764,7 +764,7 @@ pub async fn copy_dictation_text(
 ) -> Result<String, String> {
     validate_text(&text)?;
     on_main(&app, move |app| {
-        let state = app.state::<ProbeState>();
+        let state = app.state::<InsertionState>();
         let _operation = state
             .operation
             .try_lock()
@@ -790,7 +790,7 @@ pub async fn copy_test_text_without_backup(app: AppHandle) -> Result<String, Str
 #[tauri::command]
 pub async fn restore_previous_clipboard(app: AppHandle) -> Result<String, String> {
     on_main(&app, |app| {
-        let state = app.state::<ProbeState>();
+        let state = app.state::<InsertionState>();
         let _operation = state
             .operation
             .try_lock()
@@ -813,7 +813,7 @@ pub async fn restore_previous_clipboard(app: AppHandle) -> Result<String, String
 }
 #[tauri::command]
 pub async fn has_clipboard_backup(app: AppHandle) -> Result<bool, String> {
-    let state = app.state::<ProbeState>();
+    let state = app.state::<InsertionState>();
     let result = state
         .data
         .lock()
@@ -888,7 +888,7 @@ mod tests {
     fn session_claim_rejects_stale_cancelled_and_duplicate_pastes() {
         let token = CFString::new("disposable identity");
         let handle = || unsafe { OwnedCf::new(CFRetain(token.as_CFTypeRef())).unwrap() };
-        let mut data = ProbeData {
+        let mut data = InsertionData {
             dictation: Some(DictationTarget {
                 session_id: "current".into(),
                 target: Target {
@@ -900,7 +900,7 @@ mod tests {
                 },
                 paste_attempted: false,
             }),
-            ..ProbeData::default()
+            ..InsertionData::default()
         };
         assert!(claim_paste(&mut data.dictation, "stale").is_err());
         assert!(!data.dictation.as_ref().unwrap().paste_attempted);
@@ -923,6 +923,6 @@ mod tests {
             assert_eq!(result.clipboard_restored, restored);
         }
         assert!(!InsertionResult::refused("changed").paste_attempted);
-        assert!(claim_paste(&mut ProbeData::default().dictation, "stale").is_err());
+        assert!(claim_paste(&mut InsertionData::default().dictation, "stale").is_err());
     }
 }

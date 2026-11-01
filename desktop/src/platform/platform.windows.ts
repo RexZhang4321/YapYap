@@ -10,7 +10,6 @@ export function cancelShortcuts(_shortcut: string | null): string[] {
   return ["Escape"];
 }
 export const supportsCredentialStorage = true;
-export const showOverlayFixture = false;
 export const nativeMicrophoneCapture = false;
 export const platformNotice = null;
 export const credentialHint =

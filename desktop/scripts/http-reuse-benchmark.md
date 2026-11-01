@@ -93,7 +93,8 @@ The benchmark does not establish a new real-dictation release-to-insertion time.
 ## Repeating the approach
 
 Recreate a temporary harness using the method above; the experimental code has
-been removed. The existing `make-task6-speech.ps1` can generate the source audio,
+been removed. The former `make-task6-speech.ps1` (in git history) generated the
+source audio,
 which must then be normalized to the stated PCM16 mono layout. Regeneration on
 another Windows voice/runtime may produce different audio.
 
