@@ -22,8 +22,9 @@ const MODIFIERS: u64 = (1 << 17) | (1 << 18) | (1 << 19) | (1 << 20); // Shift/C
 const ACCESS_HELP: &str = "Allow YapYap in System Settings → Privacy & Security → Accessibility, then try again. No paste or clipboard change was made.";
 const AX_UNSUPPORTED: i32 = -25205;
 const AX_NO_VALUE: i32 = -25212;
-// A cold Chromium/Electron tree took about 1.5 s to appear in manual checks.
-const WAKE_POLLS: u32 = 25;
+// A cold Electron tree took about 1.5 s to appear in manual checks, and Chrome
+// web content about 2 s.
+const WAKE_POLLS: u32 = 50;
 const WAKE_INTERVAL: Duration = Duration::from_millis(100);
 
 #[repr(C)]
@@ -240,8 +241,14 @@ fn set_true(element: &OwnedCf, name: &str) -> i32 {
         )
     }
 }
-// True once the frontmost input is readable or waking it cannot help.
-fn destination_awake() -> bool {
+fn is_true(element: &OwnedCf, name: &str) -> bool {
+    copy_attribute(element, name).is_ok_and(|value| unsafe {
+        CFEqual(value.raw(), CFBoolean::true_value().as_CFTypeRef()) != 0
+    })
+}
+// True once the frontmost input is readable or waking it cannot help. Wakes
+// at most once per capture: re-sending Chrome's flag restarts its tree build.
+fn destination_awake(wake: bool) -> bool {
     let Ok(application) = frontmost() else {
         return true;
     };
@@ -260,15 +267,18 @@ fn destination_awake() -> bool {
     }
     // Electron honours AXManualAccessibility; Chromium browsers need VoiceOver's
     // flag, which stays on for that browser process.
-    if set_true(&app, "AXManualAccessibility") == AX_UNSUPPORTED {
+    if wake
+        && set_true(&app, "AXManualAccessibility") == AX_UNSUPPORTED
+        && !is_true(&app, "AXEnhancedUserInterface")
+    {
         set_true(&app, "AXEnhancedUserInterface");
     }
     false
 }
 // Waits off the main thread while a woken destination builds its tree.
 async fn wake_destination(app: &AppHandle) {
-    for _ in 0..WAKE_POLLS {
-        if on_main(app, |_| Ok(destination_awake()))
+    for poll in 0..WAKE_POLLS {
+        if on_main(app, move |_| Ok(destination_awake(poll == 0)))
             .await
             .unwrap_or(true)
         {
@@ -385,6 +395,14 @@ fn unsupported_clipboard_type(name: &str) -> bool {
         || name.contains("file-promise")
         || name.starts_with("com.apple.pasteboard.promised-file-")
 }
+// macOS converts these from public.utf8-plain-text on demand, and a conversion
+// can come back empty; restoring the UTF-8 text recreates them.
+fn derived_text_type(name: &str) -> bool {
+    matches!(
+        name,
+        "public.utf16-external-plain-text" | "public.utf16-plain-text"
+    )
+}
 // Type names are app-chosen metadata, never contents; show only plain identifiers.
 fn display_type(name: &str) -> String {
     if name.len() <= 80
@@ -472,6 +490,13 @@ fn read_clipboard() -> Result<ClipboardSnapshot, String> {
                     );
                 }
                 let data: *mut AnyObject = msg_send![item, dataForType: kind];
+                if data.is_null() && derived_text_type(&name) {
+                    let source: *mut AnyObject =
+                        msg_send![item, dataForType: ns_string("public.utf8-plain-text")];
+                    if !source.is_null() {
+                        continue;
+                    }
+                }
                 if data.is_null() {
                     return Err(format!(
                         "Clipboard format {} could not be backed up.{} Use Replace clipboard explicitly.",
@@ -975,6 +1000,14 @@ mod tests {
     fn ax_failures_name_the_attribute_and_code() {
         assert_eq!(ax_reason(AX_NO_VALUE), "no value, AX -25212");
         assert_eq!(ax_reason(-1), "error, AX -1");
+    }
+    #[test]
+    fn only_converted_text_formats_may_be_skipped() {
+        assert!(derived_text_type("public.utf16-external-plain-text"));
+        assert!(derived_text_type("public.utf16-plain-text"));
+        for name in ["public.utf8-plain-text", "public.rtf", "public.html"] {
+            assert!(!derived_text_type(name));
+        }
     }
     #[test]
     fn destination_guards_reject_each_change() {
