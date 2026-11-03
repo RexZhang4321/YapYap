@@ -7,6 +7,7 @@ use crate::platform::insertion_shared::{
 };
 use core_foundation::{
     base::{CFEqual, CFGetTypeID, CFRelease, CFRetain, CFTypeRef, TCFType},
+    boolean::CFBoolean,
     string::CFString,
 };
 use objc2::{class, msg_send, rc::autoreleasepool, runtime::AnyObject};
@@ -19,6 +20,11 @@ const MAX_ITEMS: usize = 128;
 const MAX_FORMATS: usize = 128;
 const MODIFIERS: u64 = (1 << 17) | (1 << 18) | (1 << 19) | (1 << 20); // Shift/Control/Option/Command
 const ACCESS_HELP: &str = "Allow YapYap in System Settings → Privacy & Security → Accessibility, then try again. No paste or clipboard change was made.";
+const AX_UNSUPPORTED: i32 = -25205;
+const AX_NO_VALUE: i32 = -25212;
+// A cold Chromium/Electron tree took about 1.5 s to appear in manual checks.
+const WAKE_POLLS: u32 = 25;
+const WAKE_INTERVAL: Duration = Duration::from_millis(100);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
@@ -44,6 +50,7 @@ extern "C" {
         name: CFTypeRef,
         value: *mut CFTypeRef,
     ) -> i32;
+    fn AXUIElementSetAttributeValue(element: CFTypeRef, name: CFTypeRef, value: CFTypeRef) -> i32;
     fn AXValueGetTypeID() -> usize;
     fn AXValueGetValue(value: CFTypeRef, kind: u32, output: *mut c_void) -> u8;
 }
@@ -138,7 +145,7 @@ async fn on_main<T: Send + 'static>(
         .map_err(|_| "The app is unavailable.".to_string())?
 }
 
-fn attribute(element: &OwnedCf, name: &str) -> Result<OwnedCf, String> {
+fn copy_attribute(element: &OwnedCf, name: &str) -> Result<OwnedCf, i32> {
     let name = CFString::new(name);
     let mut value = ptr::null();
     let status =
@@ -149,15 +156,126 @@ fn attribute(element: &OwnedCf, name: &str) -> Result<OwnedCf, String> {
                 CFRelease(value);
             }
         }
-        return Err("The focused input or text cursor cannot be checked. Enable accessibility support in the destination app, then retry, or use Copy.".into());
+        return Err(status);
     }
-    unsafe { OwnedCf::new(value) }
+    unsafe { OwnedCf::new(value) }.map_err(|_| AX_NO_VALUE)
+}
+fn attribute(element: &OwnedCf, name: &str) -> Result<OwnedCf, String> {
+    copy_attribute(element, name).map_err(|status| {
+        format!(
+            "The destination app did not report its focused input or text cursor ({name}: {}). Click into the text field and retry, or use Copy.",
+            ax_reason(status)
+        )
+    })
+}
+fn ax_reason(status: i32) -> String {
+    let reason = match status {
+        -25204 => "no response",
+        AX_UNSUPPORTED => "unsupported",
+        -25211 => "accessibility disabled",
+        AX_NO_VALUE => "no value",
+        _ => "error",
+    };
+    format!("{reason}, AX {status}")
 }
 fn ax_element(value: OwnedCf) -> Result<OwnedCf, String> {
     if unsafe { CFGetTypeID(value.raw()) != AXUIElementGetTypeID() } {
         return Err("The focused input cannot be identified. Use Copy.".into());
     }
     Ok(value)
+}
+fn frontmost() -> Result<*mut AnyObject, String> {
+    unsafe {
+        let workspace: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let application: *mut AnyObject = msg_send![workspace, frontmostApplication];
+        if application.is_null() {
+            Err("No foreground application was found.".into())
+        } else {
+            Ok(application)
+        }
+    }
+}
+fn app_element(pid: i32) -> Result<OwnedCf, String> {
+    let app = unsafe { OwnedCf::new(AXUIElementCreateApplication(pid))? };
+    unsafe {
+        AXUIElementSetMessagingTimeout(app.raw(), 0.3);
+    }
+    Ok(app)
+}
+
+// Chromium and Electron build their accessibility tree only after an assistive
+// client asks, so until then their focused input reports no value.
+fn chromium_app(application: *mut AnyObject) -> bool {
+    let path = unsafe {
+        let url: *mut AnyObject = msg_send![application, bundleURL];
+        if url.is_null() {
+            return false;
+        }
+        match string_value(msg_send![url, path]) {
+            Ok(path) => path,
+            Err(_) => return false,
+        }
+    };
+    chromium_bundle(std::path::Path::new(&path))
+}
+// Chrome and every Electron app ship Chromium's crash handler in a framework.
+fn chromium_bundle(bundle: &std::path::Path) -> bool {
+    std::fs::read_dir(bundle.join("Contents/Frameworks")).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry.file_name().to_string_lossy().ends_with(".framework")
+                && entry
+                    .path()
+                    .join("Versions/Current/Helpers/chrome_crashpad_handler")
+                    .exists()
+        })
+    })
+}
+fn set_true(element: &OwnedCf, name: &str) -> i32 {
+    let name = CFString::new(name);
+    unsafe {
+        AXUIElementSetAttributeValue(
+            element.raw(),
+            name.as_CFTypeRef(),
+            CFBoolean::true_value().as_CFTypeRef(),
+        )
+    }
+}
+// True once the frontmost input is readable or waking it cannot help.
+fn destination_awake() -> bool {
+    let Ok(application) = frontmost() else {
+        return true;
+    };
+    let pid: i32 = unsafe { msg_send![application, processIdentifier] };
+    if pid == std::process::id() as i32
+        || !unsafe { AXIsProcessTrusted() }
+        || !chromium_app(application)
+    {
+        return true;
+    }
+    let Ok(app) = app_element(pid) else {
+        return true;
+    };
+    if !matches!(copy_attribute(&app, "AXFocusedUIElement"), Err(AX_NO_VALUE)) {
+        return true;
+    }
+    // Electron honours AXManualAccessibility; Chromium browsers need VoiceOver's
+    // flag, which stays on for that browser process.
+    if set_true(&app, "AXManualAccessibility") == AX_UNSUPPORTED {
+        set_true(&app, "AXEnhancedUserInterface");
+    }
+    false
+}
+// Waits off the main thread while a woken destination builds its tree.
+async fn wake_destination(app: &AppHandle) {
+    for _ in 0..WAKE_POLLS {
+        if on_main(app, |_| Ok(destination_awake()))
+            .await
+            .unwrap_or(true)
+        {
+            return;
+        }
+        tokio::time::sleep(WAKE_INTERVAL).await;
+    }
 }
 struct NativeDestination;
 impl DestinationAdapter for NativeDestination {
@@ -177,21 +295,11 @@ fn target() -> Result<Target, String> {
     if !unsafe { AXIsProcessTrusted() && CGPreflightPostEventAccess() } {
         return Err(ACCESS_HELP.into());
     }
-    let pid: i32 = unsafe {
-        let workspace: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
-        let application: *mut AnyObject = msg_send![workspace, frontmostApplication];
-        if application.is_null() {
-            return Err("No foreground application was found.".into());
-        }
-        msg_send![application, processIdentifier]
-    };
+    let pid: i32 = unsafe { msg_send![frontmost()?, processIdentifier] };
     if pid == std::process::id() as i32 {
         return Err("Focus your intended text field before pressing the shortcut.".into());
     }
-    let app = unsafe { OwnedCf::new(AXUIElementCreateApplication(pid))? };
-    unsafe {
-        AXUIElementSetMessagingTimeout(app.raw(), 0.3);
-    }
+    let app = app_element(pid)?;
     let window = ax_element(attribute(&app, "AXFocusedWindow")?)?;
     let focus = ax_element(attribute(&app, "AXFocusedUIElement")?)?;
     // Read selection offsets only: never AXValue/AXSelectedText or window titles.
@@ -204,7 +312,7 @@ fn target() -> Result<Target, String> {
     } || selection.location < 0
         || selection.length < 0
     {
-        return Err("The destination does not expose its text cursor. Enable its accessibility support or use Copy.".into());
+        return Err("The destination app did not report a usable text cursor position. Click into the text field and retry, or use Copy.".into());
     }
     let event = unsafe { OwnedCf::new(CGEventCreate(ptr::null()))? };
     let mouse = unsafe { CGEventGetLocation(event.raw()) };
@@ -637,6 +745,7 @@ async fn insert_text(
 
 #[tauri::command]
 pub async fn capture_target(app: AppHandle) -> Result<String, String> {
+    wake_destination(&app).await;
     on_main(&app, |app| {
         let state = app.state::<InsertionState>();
         let _operation = state
@@ -658,6 +767,7 @@ pub async fn capture_target(app: AppHandle) -> Result<String, String> {
 }
 #[tauri::command]
 pub async fn capture_dictation_target(app: AppHandle, session_id: String) -> Result<(), String> {
+    wake_destination(&app).await;
     on_main(&app, move |app| {
         let state = app.state::<InsertionState>();
         let _operation = state
@@ -846,6 +956,25 @@ mod tests {
         ] {
             assert!(!unsupported_clipboard_type(name));
         }
+    }
+    #[test]
+    fn chromium_bundles_are_detected_from_their_crash_handler() {
+        let root = std::env::temp_dir().join(format!("yapyap-bundle-{}", std::process::id()));
+        let helpers = root.join("Chromium.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/Helpers");
+        std::fs::create_dir_all(&helpers).unwrap();
+        std::fs::create_dir_all(root.join("Native.app/Contents/Frameworks/Text.framework"))
+            .unwrap();
+        assert!(!chromium_bundle(&root.join("Chromium.app")));
+        std::fs::write(helpers.join("chrome_crashpad_handler"), b"").unwrap();
+        assert!(chromium_bundle(&root.join("Chromium.app")));
+        assert!(!chromium_bundle(&root.join("Native.app")));
+        assert!(!chromium_bundle(&root.join("Missing.app")));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn ax_failures_name_the_attribute_and_code() {
+        assert_eq!(ax_reason(AX_NO_VALUE), "no value, AX -25212");
+        assert_eq!(ax_reason(-1), "error, AX -1");
     }
     #[test]
     fn destination_guards_reject_each_change() {

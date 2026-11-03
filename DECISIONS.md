@@ -587,3 +587,10 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 ### Clipboard interface
 
 - Added a shared clipboard snapshot/change-marker/guarded-restore contract. Native adapters retain format, locking and write handling. Frontend and Mac native tests pass; packaged clipboard and Windows native checks remain pending.
+
+## November 1, 2026 — Chromium/Electron destination capture
+
+- Capture refused Chrome, Discord and other Chromium/Electron inputs with "focused input or text cursor cannot be checked" even though YapYap was trusted. An AX probe showed that a cold Chromium tree returns no value (AX -25212) for `AXFocusedUIElement` until an assistive client asks for it.
+- **Decision:** Before capture, if the frontmost app ships Chromium's `chrome_crashpad_handler` and reports no focused element, set `AXManualAccessibility` (Electron). If that attribute is unsupported, set `AXEnhancedUserInterface` (Chromium browsers). Then poll off the main thread for up to 2.5 s. Native apps are never changed. The browser flag stays on until that browser quits, and may make its window animations stutter with window managers.
+- In manual checks, a cold Discord tree appeared about 1–1.5 s after waking, and Chrome needed more than 0.5 s. Refusals now name the failing attribute and AX code.
+- Verification: Mac insertion tests (9), frontend tests and the Developer ID–signed install passed. On November 2 the user confirmed that packaged dictation pasted into an Electron app (Obsidian or VS Code) that had not been woken before. A cold Chrome launch was not retested end to end.
