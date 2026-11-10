@@ -12,3 +12,6 @@ tauri.signing.local.json
 # Local Python tooling caches.
 __pycache__/
 *.pyc
+
+# Local test artifacts.
+tmp/
