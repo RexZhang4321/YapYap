@@ -90,6 +90,7 @@ export class NativePcmRecorder {
     this.frameCount = 0;
     this.finishPromise = null;
     this.ended = false;
+    this.sampleRate = 0;
     this.onInputLevel(0);
 
     const label = await deviceLabel(deviceId);
@@ -112,6 +113,9 @@ export class NativePcmRecorder {
     this.deviceId = deviceId;
     this.deviceLabel = started.deviceName || label || "System default microphone";
     this.active = true;
+    // The native tap starts before start() returns, so early chunks arrive
+    // without a sample rate. Replay them to the preview now that it is known.
+    for (const samples of this.chunks) this.preview(samples);
     return `Recording from ${this.deviceLabel} at ${this.sampleRate.toLocaleString()} Hz.`;
   }
 
@@ -123,7 +127,7 @@ export class NativePcmRecorder {
       this.chunks.push(samples);
       this.frameCount += samples.length;
       // Store original samples first. A failed preview cannot stop capture.
-      try { this.onPcmChunk?.(samples, this.sampleRate); } catch { /* Preview is optional. */ }
+      if (this.sampleRate > 0) this.preview(samples);
       let sumSquares = 0;
       for (const sample of samples) sumSquares += sample * sample;
       this.onInputLevel(Math.sqrt(sumSquares / Math.max(1, samples.length)));
@@ -139,6 +143,10 @@ export class NativePcmRecorder {
           if (generation === this.startGeneration) this.onUnexpectedError(error instanceof Error ? error.message : String(error));
         });
     }
+  }
+
+  private preview(samples: Float32Array) {
+    try { this.onPcmChunk?.(samples, this.sampleRate); } catch { /* Preview is optional. */ }
   }
 
   stop(): Promise<CapturedPcm> {

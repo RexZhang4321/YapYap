@@ -26,6 +26,8 @@ pub enum Preview {
 }
 
 const MAX_OVERLAY_TEXT: usize = 2048; // Same UTF-16 budget as the frontend.
+const MAX_OVERLAY_NOTICE: usize = 512;
+const MAX_OVERLAY_KEY: usize = 64;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -37,11 +39,20 @@ pub struct Snapshot {
     pub preview: Preview,
     #[serde(rename = "hasGap")]
     pub has_gap: bool,
+    pub notice: String,
+    #[serde(rename = "pasteKey")]
+    pub paste_key: String,
+    #[serde(rename = "escapeKey")]
+    pub escape_key: bool,
 }
 
 impl Snapshot {
     fn validate(&self) -> Result<(), &'static str> {
         if self.text.encode_utf16().count() > MAX_OVERLAY_TEXT
+            || self.notice.encode_utf16().count() > MAX_OVERLAY_NOTICE
+            || self.paste_key.encode_utf16().count() > MAX_OVERLAY_KEY
+            || (self.phase == Phase::Hidden
+                && (!self.notice.is_empty() || !self.paste_key.is_empty() || self.escape_key))
             || ((self.phase == Phase::Hidden || self.preview == Preview::Off)
                 && (!self.text.is_empty() || self.has_gap))
             || (self.phase == Phase::Hidden && self.preview != Preview::Off)
@@ -160,7 +171,7 @@ mod tests {
                 .is_err()
         );
         assert!(serde_json::from_str::<Snapshot>(
-            r#"{"epoch":1,"revision":1,"phase":"recording","text":"你好 😀","preview":"listening","hasGap":false}"#
+            r#"{"epoch":1,"revision":1,"phase":"recording","text":"你好 😀","preview":"listening","hasGap":false,"notice":"","pasteKey":"","escapeKey":true}"#
         )
         .is_ok());
         let value = serde_json::to_value(Snapshot {
@@ -170,14 +181,14 @@ mod tests {
             ..Snapshot::default()
         })
         .unwrap();
-        assert_eq!(value.as_object().unwrap().len(), 6);
+        assert_eq!(value.as_object().unwrap().len(), 9);
         assert_eq!(value["phase"], "error");
         assert!(serde_json::from_str::<Snapshot>(
-            r#"{"epoch":1,"revision":1,"phase":"recording","text":"","preview":"off","hasGap":false,"apiKey":"fixture"}"#
+            r#"{"epoch":1,"revision":1,"phase":"recording","text":"","preview":"off","hasGap":false,"notice":"","pasteKey":"","escapeKey":false,"apiKey":"fixture"}"#
         )
         .is_err());
         assert!(serde_json::from_str::<Snapshot>(
-            r#"{"epoch":1,"revision":1,"phase":"recording","text":"","preview":"unknown","hasGap":false}"#
+            r#"{"epoch":1,"revision":1,"phase":"recording","text":"","preview":"unknown","hasGap":false,"notice":"","pasteKey":"","escapeKey":false}"#
         ).is_err());
         let mut snapshot = Snapshot {
             phase: Phase::Recording,
@@ -199,6 +210,16 @@ mod tests {
         assert!(snapshot.validate().is_err());
         snapshot.has_gap = false;
         assert!(snapshot.validate().is_ok());
+        snapshot.phase = Phase::Error;
+        snapshot.notice = "OpenAI rejected the key.".into();
+        snapshot.paste_key = "Option+V".into();
+        snapshot.escape_key = true;
+        assert!(snapshot.validate().is_ok());
+        snapshot.notice = "a".repeat(MAX_OVERLAY_NOTICE + 1);
+        assert!(snapshot.validate().is_err());
+        snapshot.notice.clear();
+        snapshot.phase = Phase::Hidden;
+        assert!(snapshot.validate().is_err());
     }
 
     #[test]

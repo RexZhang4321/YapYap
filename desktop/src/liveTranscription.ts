@@ -1,3 +1,5 @@
+import { credentialErrorMessage } from "#platform";
+
 export interface LiveEvent {
   streamId: string;
   kind: "ready" | "delta" | "completed" | "error" | "closed";
@@ -62,7 +64,7 @@ type LiveState = "idle" | "connecting" | "listening" | "finishing" | "completed"
 const errorMessages: Record<string, string> = {
   key_missing: "Save an API key to enable live transcription.",
   key_format: "The saved key could not be used. Save a replacement.",
-  live_unauthorized: "OpenAI rejected the saved key for live transcription.",
+  live_unauthorized: "OpenAI rejected the saved key for live transcription. It may be invalid, expired, or revoked. Save a replacement key.",
   live_forbidden: "The key cannot access live transcription. Check its permissions.",
   live_model_unavailable: "gpt-live-transcribe is unavailable to this account.",
   live_rate_limited: "OpenAI returned a rate or usage limit for live transcription.",
@@ -79,14 +81,16 @@ const errorMessages: Record<string, string> = {
   live_request_rejected: "OpenAI rejected the live transcription request.",
 };
 export function liveErrorMessage(error: unknown): string {
-  return typeof error === "string" && Object.prototype.hasOwnProperty.call(errorMessages, error)
-    ? errorMessages[error] : "Live transcription could not continue.";
+  if (typeof error !== "string") return "Live transcription could not continue.";
+  if (Object.prototype.hasOwnProperty.call(errorMessages, error)) return errorMessages[error];
+  return credentialErrorMessage(error) ?? "Live transcription could not continue.";
 }
 
 export class LiveTranscription {
   state: LiveState = "idle";
   text = "";
   error: string | null = null;
+  errorCode: string | null = null;
   firstVisibleMs: number | null = null;
   hasGap = false;
   private generation = 0;
@@ -135,7 +139,7 @@ export class LiveTranscription {
     const id = this.newId();
     this.streamId = id; this.accepting = true; this.queue = []; this.queuedBytes = 0;
     this.items.clear(); this.resampler = null; this.sampleRate = 0; this.draining = null;
-    this.error = null; this.state = "connecting"; this.changed();
+    this.error = null; this.errorCode = null; this.state = "connecting"; this.changed();
     this.connection = (async () => {
       await this.cancellation;
       if (generation !== this.generation) return;
@@ -208,7 +212,7 @@ export class LiveTranscription {
     const id = this.streamId;
     this.generation += 1; this.accepting = false; this.queue = []; this.queuedBytes = 0;
     this.resampler = null; this.draining = null; this.items.clear(); this.prefix = "";
-    this.text = ""; this.error = null; this.firstVisibleMs = null; this.hasGap = false;
+    this.text = ""; this.error = null; this.errorCode = null; this.firstVisibleMs = null; this.hasGap = false;
     this.state = "discarded"; this.streamId = "";
     if (id) this.stopNative(id);
     this.changed();
@@ -227,7 +231,7 @@ export class LiveTranscription {
     this.rejectCompletion("transcription_live_unavailable");
     this.generation += 1; this.accepting = false; this.queue = []; this.queuedBytes = 0;
     this.resampler = null; this.draining = null;
-    this.error = liveErrorMessage(error); this.state = "failed";
+    this.error = liveErrorMessage(error); this.errorCode = String(error); this.state = "failed";
     this.stopNative(this.streamId);
     this.changed();
   }

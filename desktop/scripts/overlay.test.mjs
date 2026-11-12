@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { OverlayController, OverlayReceiver, overlayPhase, overlayContent, overlayPresentation, MAX_OVERLAY_TEXT } from '../src/overlayState.ts';
+import { OverlayController, OverlayReceiver, overlayPhase, overlayContent, overlayPresentation, overlayNotice, MAX_OVERLAY_TEXT, MAX_OVERLAY_NOTICE } from '../src/overlayState.ts';
 import { TranscriptionSession } from '../src/transcriptionSession.ts';
 import { LiveTranscription } from '../src/liveTranscription.ts';
 import { encodeWav } from '../src/audioCapture.ts';
@@ -58,7 +58,8 @@ test('preview tails preserve Unicode and hidden/off content never carries prior 
   const live = { state: 'listening', text: 'prefix😀' + '尾'.repeat(MAX_OVERLAY_TEXT - 1), hasGap: true };
   const content = overlayContent('recording', live);
   assert.equal(content.text, '尾'.repeat(MAX_OVERLAY_TEXT - 1));
-  assert.deepEqual(overlayContent('hidden', live), { phase: 'hidden', text: '', preview: 'off', hasGap: false });
+  assert.deepEqual(overlayContent('hidden', live, { notice: 'stale', pasteKey: 'Option+V', escapeKey: true }),
+    { phase: 'hidden', text: '', preview: 'off', hasGap: false, notice: '', pasteKey: '', escapeKey: false });
   assert.equal(overlayContent('recording').text, '');
   const literal = '<img src=x onerror=alert(1)>\n你好 😀 https://example.com';
   assert.equal(overlayPresentation(overlayContent('recording', { ...live, text: literal })).text, literal);
@@ -215,4 +216,39 @@ test('cancel during transcription hides overlay and late provider response canno
   provider.resolve('late words'); await request; await tick();
   assert.equal(snapshots.at(-1).phase, 'hidden'); assert.equal(session.transcript, '');
   assert.equal(snapshots.filter(snapshot => snapshot.phase === 'hidden').length, 1);
+});
+
+test('errors show the reason and the keys that act on it instead of sending you to the app', () => {
+  const live = { state: 'failed', text: '', hasGap: false };
+  const listening = overlayPresentation(overlayContent('recording', live, { notice: 'OpenAI rejected the saved key.', pasteKey: '', escapeKey: true }));
+  assert.equal(listening.text, 'OpenAI rejected the saved key.');
+  assert.match(listening.title, /preview unavailable/);
+
+  const keyRejected = overlayPresentation(overlayContent('error', live, { notice: 'Live transcription stopped: OpenAI rejected the saved key.', pasteKey: '', escapeKey: true }));
+  assert.equal(keyRejected.title, 'Needs attention');
+  assert.equal(keyRejected.text, 'Live transcription stopped: OpenAI rejected the saved key.');
+  assert.match(keyRejected.hint, /^Esc to discard · /);
+
+  const pasteable = overlayPresentation(overlayContent('error', undefined, { notice: 'The destination could not be captured.', pasteKey: 'Option+V', escapeKey: true }));
+  assert.equal(pasteable.title, 'Not pasted yet');
+  assert.equal(pasteable.hint, 'Press Option+V in a text field to paste · Esc to discard');
+  assert.doesNotMatch(pasteable.hint, /Open YapYap/);
+
+  // Without a global Esc, discarding stays an in-app action.
+  const noEscape = overlayPresentation(overlayContent('error', undefined, { notice: 'x.', pasteKey: '', escapeKey: false }));
+  assert.match(noEscape.hint, /retry, copy, or discard/);
+  assert.match(overlayPresentation(overlayContent('processing', undefined, { notice: '', pasteKey: '', escapeKey: true })).hint, /^Esc to cancel/);
+});
+
+test('overlay notices are the first sentence, bounded, and validated by the receiver', () => {
+  assert.equal(overlayNotice('OpenAI rejected the key. It may be invalid, expired, or revoked. Save a replacement.'), 'OpenAI rejected the key.');
+  assert.equal(overlayNotice('No sentence end'), 'No sentence end');
+  assert.equal(overlayNotice('The WAV exceeds the 25 MB upload limit. Discard.'), 'The WAV exceeds the 25 MB upload limit.');
+  assert.equal(overlayContent('error', undefined, { notice: 'a'.repeat(MAX_OVERLAY_NOTICE + 9), pasteKey: '', escapeKey: false }).notice.length, MAX_OVERLAY_NOTICE);
+  const receiver = new OverlayReceiver();
+  const error = { epoch: 1, revision: 1, ...overlayContent('error', undefined, { notice: 'Reason.', pasteKey: 'Option+V', escapeKey: true }) };
+  assert.equal(receiver.accept({ ...error, notice: 'a'.repeat(MAX_OVERLAY_NOTICE + 1) }), false);
+  assert.equal(receiver.accept({ ...error, escapeKey: 'yes' }), false);
+  assert.equal(receiver.accept({ ...error, phase: 'hidden', revision: 2 }), false);
+  assert.equal(receiver.accept(error), true);
 });

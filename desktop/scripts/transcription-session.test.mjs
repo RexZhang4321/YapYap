@@ -153,6 +153,17 @@ test("empty transcript keeps retry audio and invalid uploads never send", async 
   assert.equal(transcriptionError("__proto__"), transcriptionError("unknown-code"));
 });
 
+test("a failed live stream names its cause instead of the generic gap message", () => {
+  const generic = transcriptionError("transcription_live_unavailable");
+  assert.match(generic, /without gaps/);
+  assert.equal(transcriptionError("transcription_live_unavailable", null), generic);
+  const named = transcriptionError("transcription_live_unavailable", "OpenAI rejected the saved key.");
+  assert.match(named, /^Live transcription stopped: OpenAI rejected the saved key\. Your recording is kept\./);
+  assert.doesNotMatch(named, /without gaps/);
+  // The live reason only applies to live failures.
+  assert.equal(transcriptionError("transcription_empty", "OpenAI rejected the saved key."), transcriptionError("transcription_empty"));
+});
+
 test("capture WAV has valid PCM16 mono headers and exact sample data", async () => {
   const wav = encodeWav({ channelCount: 1, frameCount: 4, sampleRate: 48_000,
     samples: [Float32Array.from([-1, 0, 0.5, 1])] });

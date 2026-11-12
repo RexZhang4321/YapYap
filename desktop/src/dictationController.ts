@@ -21,6 +21,7 @@ import { LiveTranscription } from "./liveTranscription";
 import { nativeStreamingSTT } from "./liveTransport";
 import {
   OverlayController,
+  overlayNotice,
   overlayPhase,
   type OverlaySnapshot,
 } from "./overlayState";
@@ -191,7 +192,25 @@ export function initializeDictation(ports: {
         (app.preferences.live || !transcription.usesFullAudio)
         ? live
         : undefined,
+      {
+        notice: overlayReason(),
+        pasteKey: transcription.canRetryInsertion && shortcutBinding.active
+          ? formatShortcut(shortcutBinding.active) : "",
+        escapeKey: app.readiness.escapeAvailable && canCancelDictation(),
+      },
     );
+  }
+
+  // The one-line reason the overlay shows, so it can be acted on in place.
+  function overlayReason(): string {
+    if (transcription.transcript && transcription.error === "insertion_target_unavailable")
+      return `The destination could not be captured.${targetIssue()}`;
+    if (transcription.transcript && transcription.insertion?.message)
+      return overlayNotice(transcription.insertion.message);
+    if (app.recovery.captureInterruptionMessage) return overlayNotice(app.recovery.captureInterruptionMessage);
+    if (transcription.stalled) return "OpenAI is taking longer than expected.";
+    if (transcription.error) return overlayNotice(transcriptionError(transcription.error, liveFailureReason()));
+    return liveFailureReason() ?? "";
   }
 
   function provisionalRecoveryText(allowProcessing = false): string | null {
@@ -369,7 +388,7 @@ export function initializeDictation(ports: {
         : "Check the destination before pasting again. Your text is safe here; use Copy if needed.";
     } else if (transcription.error) {
       transcriptionStatus.text =
-        transcriptionError(transcription.error) +
+        transcriptionError(transcription.error, liveFailureReason()) +
         " Retry uses your saved recording." +
         (provisionalRecoveryText() !== null
           ? " Live words are also available below."
@@ -578,6 +597,7 @@ export function initializeDictation(ports: {
               : app.recovery.captureInterruptionMessage ||
                 transcriptionError(
                   transcription.error ?? "transcription_audio_invalid",
+                  liveFailureReason(),
                 )
             : (app.recovery.captureInterruptionMessage ?? "");
     alert.hidden = !message;
@@ -632,7 +652,17 @@ export function initializeDictation(ports: {
     }
   }
 
+  let loggedLiveFailure: string | null = null;
+  // The live failure reason, only for the session whose live stream it was.
+  function liveFailureReason(): string | null {
+    return app.recovery.livePreviewSession === transcription.sessionId && live.state === "failed"
+      ? live.error : null;
+  }
+
   function showLiveState() {
+    const failure = live.state === "failed" ? live.errorCode : null;
+    if (failure && failure !== loggedLiveFailure) log(`live preview failed: ${failure}`);
+    loggedLiveFailure = failure;
     showOverlay();
     showProvisionalRecovery();
     liveView.value = live.text;

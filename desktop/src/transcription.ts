@@ -23,7 +23,13 @@ const messages: Record<string, string> = {
   validation_network_failed: "Could not connect to OpenAI. Check the connection, then retry.",
 };
 
-export function transcriptionError(code: string): string {
+const liveRecovery = "Your recording is kept. Retry full audio transcription below, copy available live words, or discard this dictation.";
+
+// A failed live stream names its own cause; the generic gap message is only
+// for a live transcript that ended incomplete without one.
+export function transcriptionError(code: string, liveReason?: string | null): string {
+  if (code === "transcription_live_unavailable" && liveReason)
+    return `Live transcription stopped: ${liveReason} ${liveRecovery}`;
   const platformMessage = credentialErrorMessage(code);
   if (platformMessage !== undefined) return platformMessage;
   return Object.prototype.hasOwnProperty.call(messages, code)

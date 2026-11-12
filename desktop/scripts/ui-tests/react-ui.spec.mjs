@@ -744,6 +744,9 @@ test("overlay renders literal text, ignores stale revisions, scrolls to the tail
             text: "",
             preview: "off",
             hasGap: false,
+            notice: "",
+            pasteKey: "",
+            escapeKey: false,
           });
         return Promise.resolve();
       },
@@ -761,6 +764,9 @@ test("overlay renders literal text, ignores stale revisions, scrolls to the tail
         text,
         preview: "listening",
         hasGap: false,
+        notice: "",
+        pasteKey: "",
+        escapeKey: false,
       }),
     text,
   );
@@ -782,6 +788,9 @@ test("overlay renders literal text, ignores stale revisions, scrolls to the tail
       text: "Stale",
       preview: "failed",
       hasGap: true,
+      notice: "",
+      pasteKey: "",
+      escapeKey: false,
     }),
   );
   await expect(page.locator("#overlay")).toHaveAttribute(
@@ -796,6 +805,9 @@ test("overlay renders literal text, ignores stale revisions, scrolls to the tail
       text: "",
       preview: "off",
       hasGap: false,
+      notice: "",
+      pasteKey: "",
+      escapeKey: false,
     }),
   );
   await expect(page.locator("#overlay-text")).toHaveText("");
@@ -815,6 +827,9 @@ test("overlay renders literal text, ignores stale revisions, scrolls to the tail
       text: "Recovered preview",
       preview: "listening",
       hasGap: false,
+      notice: "",
+      pasteKey: "",
+      escapeKey: false,
     }),
   );
   await expect(page.locator("#overlay-title")).toHaveText("Listening");

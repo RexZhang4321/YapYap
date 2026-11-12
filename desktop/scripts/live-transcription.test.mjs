@@ -163,6 +163,11 @@ test("raw IPC/provider errors and inherited properties never reach the live UI",
   }
 });
 
+test("expired keys and credential failures get actionable live messages", () => {
+  assert.match(liveErrorMessage("live_unauthorized"), /expired.*Save a replacement key/);
+  assert.notEqual(liveErrorMessage("credential_read_failed"), "Live transcription could not continue.");
+});
+
 test("a new connection waits for cancelled native startup and cannot receive its late words", async () => {
   const gate = deferred(), calls = [], listeners = new Map();
   const f = fixture({

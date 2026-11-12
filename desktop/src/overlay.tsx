@@ -18,6 +18,9 @@ export function Overlay() {
     text: "",
     preview: "off",
     hasGap: false,
+    notice: "",
+    pasteKey: "",
+    escapeKey: false,
   });
   const [failed, setFailed] = useState(false);
   const text = useRef<HTMLParagraphElement>(null);

@@ -54,6 +54,24 @@ test("native capture keeps chunks in order, previews them and drops audio after 
   assert.equal(recorder.hasRecording, false);
 });
 
+test("chunks that arrive before native start resolves reach the preview with the real sample rate", async () => {
+  const transport = fakeTransport();
+  const realStart = transport.start;
+  transport.start = async (deviceName, onEvent) => {
+    const started = await realStart(deviceName, onEvent);
+    onEvent(chunk([0.1, 0.2])); // The tap fires before the invoke response.
+    return started;
+  };
+  const previews = [];
+  const recorder = new NativePcmRecorder(() => {}, () => {}, () => {},
+    (samples, rate) => previews.push([samples.length, rate]), transport);
+  await recorder.start("");
+  transport.emit(chunk([0.3]));
+  const recording = await recorder.stop();
+  assert.deepEqual(previews, [[2, 48_000], [1, 48_000]]);
+  assert.equal(recording.frameCount, 3);
+});
+
 test("device loss stops native capture and reports the retained audio", async () => {
   const transport = fakeTransport();
   let reported;
