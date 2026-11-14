@@ -14,7 +14,7 @@ Installed and development builds share the existing app identifier.
 The built-in imagegen tool produced a transparent blue tile with a white voice
 waveform. Tauri generated the native icon assets; the React header and browser
 favicon use the same artwork. The source and prompt are in
-[icons/README.md](../src-tauri/icons/README.md).
+[icons/README.md](../../desktop/src-tauri/icons/README.md).
 
 ## Automated checks
 

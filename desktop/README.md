@@ -1,18 +1,20 @@
-# YapYap for Windows
+# YapYap desktop app
+
+Developer notes for the Tauri app. For an overview, install steps and project status, start with the [project README](../README.md).
 
 YapYap's npm and Rust packages are `yapyap`, its native library is `yapyap_lib`, and its Windows executable is `yapyap.exe`. Install the generated `YapYap_0.1.0_x64-setup.exe` and launch **YapYap** from Start. If upgrading from BYOK Dictation, follow the [upgrade instructions](RELEASE.md#upgrading-from-byok-dictation); you will save your API key and choose preferences again.
 
 For the Windows installer, required permissions, release checks and signing workflow, see [Windows release guide](RELEASE.md). Run `npm.cmd run release:windows` for an unsigned local test installer; installed-app acceptance and trusted signing remain separate release gates.
 
-Run `npm install` and `npm run tauri dev` from this directory. The initial release targets Windows. The normal flow is **hold shortcut → speak → release → insert**; the app stays available in the system tray when its window closes.
+Run `npm install` and `npm run tauri dev` from this directory. The normal flow is **hold shortcut → speak → release → insert**; the app stays available in the system tray when its window closes.
 
-## macOS feasibility shell
+## macOS
 
-The Mac probe builds and launches on Apple Silicon. Recording, Keychain, live
-streaming, guarded insertion and clipboard recovery have been developed; the
-shared HTTPS client now enables full-audio transcription, cleanup and connection
-checking on Mac. Full packaged pipeline acceptance remains open. See the
-[Mac checklist](../MACOS_PROBES.md) and historical [MP-00 evidence](scripts/macos-mp-00-verification.md).
+The Mac build runs on Apple Silicon. All three parity probe groups (recording and
+overlay, insertion and clipboard, pipeline and recovery) passed in the packaged
+app; Developer ID signing, notarization and downloaded-app acceptance are pending.
+See the [Mac checklist](../docs/MACOS_PROBES.md) and historical
+[MP-00 evidence](../docs/verification/macos-mp-00-verification.md).
 
 Install Node, Rust and Xcode tools, then run from `desktop/`:
 
@@ -148,7 +150,7 @@ Open **Settings → Developer diagnostics** for the optional live/transcription 
 
 The main window shows **Processing time** after release: audio preparation, final transcription request, cleanup request, destination check, paste/clipboard restoration, and total elapsed time after release. Running durations refresh every 250 ms; completed values remain until the next dictation or discard. Disabled or unreached stages show Skipped; failures and stopped waits keep their elapsed durations. Explicit retries show their own attempt totals. Request timings cover the frontend/native round trip, upload, provider processing, response reading and validation; they do not separate network time from model time. Timings use a monotonic clock and remain in memory only. They are not exported as telemetry or retained with earlier transcript results.
 
-Regular checks are `npm test`, `npm run build`, and, from `src-tauri/`, `cargo test --lib --offline` plus `cargo fmt --check`. Regular tests use local fixtures and make no provider requests. The recovery follow-up passes all 140 deterministic frontend tests and the production build, plus 26 native tests (seven opt-in tests ignored). The earlier rendered browser checks passed setup/settings focus, shortcut-capture Escape cancellation, closed diagnostics, and 380 × 430 layout without horizontal overflow. That browser had no Tauri IPC; native tray, microphone, global shortcut/cancellation, preference restoration, and complete paste/recovery acceptance remain pending. See [UX verification](scripts/ux-verification.md) and [TASKS.md](../TASKS.md). Task 10's earlier combined Windows gap remains open. No Milestone 3 processing work is included.
+Regular checks are `npm test`, `npm run build`, and, from `src-tauri/`, `cargo test --lib --offline` plus `cargo fmt --check`. Regular tests use local fixtures and make no provider requests. The recovery follow-up passes all 140 deterministic frontend tests and the production build, plus 26 native tests (seven opt-in tests ignored). The earlier rendered browser checks passed setup/settings focus, shortcut-capture Escape cancellation, closed diagnostics, and 380 × 430 layout without horizontal overflow. That browser had no Tauri IPC; native tray, microphone, global shortcut/cancellation, preference restoration, and complete paste/recovery acceptance remain pending. See [UX verification](../docs/verification/ux-verification.md) and [TASKS.md](../docs/TASKS.md). Task 10's earlier combined Windows gap remains open. No Milestone 3 processing work is included.
 
 The references below retain detailed capability implementation and opt-in development checks. Historical task notes describe the UI and the WebView2 integration helpers used at that time; those helpers were removed on November 1, 2026 and remain in git history. Current controls are grouped under Settings, recovery, or Developer diagnostics as described above. Real-provider checks are opt-in and may incur API usage.
 
@@ -158,7 +160,7 @@ Recording shows a small always-on-top **Listening** panel with live words labell
 
 The overlay has its own frontend entry point and event-subscription capability. Native dispatch permits only reading the bounded overlay snapshot; other application commands are denied. It receives provisional text, fixed preview status, and a gap flag; it receives no audio, credentials, or canonical transcript. Text is rendered as plain text. State updates are serialized, coalesced, and revisioned so cancellation/reload cannot apply an older status over a newer one. Hidden updates clear both the native snapshot and the overlay DOM. Overlay failures are reported in the main probe and do not cancel dictation. Preview failure shows a warning while capture continues; explicit reconnect marks the gap. Provisional text never enters the insertion path.
 
-Task 9 manual Windows check: choose **Live transcription test (no insertion)**, enable live words, prepare the actual microphone, and focus a disposable Notepad/VS Code/browser input. Hold the shortcut for 8–15 seconds and confirm provisional words appear before release while focus/input contents stay unchanged. Release retains audio and performs no automatic insertion in this mode. Test preview failure/reconnect while capturing, then cancel/discard and confirm no late text reappears. For the original Task 9 baseline, bypass cleanup in normal dictate mode and confirm canonical insertion, Finalizing status, clipboard restoration, and success hiding. Real provider requests occur with live preview enabled. See [Task 9 verification](scripts/task9-verification.md) for observed scope.
+Task 9 manual Windows check: choose **Live transcription test (no insertion)**, enable live words, prepare the actual microphone, and focus a disposable Notepad/VS Code/browser input. Hold the shortcut for 8–15 seconds and confirm provisional words appear before release while focus/input contents stay unchanged. Release retains audio and performs no automatic insertion in this mode. Test preview failure/reconnect while capturing, then cancel/discard and confirm no late text reappears. For the original Task 9 baseline, bypass cleanup in normal dictate mode and confirm canonical insertion, Finalizing status, clipboard restoration, and success hiding. Real provider requests occur with live preview enabled. See [Task 9 verification](../docs/verification/task9-verification.md) for observed scope.
 
 Manual Windows checks:
 
@@ -231,11 +233,11 @@ Manual Windows check:
 5. Choose **Remove key**. Confirm the status says no key is saved and Validate is disabled. Save the desired key again if continuing with the transcription probe.
 6. Confirm the app's event list and console contain no entered key and that no app-owned plaintext credential/settings file was created. The credential may be inspected or removed in Windows Credential Manager under Windows Credentials.
 
-Record the observed results in `../DECISIONS.md`. Deterministic input/error tests run with `cargo test --lib` from `src-tauri/`. The native storage probe is opt-in: `cargo test --lib credentials::tests::windows_credential_restart_probe -- --ignored --exact`. It creates a unique disposable fixture credential, reads it from a fresh process, replaces it, deletes it, and checks removal; it does not read or replace the app's key. The separate opt-in network check is `cargo test --lib openai::tests::openai_rejects_invalid_fixture_key -- --ignored --exact`; it sends a deliberately invalid fixture key to OpenAI and reads no saved credential.
+Record the observed results in [the decision log](../docs/DECISIONS.md). Deterministic input/error tests run with `cargo test --lib` from `src-tauri/`. The native storage probe is opt-in: `cargo test --lib credentials::tests::windows_credential_restart_probe -- --ignored --exact`. It creates a unique disposable fixture credential, reads it from a fresh process, replaces it, deletes it, and checks removal; it does not read or replace the app's key. The separate opt-in network check is `cargo test --lib openai::tests::openai_rejects_invalid_fixture_key -- --ignored --exact`; it sends a deliberately invalid fixture key to OpenAI and reads no saved credential.
 
 ## Microphone capture checks
 
-The original Task 3 recording/playback, permission denial, clearing, and disconnect/reconnect checks are recorded in `../DECISIONS.md`. Task 6 now automatically transcribes on release. A successful transcript releases playback/audio; playback remains available after transcription failure or microphone interruption.
+The original Task 3 recording/playback, permission denial, clearing, and disconnect/reconnect checks are recorded in [the decision log](../docs/DECISIONS.md). Task 6 now automatically transcribes on release. A successful transcript releases playback/audio; playback remains available after transcription failure or microphone interruption.
 
 Choose the input device in Settings or leave System default microphone selected. Access is checked automatically; use Allow microphone only to recover blocked access. The input meter should move while speaking. Capture uses mono Float32 PCM in memory and reports duration, sample rate, device, and AudioWorklet diagnostics for empty recordings. A stopped capture is encoded as in-memory PCM16 WAV. On macOS, WebKit withholds microphone audio from a hidden window and delivered very quiet samples, so the Mac build records natively with AVAudioEngine (`src-tauri/src/audio_capture.rs`) and streams the same mono Float32 chunks to the shared recorder contract; the WebView still lists devices and requests permission. Its diagnostics report tap callbacks and input channels in place of AudioWorklet values.
 
@@ -249,7 +251,7 @@ Before this check, choose **Text insertion test** under **Settings → Developer
 
 **Copy test text** saves supported clipboard formats, then puts the fixed string on the clipboard. **Restore previous clipboard** becomes available after that Copy action; use it after pasting the test string. This includes rich clipboard formats backed by movable global memory. GDI/owner-rendered formats and clipboard content over 64 MiB are not supported by this probe; the safe Copy action leaves them untouched and explains why. **Copy without backup** explicitly replaces an unsupported clipboard, and Restore remains unavailable. Automatic paste normally restores its own temporary clipboard without needing the Restore button; the button also becomes available if that restoration fails.
 
-Test the following cases and record the observed result in `../DECISIONS.md`:
+Test the following cases and record the observed result in [the decision log](../docs/DECISIONS.md):
 
 1. Plain-text clipboard, then insert into Notepad, VS Code, and a Chrome or Edge input. Confirm both the pasted string and clipboard restoration.
 2. Switch apps before releasing, move the pointer or caret before releasing, and close the target before releasing. Confirm no automatic paste and use Copy.
@@ -265,7 +267,7 @@ To check that a newer clipboard copy is preserved, run `powershell -NoProfile -E
 
 Normal **Dictate and insert** combines provisional overlay words with complete-original-audio final transcription and guarded canonical insertion. The overlay says **Finalizing** on release and hides immediately after successful paste/clipboard restoration; **Completed** and the retained canonical result remain in the main window. Live probe mode intentionally retains audio and does not paste.
 
-The combined regression is documented in [Task 10 verification](scripts/task10-verification.md). The combined native/live check remains unverified because desktop automation timed out before the test started; the combined-flow row of the [Windows regression checklist](scripts/windows-regression-verification.md) covers it. Earlier platform checks and regular deterministic tests pass.
+The combined regression is documented in [Task 10 verification](../docs/verification/task10-verification.md). The combined native/live check remains unverified because desktop automation timed out before the test started; the combined-flow row of the [Windows regression checklist](../docs/verification/windows-regression-verification.md) covers it. Earlier platform checks and regular deterministic tests pass.
 
 ## Conservative cleanup (Task 11)
 
@@ -273,7 +275,7 @@ The combined regression is documented in [Task 10 verification](scripts/task10-v
 
 The guard permits only conservative edits and rejects changed lexical content/order or protected values. It may fall back on text that could have been acceptably cleaned. Neither the prompt nor the guard proves meaning preservation; the original and bypass remain available. No foreground application content is collected. Cleanup uses native saved-key access, fixed HTTPS endpoints, bounded payloads and `store: false`; dictated text is not written to app logs/files. Provider-side retention is governed by the account/provider policy.
 
-See [Task 11 verification](scripts/task11-verification.md) for deterministic/API checks and the manual comparison/cancellation checklist.
+See [Task 11 verification](../docs/verification/task11-verification.md) for deterministic/API checks and the manual comparison/cancellation checklist.
 
 ## Failure recovery (Task 12)
 
@@ -283,7 +285,7 @@ Failed or malformed canonical transcription retains the original audio for **Ret
 
 Cancellation clears local session sources, immediately unlocks the local session, and suppresses late results. Native request guards can briefly refuse a new request until their bounded send/response work finishes; the app retains the new recording for retry and reports that condition. Paste cannot be cancelled after dispatch; an insertion wait timeout exposes an uncertain outcome for manual recovery. Exit or crash loses pending audio, transcripts and in-memory clipboard backups.
 
-See [Task 12 verification](scripts/task12-verification.md) for the recovery matrix and final checks. Milestone 2 implementation is complete; the full new combined Windows manual validation remains pending as recorded in Task 10.
+See [Task 12 verification](../docs/verification/task12-verification.md) for the recovery matrix and final checks. Milestone 2 implementation is complete; the full new combined Windows manual validation remains pending as recorded in Task 10.
 
 ## macOS insertion and clipboard probe
 
@@ -334,5 +336,5 @@ that may already have been sent permits manual recovery only.
 
 Native adapters are selected at compile time. Mac AppKit/Accessibility/CGEvent
 code stays in `src-tauri/src/platform/insertion_macos.rs`; Windows uses
-`src-tauri/src/platform/insertion_windows.rs`. See [probe status](../MACOS_PROBES.md) for the
+`src-tauri/src/platform/insertion_windows.rs`. See [probe status](../docs/MACOS_PROBES.md) for the
 observed packaged acceptance and remaining checks.

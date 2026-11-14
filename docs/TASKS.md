@@ -21,7 +21,7 @@ Status markers: `[ ]` not started, `[-]` in progress, `[x]` verified complete, `
 The [macOS probe checklist](MACOS_PROBES.md) requires parity with existing Windows
 features in three groups: recording/controls, insertion/clipboard, and
 pipeline/settings/recovery. MP-00 passed on October 7, 2026; see the
-[build evidence](desktop/scripts/macos-mp-00-verification.md). Probe 1 passed on
+[build evidence](verification/macos-mp-00-verification.md). Probe 1 passed on
 October 11: native recording/playback/stop/clear, shortcuts/cancellation/conflict
 recovery, permission/device recovery, Keychain setup, and floating-overlay checks.
 Probe 2 passed on October 13: guarded Unicode/multiline insertion in
@@ -31,7 +31,7 @@ confirm rich/custom multi-item clipboard restoration and preservation of a newer
 copy. The original clipboard was restored and fixtures removed. Mac insertion is
 isolated; the Windows native adapter is unchanged. Group 3 passed on October 29.
 Windows native regression and combined manual acceptance remain pending; see the
-[Windows regression checklist](desktop/scripts/windows-regression-verification.md).
+[Windows regression checklist](verification/windows-regression-verification.md).
 The [scope assessment](MACOS_PORT_SCOPE.md) retains historical source evidence;
 historical Windows completion markers below do not establish Mac support.
 
@@ -117,7 +117,7 @@ Done: a real recording can be transcribed with the user's key and a failed reque
 - [x] Retain results for Copy/retry when insertion fails or the destination is uncertain. Real hotkey insertion retry and native Copy/Restore recovery passed.
 - [x] Test Unicode, newlines, URLs, filenames, identifiers, and technical terminology. Exact fixtures passed deterministic checks and were visually verified through native Notepad insertion.
 
-Done: `record → transcribe → insert` works independently of the live overlay, including cancellation and recovery. [Windows verification note](desktop/scripts/task6-verification.md) distinguishes synthetic microphone/shortcut replay from real physical-device checks. Next: Task 7.
+Done: `record → transcribe → insert` works independently of the live overlay, including cancellation and recovery. [Windows verification note](verification/task6-verification.md) distinguishes synthetic microphone/shortcut replay from real physical-device checks. Next: Task 7.
 
 ### 7. Live-transcription probe
 
@@ -128,7 +128,7 @@ Done: `record → transcribe → insert` works independently of the live overlay
 - [x] Continue preserving the local original-audio buffer independently. After a live failure, 9.51 seconds of original audio remained playable and successfully produced a canonical transcript through an explicit real API request.
 - [x] Verify account access and streaming behavior with a real API call. The saved-key configuration probe and real synthetic-audio delta/completion checks passed without returning credentials to the UI.
 
-Done: words appear before release, and the original recording survives live-stream failure. The user confirmed physical microphone and network-outage checks on October 3, 2026. [Windows verification note](desktop/scripts/task7-verification.md) records evidence and synthetic/device/network test boundaries. Next: Task 8, minimal floating overlay.
+Done: words appear before release, and the original recording survives live-stream failure. The user confirmed physical microphone and network-outage checks on October 3, 2026. [Windows verification note](verification/task7-verification.md) records evidence and synthetic/device/network test boundaries. Next: Task 8, minimal floating overlay.
 
 ### 8. Minimal floating overlay
 
@@ -138,7 +138,7 @@ Done: words appear before release, and the original recording survives live-stre
 - [x] Hide the overlay after success; keep error recovery accessible until resolved or discarded. Native Notepad insertion after a fixture failure/retry hid the overlay; cancellation cleared audio and hid it. Recovery stays available through the tray's main probe.
 - [x] Verify it does not steal focus from the target application. Native observations preserved Notepad's foreground window through recording, processing, recovery, and hiding; VS Code window focus was also preserved. No new VS Code editor/browser insertion pass is claimed.
 
-Done: the overlay lifecycle works while another application remains active. [Windows verification note](desktop/scripts/task8-verification.md) records local fixture, real-window, and tooling boundaries. Next: Task 9, live transcription overlay.
+Done: the overlay lifecycle works while another application remains active. [Windows verification note](verification/task8-verification.md) records local fixture, real-window, and tooling boundaries. Next: Task 9, live transcription overlay.
 
 ### 9. Live transcription overlay
 
@@ -147,7 +147,7 @@ Done: the overlay lifecycle works while another application remains active. [Win
 - [x] Show listening, processing, and error states. Local fixtures verified preview failure/reconnect, delayed finalization, cancellation, discard, and a new session with live preview disabled.
 - [x] Do not insert provisional text into the target application. A disposable native Windows input stayed focused and unchanged in local and real-streaming checks; deterministic checks verify that only canonical text reaches insertion.
 
-Done: `hotkey → speak → see provisional text → stop` works without editing the foreground app, verified with synthetic microphone input and shortcut-handler replay. The user also reported the manual test works on October 3, 2026. [Windows verification note](desktop/scripts/task9-verification.md) records real-streaming, local-fixture, and user-observed boundaries, plus feedback about overlay dismissal after transcription. Next: Task 10, single-segment integration.
+Done: `hotkey → speak → see provisional text → stop` works without editing the foreground app, verified with synthetic microphone input and shortcut-handler replay. The user also reported the manual test works on October 3, 2026. [Windows verification note](verification/task9-verification.md) records real-streaming, local-fixture, and user-observed boundaries, plus feedback about overlay dismissal after transcription. Next: Task 10, single-segment integration.
 
 ## Milestone 2 — First experience MVP
 
@@ -159,7 +159,7 @@ Done: `hotkey → speak → see provisional text → stop` works without editing
 - [-] Verify the overlay does not change the insertion target. Source/deterministic checks pass; the new combined Windows observer run is pending.
 - [x] Show finalizing/completed/error states. Successful insertion hides the overlay immediately.
 
-Implemented and automatically checked; the complete real combined-flow verification remains pending. [Task 10 verification note](desktop/scripts/task10-verification.md) records the desktop automation timeout and evidence boundaries. No VAD or incremental transcription is introduced.
+Implemented and automatically checked; the complete real combined-flow verification remains pending. [Task 10 verification note](verification/task10-verification.md) records the desktop automation timeout and evidence boundaries. No VAD or incremental transcription is introduced.
 
 ### 11. Conservative cleanup
 
@@ -170,7 +170,7 @@ Implemented and automatically checked; the complete real combined-flow verificat
 - [x] Fall back to canonical text if cleanup fails.
 - [x] Provide Copy original transcript and retain the canonical text for the session until explicit discard.
 
-Implemented and checked with deterministic fixtures and a real saved-key synthetic cleanup request. [Task 11 verification](desktop/scripts/task11-verification.md) records preservation guards, canonical recovery, API evidence and remaining manual/semantic limits. Full corpus evaluation remains Task 13.
+Implemented and checked with deterministic fixtures and a real saved-key synthetic cleanup request. [Task 11 verification](verification/task11-verification.md) records preservation guards, canonical recovery, API evidence and remaining manual/semantic limits. Full corpus evaluation remains Task 13.
 
 ### 12. Failure recovery audit
 
@@ -183,7 +183,7 @@ Implemented and checked with deterministic fixtures and a real saved-key synthet
 - [x] Preserve session transcripts until the user’s result is safely inserted or explicitly discarded.
 - [x] Verify API retries use retained in-memory audio; document that app exit or crash loses pending audio.
 
-Implemented and audited with a combined deterministic failure matrix and native/source review. [Task 12 verification](desktop/scripts/task12-verification.md) records recovery behavior, the malformed-canonical fix, GPT-6 Luna access and the remaining combined Windows manual gap. Exit/crash recovery is outside the initial scope. Milestone 2 implementation is complete; Task 10's full live validation remains pending.
+Implemented and audited with a combined deterministic failure matrix and native/source review. [Task 12 verification](verification/task12-verification.md) records recovery behavior, the malformed-canonical fix, GPT-6 Luna access and the remaining combined Windows manual gap. Exit/crash recovery is outside the initial scope. Milestone 2 implementation is complete; Task 10's full live validation remains pending.
 
 ## UX checkpoint — Before Milestone 3
 
@@ -194,7 +194,7 @@ The user requested a complete daily-use UX pass before processing-pipeline work.
 - [x] Report saved-key presence without retrieving the secret or making a provider request on launch. Use ordinary setup and key-failure language; lock credential changes while dictation is active.
 - [x] Implement automatic microphone readiness, permission recovery, persisted device/preferences, key-combination recording, cancellation before paste dispatch, and repeated successful dictations without requiring a discard first. Original transcripts stay in memory until explicit discard or quit.
 - [x] Keep retry, playback, Copy original, provisional recovery, and explicit clipboard replacement available in the relevant session state. Rename app/tray/overlay labels for ordinary dictation use.
-- [x] Verify automated checks and rendered browser setup/settings behavior. All 132 deterministic frontend tests, frontend/native builds, and 25 native tests pass (seven ignored). Browser checks passed setup focus, Settings focus, shortcut-capture Escape cancellation, closed diagnostics, and 380 × 430 home/modal width with vertical scrolling. See [UX verification](desktop/scripts/ux-verification.md).
+- [x] Verify automated checks and rendered browser setup/settings behavior. All 132 deterministic frontend tests, frontend/native builds, and 25 native tests pass (seven ignored). Browser checks passed setup focus, Settings focus, shortcut-capture Escape cancellation, closed diagnostics, and 380 × 430 home/modal width with vertical scrolling. See [UX verification](verification/ux-verification.md).
 - [-] Verify the complete native recording/recovery interaction flow. The compiled app starts, but this pass could not target its window or connect a WebView debugging port. Browser evidence had no Tauri IPC and does not verify native interactions.
 - [ ] Confirm the updated tray/hotkey flow on Windows with the physical microphone, application targets, restart readiness, permission denial/retry, shortcut conflicts, and cancellation during capture/finalization. This checkpoint does not close Task 10's earlier complete combined Windows verification gap.
 
@@ -246,8 +246,8 @@ Done when: the default lifecycle matches the project’s local-first privacy req
 
 ### 17. Packaging and release checks
 
-- [x] Build a Windows installer. Per-user Windows x64 NSIS package generated; see [Task 17 verification](desktop/scripts/task17-verification.md).
-- [x] Document required Windows permissions. See [Windows release guide](desktop/RELEASE.md).
+- [x] Build a Windows installer. Per-user Windows x64 NSIS package generated; see [Task 17 verification](verification/task17-verification.md).
+- [x] Document required Windows permissions. See [Windows release guide](../desktop/RELEASE.md).
 - [ ] Test startup, restart, suspend/resume, and microphone changes.
 - [-] Add Windows signing workflow before external distribution. The release script supports a local signing config and checks the installer signature; a separate gate checks timestamped signatures on the installer and actual installed payload. Real certificate/service verification remains pending.
 

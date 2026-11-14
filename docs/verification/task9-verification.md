@@ -33,4 +33,4 @@ Initial helper attempts exposed test-harness newline escaping, Windows PowerShel
 - 20 native checks passed; six explicit platform/API helpers remain skipped in the regular suite. Overlay checks cover bounded UTF-16 payloads, fixed enums, unknown fields, inconsistent hidden/off states, and stale owners/revisions. Existing streaming and insertion tests still pass.
 - Frontend production build, native debug build, Rust formatting, helper syntax, privacy-scanner regression checks, pattern-only leak audit, and Git whitespace checks passed.
 
-Repeatable commands and the physical-device checklist are in [the README](../README.md). Task 9 is complete within this scope. Next: Task 10, verify the combined single-segment flow with live overlay and canonical insertion.
+Repeatable commands and the physical-device checklist are in [the README](../../desktop/README.md). Task 9 is complete within this scope. Next: Task 10, verify the combined single-segment flow with live overlay and canonical insertion.

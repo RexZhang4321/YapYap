@@ -27,4 +27,4 @@ The app saves no real audio or transcripts to disk and emits no content/credenti
 - TypeScript/Vite build, native debug build and Rust formatting passed.
 - The four leak-scanner regression checks and pattern-only repository/build/Git scan passed. With the synthetic app closed to release its cookie database, the redacted saved-key/app-data audit checked all 486 selected files/build outputs and 271 Git objects with no matching key exposures or unreadable files.
 
-Repeatable synthetic setup and the physical-device checks are in [the README](../README.md). Quit the test app and remove process-local fake-device/debugger flags before launching normally. Next: Task 8, a non-focus-stealing floating overlay.
+Repeatable synthetic setup and the physical-device checks are in [the README](../../desktop/README.md). Quit the test app and remove process-local fake-device/debugger flags before launching normally. Next: Task 8, a non-focus-stealing floating overlay.

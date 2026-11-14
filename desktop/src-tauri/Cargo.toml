@@ -1,7 +1,9 @@
 [package]
 name = "yapyap"
 version = "0.1.0"
-description = "Windows hold-to-talk dictation with your own OpenAI API key"
+description = "Hold-to-talk desktop dictation with your own OpenAI API key"
+repository = "https://github.com/RexZhang4321/YapYap"
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -2,7 +2,7 @@
 
 Assessment: October 6, 2026; source commit `161f413`.
 
-Execution update October 7, 2026: [MP-00 passed](desktop/scripts/macos-mp-00-verification.md)
+Execution update October 7, 2026: [MP-00 passed](verification/macos-mp-00-verification.md)
 on this Apple Silicon Mac. A local ad-hoc signed app/DMG builds, the development
 and packaged shells load both React windows, and unsupported insertion/clipboard
 operations refuse. This closes the build-shell gap only. Keychain, transport,

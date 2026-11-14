@@ -14,6 +14,7 @@ Hold your shortcut → speak → see words almost immediately → release → ge
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Rust](https://img.shields.io/badge/Rust-native-000000?logo=rust&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
 
 </div>
 
@@ -44,7 +45,7 @@ Each phase can be turned off on its own under **Processing phases** in the app.
 
 ## Status
 
-> Last updated November 2026 · `main` @ `8c6793b`
+> Last updated November 2026
 
 | Area | Status |
 | --- | --- |
@@ -53,12 +54,12 @@ Each phase can be turned off on its own under **Processing phases** in the app.
 | **Windows** per-user NSIS installer (`0.1.0`, x64) | ✅ Builds · 🟡 unsigned test builds |
 | **macOS** parity probes: recording/overlay, insertion/clipboard, pipeline/recovery | ✅ All 3 groups passed (packaged app, Apple Silicon) |
 | **macOS** Developer ID signing, notarization, downloaded-app acceptance | 🟡 Pending |
-| **Windows** native regression after the macOS port | 🟡 Pending ([checklist](desktop/scripts/windows-regression-verification.md)) |
+| **Windows** native regression after the macOS port | 🟡 Pending ([checklist](docs/verification/windows-regression-verification.md)) |
 | Evaluation corpus and latency/accuracy baseline | ⬜ Not started |
 | VAD segmentation and incremental transcription | ⬜ Not started |
 | Privacy and lifecycle audit | ⬜ Not started |
 
-Task-by-task progress lives in [TASKS.md](TASKS.md). The reasoning behind decisions is recorded in [DECISIONS.md](DECISIONS.md).
+Task-by-task progress lives in [TASKS.md](docs/TASKS.md). The reasoning behind decisions is recorded in [DECISIONS.md](docs/DECISIONS.md).
 
 ## Install
 
@@ -72,7 +73,7 @@ Task-by-task progress lives in [TASKS.md](TASKS.md). The reasoning behind decisi
 <details>
 <summary>Upgrading from the earlier <b>BYOK Dictation</b> build</summary>
 
-Quit the old app and uninstall it before you install YapYap. Leave **Delete application data** unchecked to keep your preferences. The app ID, preference storage key and Credential Manager target are unchanged, so your saved API key carries over.
+Quit the old app and uninstall it before you install YapYap. The app ID, preference storage key and Credential Manager target were renamed, so nothing carries over: save your API key again and reselect your shortcut, microphone and processing options. See the [upgrade notes](desktop/RELEASE.md#upgrading-from-byok-dictation).
 
 </details>
 
@@ -123,12 +124,14 @@ YapYap/
 │   ├── src/                 # React UI, dictation controller, session and recovery logic
 │   │   └── platform/        # build-time platform modules (windows / macos / unsupported)
 │   ├── src-tauri/           # Rust: capture, credentials, shortcuts, overlay, insertion, transport
-│   └── scripts/             # tests, benchmarks, release scripts and verification notes
-├── REQUIREMENTS.md          # product requirements (P0 / P1 / P2)
-├── TASKS.md                 # incremental build plan and status
-├── DECISIONS.md             # decision log
-├── MACOS_PROBES.md          # macOS feature-parity checklist
-└── KEY_SECURITY.md          # API-key handling and leak audit
+│   └── scripts/             # tests, smoke harnesses, install and release scripts
+└── docs/
+    ├── REQUIREMENTS.md      # product requirements (P0 / P1 / P2)
+    ├── TASKS.md             # incremental build plan and status
+    ├── DECISIONS.md         # decision log
+    ├── MACOS_PROBES.md      # macOS feature-parity checklist
+    ├── KEY_SECURITY.md      # API-key handling and leak audit
+    └── verification/        # per-task verification notes and benchmarks
 ```
 
 ## Privacy
@@ -137,8 +140,12 @@ YapYap/
 - Audio is kept in memory only. It is released after a successful insert or when you discard the session. Quitting the app or a crash loses any pending audio.
 - Audio and transcripts go only to the configured provider (OpenAI). Dictated text and keys are never logged.
 
-See [KEY_SECURITY.md](KEY_SECURITY.md) for the repeatable local leak audit.
+See [KEY_SECURITY.md](docs/KEY_SECURITY.md) for the repeatable local leak audit.
 
 ## Roadmap
 
-After the full P0 pipeline is done: personal vocabulary and app-aware context, undo and a raw-vs-cleaned comparison view, true inline live transcription, formatting voice commands, per-app profiles, and offline/local models. See [REQUIREMENTS.md](REQUIREMENTS.md) and the **Deferred after P0** section of [TASKS.md](TASKS.md).
+After the full P0 pipeline is done: personal vocabulary and app-aware context, undo and a raw-vs-cleaned comparison view, true inline live transcription, formatting voice commands, per-app profiles, and offline/local models. See [REQUIREMENTS.md](docs/REQUIREMENTS.md) and the **Deferred after P0** section of [TASKS.md](docs/TASKS.md).
+
+## License
+
+[MIT](LICENSE)

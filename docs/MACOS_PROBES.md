@@ -1,7 +1,7 @@
 # macOS feature-parity probes
 
 Goal: match every existing Windows feature below, using native Mac conventions.
-Baseline: [Windows implementation and behavior](desktop/README.md).
+Baseline: [Windows implementation and behavior](../desktop/README.md).
 
 ## Feature coverage
 
@@ -142,4 +142,4 @@ checks that capture ends, flushes and restarts on the default microphone. It
 passed three runs and fails when the device-loss event is removed. One physical
 USB unplug under native capture is still worth a spot check. Group 3 Mac rows are
 complete; Windows native regression remains pending, with its checklist in
-[Windows regression verification](desktop/scripts/windows-regression-verification.md).
+[Windows regression verification](verification/windows-regression-verification.md).
