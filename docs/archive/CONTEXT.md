@@ -1,6 +1,6 @@
 # Project context
 
-The founding notes for YapYap: the principles and open questions the project set out to preserve. Later choices are recorded in the [decision log](DECISIONS.md).
+The founding notes for YapYap: the principles and open questions the project set out to preserve. Later choices are recorded in the [decision log](../DECISIONS.md).
 
 1. **Architecture decisions and rationale.** Record that we intentionally chose a two-pass STT architecture: `gpt-live-transcribe` for perceived latency, original audio retained locally, `gpt-transcribe` as the authoritative second pass, then `gpt-6-luna` for conservative cleanup. Also record why we rejected using only live transcription, why cleanup must operate after re-transcription from audio, and why provisional text initially lives in an overlay instead of being inserted directly into arbitrary apps.
     

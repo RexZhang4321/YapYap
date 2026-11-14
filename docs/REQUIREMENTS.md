@@ -1,13 +1,29 @@
 
+# YapYap — Requirements
+
 ## Product goal
 
-Build YapYap, a privacy-oriented desktop dictation tool similar in interaction model to Whispr Flow, but using the user's own API key and communicating directly with model providers.
+Build YapYap, a privacy-oriented desktop dictation tool with a hold-to-talk interaction, using the user's own API key and communicating directly with model providers.
 
 The product should provide near-real-time transcription in an overlay while speaking, then insert a more accurate, cleaned-up version when dictation ends.
 
-Develop and verify on Windows first. Confirm whether macOS is required for the initial release, and track its platform checks separately.
+Windows was developed and verified first; macOS followed as a feature-parity port, tracked in the [macOS probe results](MACOS_PROBES.md).
 
-Prove the single-segment experience before adding VAD and incremental transcription for the full P0 pipeline. Choose the stack, test devices, hotkey fallback, and audio-buffer policy before implementation.
+Prove the single-segment experience before adding VAD and incremental transcription for the full P0 pipeline.
+
+## Principles
+
+These come from the project's [founding notes](archive/CONTEXT.md) and apply to every requirement below.
+
+- **Bring your own key, direct to the provider.** No dictation backend sits in between. "Private" here means private from a third-party dictation company, not fully local or offline.
+- **Local-first audio.** The app does not retain audio by default, keeps credentials in local secure storage, and collects no transcript analytics. Contextual information such as repository filenames is sent only when explicitly enabled.
+- **Source-of-truth order.** `original audio > canonical transcript > cleaned transcript > live provisional transcript`. The cleaned text is what normally gets inserted, but the canonical transcript stays recoverable until the session is discarded.
+- **Live text is immediate but may be wrong; final text prioritizes correctness.** Perceived latency and release-to-insertion latency are optimized separately.
+- **Cleanup preserves meaning.** It tidies the user's words; it does not improve their ideas.
+- **A later-stage failure never loses the dictation.**
+- **Model names are implementation choices.** The roles are `StreamingSTT`, `FinalSTT` and `CleanupModel`, each behind a small interface.
+
+The defining sentence: **"Hold hotkey → speak → see words almost immediately → release → receive an accurate, cleaned-up version at the cursor."**
 
 Priority definitions:
 

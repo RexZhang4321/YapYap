@@ -14,7 +14,7 @@ Date: October 6, 2026. Windows x64 candidate: 0.1.0.
 At this rename the app identifier, Credential Manager target, and preference
 storage key kept their original values for compatibility. On October 29, 2026
 all three moved to `com.jingxuan-zhang.yapyap` names; see
-[the release guide](../../desktop/RELEASE.md#upgrading-from-byok-dictation). Earlier
+[the release guide](../../../desktop/RELEASE.md#upgrading-from-byok-dictation). Earlier
 verification records keep the original artifact names and observed titles.
 
 ## Automated build evidence
@@ -46,7 +46,7 @@ The YapYap installer has not been installed as part of this rename. Quit and
 uninstall BYOK Dictation first, leaving **Delete application data** unchecked.
 Install YapYap and verify its Start menu entry, Installed apps entry, window and
 tray names, saved-key presence, preferences, relaunch, and uninstall. See
-[the release guide](../../desktop/RELEASE.md#upgrading-from-byok-dictation).
+[the release guide](../../../desktop/RELEASE.md#upgrading-from-byok-dictation).
 
 Previous installed-app results do not establish acceptance of the renamed
 candidate. Signing and the existing manual release gates still apply.

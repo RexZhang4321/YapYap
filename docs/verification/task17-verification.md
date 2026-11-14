@@ -1,7 +1,7 @@
 # Task 17 — Packaging and release verification
 
 Earlier artifacts and observed titles below retain the BYOK Dictation name.
-The current product is YapYap; see [rename verification](rename-verification.md)
+The current product is YapYap; see [rename verification](../archive/verification/rename-verification.md)
 for its build and remaining installed-app acceptance.
 
 Date: October 5, 2026. Candidate: 0.1.0. Build host: Windows x64, build 26200. Scope: existing single-segment processing pipeline.
@@ -69,7 +69,7 @@ The updated per-user installation exited 0. Native screenshots confirmed the
 main window, new title-bar/header icons and Settings. Relaunching while visible,
 minimized or hidden in the tray restored the same window and original process;
 Settings stayed open across hide/relaunch. Each duplicate launch exited 0 and
-only one dictation app process remained. See [app relaunch verification](app-launch-verification.md)
+only one dictation app process remained. See [app relaunch verification](../archive/verification/app-launch-verification.md)
 for evidence and the repeatable procedure. Tray-menu Quit/reopen, shortcut
 conflicts, physical dictation and the other lifecycle/signing gates above remain
 pending.

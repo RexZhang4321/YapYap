@@ -14,7 +14,7 @@ Installed and development builds share the existing app identifier.
 The built-in imagegen tool produced a transparent blue tile with a white voice
 waveform. Tauri generated the native icon assets; the React header and browser
 favicon use the same artwork. The source and prompt are in
-[icons/README.md](../../desktop/src-tauri/icons/README.md).
+[icons/README.md](../../../desktop/src-tauri/icons/README.md).
 
 ## Automated checks
 
@@ -45,7 +45,7 @@ expected and are not additional dictation app instances.
 
 No dictation or provider request is necessary for these checks. Physical
 microphone, insertion, suspend/resume, signing and the remaining release gates
-are tracked separately in [Task 17 verification](task17-verification.md).
+are tracked separately in [Task 17 verification](../../verification/task17-verification.md).
 
 ## Observed installed-app results
 

@@ -9,7 +9,7 @@ operations refuse. This closes the build-shell gap only. Keychain, transport,
 microphone capture, safe insertion, physical shortcuts and distribution acceptance
 remain unverified. The findings below describe the original source assessment.
 
-Next: [three feasibility checks](MACOS_PROBES.md). The checklist was
+Next: [three feasibility checks](../MACOS_PROBES.md). The checklist was
 simplified October 10: broader compatibility and release QA below follow a working
 Mac dictation flow. This document retains the original assessment and estimates.
 

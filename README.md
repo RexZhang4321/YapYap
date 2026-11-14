@@ -59,7 +59,7 @@ Each phase can be turned off on its own under **Processing phases** in the app.
 | VAD segmentation and incremental transcription | ⬜ Not started |
 | Privacy and lifecycle audit | ⬜ Not started |
 
-Task-by-task progress lives in [TASKS.md](docs/TASKS.md). The reasoning behind decisions is recorded in [DECISIONS.md](docs/DECISIONS.md).
+Open work is listed in [TASKS.md](docs/TASKS.md). The reasoning behind decisions is recorded in [DECISIONS.md](docs/DECISIONS.md), and how to use the app in the [user guide](docs/USER_GUIDE.md).
 
 ## Install
 
@@ -126,12 +126,14 @@ YapYap/
 │   ├── src-tauri/           # Rust: capture, credentials, shortcuts, overlay, insertion, transport
 │   └── scripts/             # tests, smoke harnesses, install and release scripts
 └── docs/
-    ├── REQUIREMENTS.md      # product requirements (P0 / P1 / P2)
-    ├── TASKS.md             # incremental build plan and status
+    ├── USER_GUIDE.md        # setting up, dictating and recovering your words
+    ├── REQUIREMENTS.md      # product requirements and principles (P0 / P1 / P2)
+    ├── TASKS.md             # open tasks, in build order
     ├── DECISIONS.md         # decision log
-    ├── MACOS_PROBES.md      # macOS feature-parity checklist
+    ├── MACOS_PROBES.md      # macOS feature-parity checklist and results
     ├── KEY_SECURITY.md      # API-key handling and leak audit
-    └── verification/        # per-task verification notes and benchmarks
+    ├── verification/        # live checklists and benchmark records
+    └── archive/             # historical progress and verification notes
 ```
 
 ## Privacy
