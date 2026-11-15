@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/RexZhang4321/YapYap/security/advisories/new
+    about: Report vulnerabilities privately, not as a public issue.
+  - name: User guide
+    url: https://github.com/RexZhang4321/YapYap/blob/main/docs/USER_GUIDE.md
+    about: How to set up, dictate and recover your words.

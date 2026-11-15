@@ -1,0 +1,83 @@
+name: Bug report
+description: Something in YapYap doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Don't paste your API key, recordings or private transcripts here.** For a security problem, follow [SECURITY.md](https://github.com/RexZhang4321/YapYap/blob/main/SECURITY.md) instead.
+  - type: input
+    id: version
+    attributes:
+      label: YapYap version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "e.g. Windows 11 24H2, macOS 26.1"
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did it go wrong?
+      options:
+        - Setup (API key, microphone, shortcut)
+        - Recording or the shortcut
+        - Live words overlay
+        - Final transcription
+        - Cleanup
+        - Pasting into the target app
+        - Clipboard restore
+        - Recovery actions
+        - Install or launch
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: target-app
+    attributes:
+      label: Target app
+      description: If pasting was involved, which app and which text field were you dictating into?
+      placeholder: "e.g. Chrome address bar, VS Code editor, Slack message box"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Focus …
+        2. Hold the shortcut and say …
+        3. Release …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include the exact error or refusal message YapYap showed, if any. Screenshots help, but crop out private text.
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings
+      description: Which of Show live words, Full audio transcription and cleanup were on?

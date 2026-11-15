@@ -2,7 +2,7 @@
 
 Developer notes for the Tauri app. For an overview, install steps and project status, start with the [project README](../README.md). For how to use the app, see the [user guide](../docs/USER_GUIDE.md).
 
-YapYap's npm and Rust packages are `yapyap`, its native library is `yapyap_lib`, and its Windows executable is `yapyap.exe`. Install the generated `YapYap_0.1.0_x64-setup.exe` and launch **YapYap** from Start. If upgrading from BYOK Dictation, follow the [upgrade instructions](RELEASE.md#upgrading-from-byok-dictation); you will save your API key and choose preferences again.
+YapYap's npm and Rust packages are `yapyap`, its native library is `yapyap_lib`, and its Windows executable is `yapyap.exe`. Install the generated `YapYap_0.1.0_x64-setup.exe` and launch **YapYap** from Start.
 
 For the Windows installer, required permissions, release checks and signing workflow, see [Windows release guide](RELEASE.md). Run `npm.cmd run release:windows` for an unsigned local test installer; installed-app acceptance and trusted signing remain separate release gates.
 

@@ -238,3 +238,8 @@ native conflict helpers were removed. Insertion and the full pipeline remain ope
 - Follow-up: dictation into Chrome web content (the Google search box) still failed on the first attempt, while the native URL bar worked. Re-sending `AXEnhancedUserInterface` every 100 ms restarted Chrome's tree build: with repeated sets the field had not appeared after 12 s, versus about 2 s with a single set. The flag is now set at most once per capture, never while it is already on, and the wait is up to 5 s. Switching the flag off reproduces a cold Chrome without quitting it.
 - **Decision:** Clipboard backup may skip `public.utf16-external-plain-text` or `public.utf16-plain-text` when that format reads back empty and the item has `public.utf8-plain-text`. macOS converts these from UTF-8 on demand, so restoring UTF-8 recreates them. Any other unreadable format still refuses. This read failure happened once in a packaged dictation and did not reproduce in 20 direct reads.
 - Verification: on November 2 the user confirmed that the packaged build pasted into the Google search box in a Chrome reset to the cold state. 10 Mac insertion tests passed.
+
+### November 14, 2026 — Content Security Policy for packaged builds
+
+- Packaged builds shipped with `csp: null`. The webviews hold no key, but they can invoke native commands that make requests with it, so injected script would be a real risk.
+- **Decision:** Packaged builds use `default-src 'self'`, with only same-origin scripts, styles and images, `blob:` media for recovery playback, and `connect-src` limited to Tauri IPC (`ipc:` on macOS, `http://ipc.localhost` on Windows). The webviews make no network requests of their own; OpenAI traffic is native. `devCsp` stays `null` so Vite's dev server and HMR keep working.

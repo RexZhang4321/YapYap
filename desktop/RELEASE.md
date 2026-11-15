@@ -2,11 +2,11 @@
 
 The initial package is YapYap 0.1.0 for Windows x64. The NSIS installer installs for the current Windows user, with `yapyap.exe` in `%LOCALAPPDATA%\YapYap`. The npm and Rust packages are named `yapyap`; the native library is `yapyap_lib`. The app and installer use the generated teal waveform icon; its source and regeneration instructions live in src-tauri/icons/.
 
-## Upgrading from BYOK Dictation
+## App identity
 
-Quit the earlier app through its tray menu, then uninstall **BYOK Dictation** before installing YapYap. NSIS identifies the uninstall entry by product name, so the renamed installer does not automatically replace the old entry. Launch YapYap from Start after installing it.
+YapYap uses `com.jingxuan-zhang.yapyap` as its app identifier, `com.jingxuan-zhang.yapyap/preferences` as its preference storage key, and `com.jingxuan-zhang.yapyap/openai-api-key` as its Credential Manager target. Changing any of these makes existing users save their key and preferences again, so treat them as fixed once released. Installed and development builds share the same app identity. NSIS identifies the uninstall entry by product name.
 
-YapYap uses `com.jingxuan-zhang.yapyap` as its app identifier, `com.jingxuan-zhang.yapyap/preferences` as its preference storage key, and `com.jingxuan-zhang.yapyap/openai-api-key` as its Credential Manager target. BYOK Dictation and YapYap builds before October 29, 2026 used earlier names, so nothing carries over: save your API key again and reselect your shortcut, microphone and processing options. Then remove the earlier `app.byokdictation.hotkeyprobe/openai-api-key` credential in Windows Credential Manager; you may also check **Delete application data** when uninstalling. Installed and development builds share the same app identity. Historical verification records describe earlier artifacts under their original names; the YapYap candidate needs its own installation acceptance.
+Historical verification records describe pre-release builds under the earlier name BYOK Dictation (`app.byokdictation.hotkeyprobe`).
 
 ## Build a local test installer
 

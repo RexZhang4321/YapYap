@@ -10,7 +10,7 @@ Hold your shortcut → speak → see words almost immediately → release → ge
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Windows](https://img.shields.io/badge/Windows-installer%20available-0078D4?logo=windows&logoColor=white)
-![macOS](https://img.shields.io/badge/macOS-parity%20probes%20passed-lightgrey?logo=apple&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-build%20from%20source-lightgrey?logo=apple&logoColor=white)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Rust](https://img.shields.io/badge/Rust-native-000000?logo=rust&logoColor=white)
@@ -43,43 +43,49 @@ When stages disagree, YapYap trusts them in this order:
 **original audio › canonical transcript › cleaned transcript › live preview**.
 Each phase can be turned off on its own under **Processing phases** in the app.
 
-## Status
+## Platforms
 
-> Last updated November 2026
-
-| Area | Status |
+| Platform | Support |
 | --- | --- |
-| **Windows** core dictation (record → live overlay → transcribe → clean up → insert) | ✅ Verified |
-| **Windows** failure recovery, cancellation, saved-output retry | ✅ Verified |
-| **Windows** per-user NSIS installer (`0.1.0`, x64) | ✅ Builds · 🟡 unsigned test builds |
-| **macOS** parity probes: recording/overlay, insertion/clipboard, pipeline/recovery | ✅ All 3 groups passed (packaged app, Apple Silicon) |
-| **macOS** Developer ID signing, notarization, downloaded-app acceptance | 🟡 Pending |
-| **Windows** native regression after the macOS port | 🟡 Pending ([checklist](docs/verification/windows-regression-verification.md)) |
-| Evaluation corpus and latency/accuracy baseline | ⬜ Not started |
-| VAD segmentation and incremental transcription | ⬜ Not started |
-| Privacy and lifecycle audit | ⬜ Not started |
+| **Windows 11** (x64) | Installer on the [Releases](https://github.com/RexZhang4321/YapYap/releases) page. Windows 10 and ARM64 are untested. |
+| **macOS** (Apple Silicon) | Works; [build from source](#macos-1) for now |
+| **Linux** | Not supported |
 
-Open work is listed in [TASKS.md](docs/TASKS.md). The reasoning behind decisions is recorded in [DECISIONS.md](docs/DECISIONS.md), and how to use the app in the [user guide](docs/USER_GUIDE.md).
+### Known limitations
+
+- **The Windows installer is not code-signed yet.** SmartScreen may warn you the first time you run it. Choose **More info → Run anyway** if you trust the download.
+- **There is no downloadable macOS build yet.** It needs Developer ID signing and notarization first.
+- **No automatic updates.** To upgrade, download and run the newer installer.
+- **Pending audio is lost if the app quits or crashes.** YapYap keeps recordings in memory only, by design.
+- **Needs an internet connection and an OpenAI API key.** There is no offline mode.
+- **Windows can't paste into apps running as administrator.** Use **Copy** in YapYap and paste by hand.
+
+Open work is listed in [TASKS.md](docs/TASKS.md), and the reasoning behind decisions is recorded in [DECISIONS.md](docs/DECISIONS.md).
 
 ## Install
 
 ### Windows
 
-1. Run `YapYap_0.1.0_x64-setup.exe`, then launch **YapYap** from the Start menu.
-   It installs per user, to `%LOCALAPPDATA%\YapYap`.
-2. Open **Settings**, save your OpenAI API key, allow microphone access, and choose a shortcut. The default is `Ctrl+Alt+F8`.
+1. Download `YapYap_<version>_x64-setup.exe` from the [latest release](https://github.com/RexZhang4321/YapYap/releases/latest), run it, then launch **YapYap** from the Start menu.
+   It installs for the current user only, in `%LOCALAPPDATA%\YapYap`. It needs no admin rights, except that Windows may ask for permission if it has to install the WebView2 runtime.
+2. Open **Settings**, save your [OpenAI API key](https://platform.openai.com/api-keys), allow microphone access, and choose a shortcut. The default is `Ctrl+Alt+F8`.
 3. Closing the window keeps YapYap running in the tray. Choose **Quit** from the tray to exit.
 
-<details>
-<summary>Upgrading from the earlier <b>BYOK Dictation</b> build</summary>
-
-Quit the old app and uninstall it before you install YapYap. The app ID, preference storage key and Credential Manager target were renamed, so nothing carries over: save your API key again and reselect your shortcut, microphone and processing options. See the [upgrade notes](desktop/RELEASE.md#upgrading-from-byok-dictation).
-
-</details>
+The [user guide](docs/USER_GUIDE.md) covers dictating, cancelling and recovering your words.
 
 ### macOS
 
 No downloadable build has been published yet. To build and install locally, see [Develop → macOS](#macos-1).
+
+## Cost
+
+YapYap is free. OpenAI bills your API account directly for each dictation:
+
+- a transcription of the full recording, when **Full audio transcription** is on;
+- streaming transcription while you speak, when **Show live words** is on (or when full audio transcription is off, since the live transcript is then the final one);
+- a short text request, when cleanup is on.
+
+You can turn each of these off under **Processing phases** or in **Settings**. See [OpenAI pricing](https://developers.openai.com/api/docs/pricing) for current rates, and consider setting a usage limit in your OpenAI account.
 
 ## Develop
 
@@ -139,14 +145,20 @@ YapYap/
 ## Privacy
 
 - Your API key is stored in Windows Credential Manager or the macOS Keychain. Only native code reads it, and it never goes through the UI layer.
-- Audio is kept in memory only. It is released after a successful insert or when you discard the session. Quitting the app or a crash loses any pending audio.
-- Audio and transcripts go only to the configured provider (OpenAI). Dictated text and keys are never logged.
+- Audio is kept in memory only. It is released after a successful insert or when you discard the session. Quitting the app or a crash loses any pending audio. The one exception is **Download WAV**, which you choose yourself: it saves the recording to your Downloads folder, and that file stays there until you delete it.
+- Audio and transcripts go only to OpenAI, under your own API account. OpenAI's [data controls](https://developers.openai.com/api/docs/guides/your-data) describe how long they keep API data. YapYap has no server of its own and no analytics.
+- Dictated text and keys are never logged.
+- Uninstalling does not delete the saved key. Choose **Settings → Remove key** first, or delete `com.jingxuan-zhang.yapyap/openai-api-key` in Windows Credential Manager or Keychain Access.
 
-See [KEY_SECURITY.md](docs/KEY_SECURITY.md) for the repeatable local leak audit.
+See [KEY_SECURITY.md](docs/KEY_SECURITY.md) for the repeatable local leak audit. To report a security problem, see [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up, test and submit changes, and [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## Roadmap
 
-After the full P0 pipeline is done: personal vocabulary and app-aware context, undo and a raw-vs-cleaned comparison view, true inline live transcription, formatting voice commands, per-app profiles, and offline/local models. See [REQUIREMENTS.md](docs/REQUIREMENTS.md) and the **Deferred after P0** section of [TASKS.md](docs/TASKS.md).
+After the core pipeline is finished: personal vocabulary and app-aware context, undo and a raw-vs-cleaned comparison view, true inline live transcription, formatting voice commands, per-app profiles, and offline/local models. See [REQUIREMENTS.md](docs/REQUIREMENTS.md) and the **Deferred after P0** section of [TASKS.md](docs/TASKS.md).
 
 ## License
 
