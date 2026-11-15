@@ -55,5 +55,5 @@ capture is still worth a spot check.
 Still open: Developer ID release signing, notarization and downloaded-app
 acceptance, and the [Windows native regression](verification/windows-regression-verification.md)
 after the port. The dated notes written during the probes are in the
-[probe log](archive/MACOS_PROBES-log.md); the original pre-port assessment is the
-[scope document](archive/MACOS_PORT_SCOPE.md).
+[probe log](https://github.com/RexZhang4321/YapYap/blob/a111e24/docs/archive/MACOS_PROBES-log.md); the original pre-port assessment is the
+[scope document](https://github.com/RexZhang4321/YapYap/blob/a111e24/docs/archive/MACOS_PORT_SCOPE.md).

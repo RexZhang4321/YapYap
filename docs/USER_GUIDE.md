@@ -2,6 +2,15 @@
 
 How to set up, dictate and recover your words. Shortcuts are shown for Windows; on a Mac the app shows the equivalent Command/Option keys.
 
+## Quick start
+
+1. **Set up.** Open **Settings**, paste your OpenAI API key, choose **Save key**, and allow microphone access when asked. On a Mac, also allow YapYap in **System Settings → Privacy & Security → Accessibility** so it can paste.
+2. **Dictate.** Click into any text field. Hold `Ctrl+Alt+F8` and speak; live words appear in a small floating window. Release, and the final text is pasted at your cursor.
+3. **Cancel.** Press **Esc** before the text is pasted.
+4. **If something goes wrong,** your words aren't lost. Open YapYap from the tray: it says what failed and offers **Retry transcription**, **Copy original**, or pasting again into a field you choose.
+
+The rest of this guide covers each step in detail.
+
 ## Set up once
 
 1. Open **Settings** or choose **Set up dictation** from the readiness screen.

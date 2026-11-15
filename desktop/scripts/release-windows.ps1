@@ -105,7 +105,7 @@ try {
         installer = $installers[0].Name
         bytes = $installers[0].Length
         sha256 = $hash.Hash
-        manualAcceptance = 'pending; see docs/verification/task17-verification.md'
+        manualAcceptance = 'pending; see docs/dev/verification/task17-verification.md'
     }
     $manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $bundlePath 'release-manifest.json') -Encoding UTF8
     "$($hash.Hash)  $($installers[0].Name)" | Set-Content -LiteralPath (Join-Path $bundlePath 'SHA256SUMS.txt') -Encoding ASCII

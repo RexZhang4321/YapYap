@@ -1,6 +1,6 @@
 # YapYap — Open tasks
 
-What is left to do, in build order. Tasks 0–12 (capability probes, session lifecycle, live overlay, cleanup and the failure-recovery audit) are complete; their checklists and evidence are in the [completed task list](archive/TASKS-completed.md).
+What is left to do, in build order. Tasks 0–12 (capability probes, session lifecycle, live overlay, cleanup and the failure-recovery audit) are complete; their checklists and evidence are in the [completed task list](https://github.com/RexZhang4321/YapYap/blob/a111e24/docs/archive/TASKS-completed.md).
 
 Status markers: `[ ]` not started, `[-]` in progress, `[x]` verified complete.
 
@@ -68,7 +68,7 @@ Done when: the default lifecycle matches the project's local-first privacy requi
 ### 17. Packaging and release checks
 
 - [x] Build a Windows installer. A per-user Windows x64 NSIS package is generated; see [Task 17 verification](verification/task17-verification.md).
-- [x] Document required Windows permissions. See the [Windows release guide](../desktop/RELEASE.md).
+- [x] Document required Windows permissions. See the [Windows release guide](../../desktop/RELEASE.md).
 - [ ] Test startup, restart, suspend/resume and microphone changes.
 - [-] Add a Windows signing workflow before external distribution. The release script supports a local signing config and checks signatures; verification with a real certificate or signing service is pending.
 - [ ] macOS trusted distribution: Developer ID signing for release, notarization and downloaded-app acceptance. Feature parity itself is complete; see the [macOS probe results](MACOS_PROBES.md).

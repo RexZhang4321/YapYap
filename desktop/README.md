@@ -13,8 +13,8 @@ Run `npm install` and `npm run tauri dev` from this directory. The normal flow i
 The Mac build runs on Apple Silicon. All three parity probe groups (recording and
 overlay, insertion and clipboard, pipeline and recovery) passed in the packaged
 app; Developer ID signing, notarization and downloaded-app acceptance are pending.
-See the [Mac checklist](../docs/MACOS_PROBES.md) and historical
-[MP-00 evidence](../docs/archive/verification/macos-mp-00-verification.md).
+See the [Mac checklist](../docs/dev/MACOS_PROBES.md) and historical
+[MP-00 evidence](https://github.com/RexZhang4321/YapYap/blob/a111e24/docs/archive/verification/macos-mp-00-verification.md).
 
 Install Node, Rust and Xcode tools, then run from `desktop/`:
 
@@ -121,9 +121,9 @@ Open **Settings → Developer diagnostics** for the optional live/transcription 
 
 The main window shows **Processing time** after release: audio preparation, final transcription request, cleanup request, destination check, paste/clipboard restoration, and total elapsed time after release. Running durations refresh every 250 ms; completed values remain until the next dictation or discard. Disabled or unreached stages show Skipped; failures and stopped waits keep their elapsed durations. Explicit retries show their own attempt totals. Request timings cover the frontend/native round trip, upload, provider processing, response reading and validation; they do not separate network time from model time. Timings use a monotonic clock and remain in memory only. They are not exported as telemetry or retained with earlier transcript results.
 
-Regular checks are `npm test`, `npm run build`, and, from `src-tauri/`, `cargo test --lib --offline` plus `cargo fmt --check`. Regular tests use local fixtures and make no provider requests. Real-provider checks are opt-in (`cargo test -- --ignored`) and may incur API usage. Native tray, microphone, global-shortcut and paste behavior is not covered by these suites; it is checked manually against the [Windows regression checklist](../docs/verification/windows-regression-verification.md) and the [macOS probes](../docs/MACOS_PROBES.md).
+Regular checks are `npm test`, `npm run build`, and, from `src-tauri/`, `cargo test --lib --offline` plus `cargo fmt --check`. Regular tests use local fixtures and make no provider requests. Real-provider checks are opt-in (`cargo test -- --ignored`) and may incur API usage. Native tray, microphone, global-shortcut and paste behavior is not covered by these suites; it is checked manually against the [Windows regression checklist](../docs/dev/verification/windows-regression-verification.md) and the [macOS probes](../docs/dev/MACOS_PROBES.md).
 
-The per-task implementation and manual-check notes that used to follow here are in the [archived probe notes](../docs/archive/desktop-probe-notes.md).
+The per-task implementation and manual-check notes that used to follow here are in the [archived probe notes](https://github.com/RexZhang4321/YapYap/blob/a111e24/docs/archive/desktop-probe-notes.md).
 
 ## macOS insertion and clipboard notes
 
@@ -174,5 +174,5 @@ that may already have been sent permits manual recovery only.
 
 Native adapters are selected at compile time. Mac AppKit/Accessibility/CGEvent
 code stays in `src-tauri/src/platform/insertion_macos.rs`; Windows uses
-`src-tauri/src/platform/insertion_windows.rs`. See [probe status](../docs/MACOS_PROBES.md) for the
+`src-tauri/src/platform/insertion_windows.rs`. See [probe status](../docs/dev/MACOS_PROBES.md) for the
 observed packaged acceptance and remaining checks.

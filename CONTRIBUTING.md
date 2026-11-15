@@ -47,7 +47,7 @@ These keep YapYap's privacy promises intact. A pull request that breaks one won'
 - **Respect the order of trust:** original audio › canonical transcript › cleaned transcript › live preview. Live words are never inserted automatically.
 - **Never commit a key or certificate,** even an expired one. Test fixtures use obviously fake values such as `sk-disposable-…`.
 
-Write down any choice that isn't obvious from the code in [docs/DECISIONS.md](docs/DECISIONS.md).
+Write down any choice that isn't obvious from the code in [docs/dev/DECISIONS.md](docs/dev/DECISIONS.md).
 
 ## Pull requests
 

@@ -13,7 +13,7 @@ Prove the single-segment experience before adding VAD and incremental transcript
 
 ## Principles
 
-These come from the project's [founding notes](archive/CONTEXT.md) and apply to every requirement below.
+These come from the project's [founding notes](https://github.com/RexZhang4321/YapYap/blob/a111e24/docs/archive/CONTEXT.md) and apply to every requirement below.
 
 - **Bring your own key, direct to the provider.** No dictation backend sits in between. "Private" here means private from a third-party dictation company, not fully local or offline.
 - **Local-first audio.** The app does not retain audio by default, keeps credentials in local secure storage, and collects no transcript analytics. Contextual information such as repository filenames is sent only when explicitly enabled.

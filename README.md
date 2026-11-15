@@ -60,7 +60,7 @@ Each phase can be turned off on its own under **Processing phases** in the app.
 - **Needs an internet connection and an OpenAI API key.** There is no offline mode.
 - **Windows can't paste into apps running as administrator.** Use **Copy** in YapYap and paste by hand.
 
-Open work is listed in [TASKS.md](docs/TASKS.md), and the reasoning behind decisions is recorded in [DECISIONS.md](docs/DECISIONS.md).
+Open work is listed in [TASKS.md](docs/dev/TASKS.md), and the reasoning behind decisions is recorded in [DECISIONS.md](docs/dev/DECISIONS.md).
 
 ## Install
 
@@ -133,13 +133,13 @@ YapYap/
 │   └── scripts/             # tests, smoke harnesses, install and release scripts
 └── docs/
     ├── USER_GUIDE.md        # setting up, dictating and recovering your words
-    ├── REQUIREMENTS.md      # product requirements and principles (P0 / P1 / P2)
-    ├── TASKS.md             # open tasks, in build order
-    ├── DECISIONS.md         # decision log
-    ├── MACOS_PROBES.md      # macOS feature-parity checklist and results
     ├── KEY_SECURITY.md      # API-key handling and leak audit
-    ├── verification/        # live checklists and benchmark records
-    └── archive/             # historical progress and verification notes
+    └── dev/                 # notes for working on YapYap
+        ├── REQUIREMENTS.md  # product requirements and principles (P0 / P1 / P2)
+        ├── TASKS.md         # open tasks, in build order
+        ├── DECISIONS.md     # decision log
+        ├── MACOS_PROBES.md  # macOS feature-parity checklist and results
+        └── verification/    # live checklists and benchmark records
 ```
 
 ## Privacy
@@ -158,7 +158,7 @@ Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## Roadmap
 
-After the core pipeline is finished: personal vocabulary and app-aware context, undo and a raw-vs-cleaned comparison view, true inline live transcription, formatting voice commands, per-app profiles, and offline/local models. See [REQUIREMENTS.md](docs/REQUIREMENTS.md) and the **Deferred after P0** section of [TASKS.md](docs/TASKS.md).
+After the core pipeline is finished: personal vocabulary and app-aware context, undo and a raw-vs-cleaned comparison view, true inline live transcription, formatting voice commands, per-app profiles, and offline/local models. See [REQUIREMENTS.md](docs/dev/REQUIREMENTS.md) and the **Deferred after P0** section of [TASKS.md](docs/dev/TASKS.md).
 
 ## License
 
