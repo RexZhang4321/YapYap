@@ -2,16 +2,20 @@
 #
 # Launches the installed app with a synthetic WebView2 microphone and a local
 # debugging port (process-local flags only), then runs windows-native-smoke.cs,
-# which presses the real shortcut into its own target window and checks overlay
-# focus/styles, HTTPS transcription and cleanup, guarded paste, rich clipboard
-# restore, changed-destination refusal and retry, Esc cancel, hidden and
-# minimized capture, insertion test mode and Download recording.
+# which presses the real shortcut into its own target window and checks packaged
+# CSP/WebView health, AudioWorklet and blob: playback, Settings copy, insertion
+# test mode and refusal variants (caret, pointer, closed target, held modifier,
+# app switch), clipboard restore/busy/newer-copy/explicit recovery, shortcut
+# conflict and rebind, single-instance tray reopen, hidden idle CPU, 3-run tray
+# combined flow with retained results, cleanup-off and live-only modes, overlay
+# focus/styles/refusal actions, retry, Esc cancel, and Download recording.
+# User preferences are snapshotted and restored at exit.
 #
-# -Live is required: each run sends a few seconds of synthetic speech to OpenAI
-# with the saved key (two dictations). Keyboard, mouse focus and the clipboard
-# are driven for about a minute; do not type during the run. Artifacts go to
-# <repo>/tmp/windows-native-smoke. The app is restarted without test flags at
-# the end if it was running before.
+# -Live is required: each run sends short synthetic speech clips to OpenAI with
+# the saved key (six dictations plus one Esc-cancelled start). Keyboard, mouse
+# focus and the clipboard are driven for about 90 seconds; do not type during
+# the run. Artifacts go to <repo>/tmp/windows-native-smoke. The app is restarted
+# without test flags at the end if it was running before.
 #
 # Run with Windows PowerShell:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-native-smoke.ps1 -Live [-StopRunningApp]
@@ -82,7 +86,7 @@ try {
         if (-not $ready) { Start-Sleep -Milliseconds 500 }
     }
     if (-not $ready) { throw 'The test app did not expose its debugging port.' }
-    $harness = Start-Process -FilePath $harnessPath -ArgumentList @($Port, "`"$outputPath`"", $app.Id) -PassThru -Wait
+    $harness = Start-Process -FilePath $harnessPath -ArgumentList @($Port, "`"$outputPath`"", $app.Id, "`"$AppPath`"") -PassThru -Wait
     $exitCode = $harness.ExitCode
     $resultsPath = Join-Path $outputPath 'results.json'
     if (Test-Path -LiteralPath $resultsPath) {
