@@ -90,12 +90,18 @@ try {
     $exitCode = $harness.ExitCode
     $resultsPath = Join-Path $outputPath 'results.json'
     if (Test-Path -LiteralPath $resultsPath) {
-        (Get-Content -LiteralPath $resultsPath -Raw | ConvertFrom-Json) | Format-List | Out-String -Width 200 | Write-Output
-    } else { Write-Output 'The harness wrote no results.' }
+        $parsed = Get-Content -LiteralPath $resultsPath -Raw | ConvertFrom-Json
+        $parsed | Format-List | Out-String -Width 200 | Write-Output
+        $failedChecks = @($parsed.PSObject.Properties | Where-Object { $_.Name -ne 'passed' -and $_.Value -is [bool] -and -not $_.Value } | ForEach-Object { $_.Name })
+    } else { Write-Output 'The harness wrote no results.'; $failedChecks = @() }
 } finally {
     Get-Process -Id $app.Id -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Seconds 2
     if ($wasRunning) { Start-Process -FilePath $AppPath | Out-Null }  # normal launch, no test flags
 }
-if ($exitCode -eq 0) { Write-Output 'PASS: Windows native smoke run.' } else { Write-Output 'FAIL: see the results above.' }
+if ($exitCode -eq 0) { Write-Output 'PASS: Windows native smoke run.' }
+else {
+    if ($failedChecks.Count -gt 0) { Write-Output ('FAILED CHECKS: ' + ($failedChecks -join ', ')) }
+    Write-Output 'FAIL: see the results above.'
+}
 exit $exitCode

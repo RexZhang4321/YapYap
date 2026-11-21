@@ -566,7 +566,9 @@ pub fn discard_dictation_target(
     Ok(())
 }
 
-#[tauri::command]
+// Runs off the main thread: the paste waits for modifiers and sleeps before restoring the clipboard,
+// and blocking the window thread would stall other apps taking clipboard ownership from us.
+#[tauri::command(async)]
 pub fn insert_dictation_text(
     session_id: String,
     text: String,
@@ -603,7 +605,7 @@ pub fn insert_dictation_text(
     attempt.unwrap_or_else(InsertionResult::refused)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn insert_test_text(
     window: tauri::WebviewWindow,
     state: State<'_, InsertionState>,

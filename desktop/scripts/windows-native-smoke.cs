@@ -245,10 +245,21 @@ class Smoke {
   string State() { return S(main, "document.querySelector('#session-state').textContent"); }
   string OverlayPhase() { return S(overlay, "document.querySelector('#overlay').dataset.phase"); }
   string Field(string id) { return S(main, "(e => e ? (e.value ?? e.textContent) : null)(document.querySelector('#" + id + "'))"); }
-  static bool WaitFor(Func<bool> condition, int milliseconds) {
+  static bool WaitFor(Func<bool> condition, int milliseconds, int pollMs) {
     var deadline = DateTime.UtcNow.AddMilliseconds(milliseconds);
-    while (DateTime.UtcNow < deadline) { if (condition()) return true; Thread.Sleep(100); }
+    while (DateTime.UtcNow < deadline) { if (condition()) return true; Thread.Sleep(pollMs); }
     return condition();
+  }
+  static bool WaitFor(Func<bool> condition, int milliseconds) { return WaitFor(condition, milliseconds, 100); }
+  bool WaitAppIdle(int milliseconds) {
+    return WaitFor(() => (Field("hold-state") ?? "") == "UP"
+      && B(main, "!document.querySelector('#copy-text').disabled && !document.querySelector('#shortcut-record').disabled"), milliseconds);
+  }
+  bool WaitTargetCaptured(int milliseconds) {
+    bool ok = WaitFor(() => (Field("hold-state") ?? "") == "DOWN"
+      && (Field("insertion-status") ?? "").StartsWith("Capturing the focused target"), milliseconds, 25);
+    if (ok) Thread.Sleep(150);
+    return ok;
   }
   void SetSelect(string id, string value) {
     S(main, "(() => { const e = document.querySelector('#" + id + "');"
@@ -376,6 +387,22 @@ class Smoke {
       } catch (ExternalException) { return false; }
     }), 4000);
   }
+  void SetPlainClipboard(string text) {
+    Ui(() => {
+      for (int attempt = 0; attempt < 20; attempt++) {
+        try { Clipboard.SetText(text); return true; }
+        catch (ExternalException) { Thread.Sleep(25); }
+      }
+      Clipboard.SetText(text);
+      return true;
+    });
+  }
+  bool ClipboardTextEquals(string expected) {
+    return WaitFor(() => Ui(() => {
+      try { return Clipboard.ContainsText() && Clipboard.GetText() == expected; }
+      catch (ExternalException) { return false; }
+    }), 4000);
+  }
 
   // ---- Overlay and window sampler ----
   void Sampler() {
@@ -493,33 +520,41 @@ class Smoke {
 
     // 3. Insertion test mode: key-down captures the target, release inserts the test text and restores RTF clipboard.
     SetSelect("hotkey-action", "insert");
+    WaitAppIdle(5000);
     SetRichClipboard();
     ClearTexts();
     if (!Check("insertTestTargetFocused", Activate(target, targetBox))) return false;
-    ShortcutDown(); Thread.Sleep(400); ShortcutUp();
-    Check("insertTestTextInserted", WaitFor(() => TargetText() == InsertionTestText, 5000));
+    ShortcutDown();
+    bool captured3 = WaitTargetCaptured(4000);
+    ShortcutUp();
+    Check("insertTestTextInserted", captured3 && WaitFor(() => TargetText() == InsertionTestText, 5000));
     Check("insertTestClipboardRestored", RichClipboardRestored());
+    WaitAppIdle(5000);
 
     // 4. Insertion refusal variants (caret moved, pointer moved, closed target, held modifier).
     // 4a. Caret moved
     ClearTexts();
     Ui(() => { targetBox.Text = "hello world"; targetBox.SelectionStart = 11; targetBox.SelectionLength = 0; return true; });
     Activate(target, targetBox);
-    ShortcutDown(); Thread.Sleep(300);
+    ShortcutDown();
+    bool captured4a = WaitTargetCaptured(4000);
     Ui(() => { targetBox.SelectionStart = 0; return true; });
-    Thread.Sleep(100);
+    Thread.Sleep(80);
     ShortcutUp();
-    Check("refusalCaretMoved", WaitFor(() => (Field("insertion-status") ?? "").Contains("Text cursor moved"), 4000) && TargetText() == "hello world");
+    Check("refusalCaretMoved", captured4a && WaitFor(() => (Field("insertion-status") ?? "").Contains("Text cursor moved"), 4000) && TargetText() == "hello world");
+    WaitAppIdle(5000);
 
     // 4b. Pointer moved
     ClearTexts();
     Activate(target, targetBox);
-    ShortcutDown(); Thread.Sleep(300);
+    ShortcutDown();
+    bool captured4b = WaitTargetCaptured(4000);
     Win.POINT pt; Win.GetCursorPos(out pt);
     Win.SetCursorPos(pt.X + 40, pt.Y + 40);
-    Thread.Sleep(100);
+    Thread.Sleep(80);
     ShortcutUp();
-    Check("refusalPointerMoved", WaitFor(() => (Field("insertion-status") ?? "").Contains("Pointer moved"), 4000) && TargetText() == "");
+    Check("refusalPointerMoved", captured4b && WaitFor(() => (Field("insertion-status") ?? "").Contains("Pointer moved"), 4000) && TargetText() == "");
+    WaitAppIdle(5000);
 
     // 4c. Closed target
     Form tempForm = null; TextBox tempBox = null;
@@ -531,26 +566,30 @@ class Smoke {
       return true;
     });
     Activate(tempForm, tempBox);
-    ShortcutDown(); Thread.Sleep(300);
+    ShortcutDown();
+    bool captured4c = WaitTargetCaptured(4000);
     Ui(() => { tempForm.Close(); tempForm.Dispose(); return true; });
-    Thread.Sleep(150);
+    Thread.Sleep(120);
     ShortcutUp();
-    Check("refusalClosedTarget", WaitFor(() => {
+    Check("refusalClosedTarget", captured4c && WaitFor(() => {
       var st = Field("insertion-status") ?? "";
       return st.Contains("Focused application or input changed") || st.Contains("No foreground window") || st.Contains("focused input could not be identified");
     }, 4000));
+    WaitAppIdle(5000);
 
     // 4d. Held modifier (> 1.5 s)
     ClearTexts();
     Activate(target, targetBox);
-    ShortcutDown(); Thread.Sleep(300);
+    ShortcutDown();
+    bool captured4d = WaitTargetCaptured(4000);
     // Hold Ctrl (0x11) down before releasing the shortcut so wait_for_modifiers times out for any shortcut.
     Win.keybd_event(0x11, 0, 0, UIntPtr.Zero);
     Win.keybd_event(key, 0, Win.KEYUP, UIntPtr.Zero);
     foreach (var m in modifiers.Reverse()) { if (m != 0x11) Win.keybd_event(m, 0, Win.KEYUP, UIntPtr.Zero); }
     Thread.Sleep(2200);
     Win.keybd_event(0x11, 0, Win.KEYUP, UIntPtr.Zero);
-    Check("refusalHeldModifier", WaitFor(() => (Field("insertion-status") ?? "").Contains("Modifier keys remained down"), 4000) && TargetText() == "");
+    Check("refusalHeldModifier", captured4d && WaitFor(() => (Field("insertion-status") ?? "").Contains("Modifier keys remained down"), 4000) && TargetText() == "");
+    WaitAppIdle(5000);
 
     // 5. Clipboard edge cases: busy clipboard, newer-copy preservation, and explicit Copy/Restore/Replace.
     // 5a. Busy clipboard
@@ -558,64 +597,110 @@ class Smoke {
     Activate(target, targetBox);
     bool lockedClipboard = Ui(() => Win.OpenClipboard(target.Handle));
     try {
-      ShortcutDown(); Thread.Sleep(300); ShortcutUp();
-      Check("clipboardBusyRefused", lockedClipboard && WaitFor(() => (Field("insertion-status") ?? "").Contains("Clipboard is busy"), 5000) && TargetText() == "");
+      ShortcutDown();
+      bool captured5a = WaitTargetCaptured(4000);
+      ShortcutUp();
+      Check("clipboardBusyRefused", lockedClipboard && captured5a && WaitFor(() => (Field("insertion-status") ?? "").Contains("Clipboard is busy"), 5000) && TargetText() == "");
     } finally {
       if (lockedClipboard) Ui(() => Win.CloseClipboard());
     }
+    WaitAppIdle(5000);
 
     // 5b. Newer-copy preservation
     ClearTexts();
     string olderMarker = "YapYapOlderMarker" + Guid.NewGuid().ToString("N").Substring(0, 8);
     string newerMarker = "YapYapNewerMarker" + Guid.NewGuid().ToString("N").Substring(0, 8);
-    Ui(() => { Clipboard.SetText(olderMarker); return true; });
+    SetPlainClipboard(olderMarker);
     Activate(target, targetBox);
     newerCopied = false;
+    string watcherDiag = "none";
+    var shortcutUpAt = DateTime.UtcNow;
+    // Copy the newer marker once the paste has landed in the target, inside the app's 250 ms
+    // pre-restore window. Watch the target text, not the clipboard: polling the clipboard keeps it
+    // open and makes the app's post-paste restore fail with "clipboard busy".
+    // Suspected app issue: the sync Tauri insertion command sleeps 250 ms on the main thread, so taking clipboard
+    // ownership (EmptyClipboard -> WM_DESTROYCLIPBOARD to the app window) blocks ~440 ms and collides with the
+    // restore, leaving the backup pending. This check fails until the app stops blocking its main thread.
     var watcher = new Thread(() => {
       var dl = DateTime.UtcNow.AddSeconds(6);
       while (DateTime.UtcNow < dl) {
-        try {
-          string cur = null;
-          try { cur = Ui(() => Clipboard.ContainsText() ? Clipboard.GetText() : null); } catch { }
-          if (cur == InsertionTestText) {
-            for (int a = 0; a < 30; a++) {
-              try { Ui(() => { Clipboard.SetText(newerMarker); return true; }); newerCopied = true; return; }
-              catch { Thread.Sleep(5); }
-            }
-            return;
+        if (TargetText() == InsertionTestText) {
+          var seen = DateTime.UtcNow;
+          for (int a = 0; a < 30; a++) {
+            try {
+              Ui(() => { Clipboard.SetText(newerMarker); return true; });
+              newerCopied = true;
+              watcherDiag = "seenAfterUpMs=" + (int)(seen - shortcutUpAt).TotalMilliseconds + " attempts=" + (a + 1) + " setMs=" + (int)(DateTime.UtcNow - seen).TotalMilliseconds;
+              return;
+            } catch (ExternalException) { Thread.Sleep(5); }
           }
-        } catch { }
+          watcherDiag = "set failed after 30 attempts";
+          return;
+        }
         Thread.Sleep(5);
       }
     });
     watcher.IsBackground = true; watcher.Start();
-    ShortcutDown(); Thread.Sleep(300); ShortcutUp();
+    ShortcutDown();
+    bool captured5b = WaitTargetCaptured(4000);
+    shortcutUpAt = DateTime.UtcNow;
+    ShortcutUp();
     watcher.Join(7000);
-    Thread.Sleep(600);
-    string clipAfter = Ui(() => Clipboard.ContainsText() ? Clipboard.GetText() : "");
-    Check("clipboardNewerCopyPreserved", newerCopied && clipAfter == newerMarker);
+    WaitAppIdle(5000);
+    bool preservedStatus = WaitFor(() => (Field("insertion-status") ?? "").Contains("newer clipboard contents were preserved"), 3000);
+    if (!Check("clipboardNewerCopyPreserved", captured5b && newerCopied && ClipboardTextEquals(newerMarker) && preservedStatus))
+      Record("clipboard5bDiag", "status=" + Field("insertion-status") + " | watcher " + watcherDiag);
 
     // 5c. Explicit Copy (with backup) -> Restore previous clipboard -> Copy without backup
+    // Isolate 5c from an earlier step that left a clipboard backup pending.
+    if (B(main, "!document.querySelector('#clipboard-recovery').hidden && !document.querySelector('#restore-clipboard').disabled")) {
+      Record("clipboard5cClearedPendingBackup", true);
+      Click("restore-clipboard");
+      WaitFor(() => B(main, "document.querySelector('#restore-clipboard').disabled"), 5000);
+    }
     SetRichClipboard();
-    WaitFor(() => B(main, "!document.querySelector('#copy-text').disabled"), 5000);
+    WaitAppIdle(5000);
     Click("copy-text");
-    bool copiedWithBackup = WaitFor(() => Ui(() => Clipboard.ContainsText() && Clipboard.GetText() == InsertionTestText), 4000)
-      && WaitFor(() => B(main, "!document.querySelector('#restore-clipboard').hidden && !document.querySelector('#restore-clipboard').disabled"), 4000);
+    bool cText = ClipboardTextEquals(InsertionTestText);
+    bool cUi = WaitFor(() => (Field("insertion-status") ?? "").StartsWith("Test text copied;")
+      && B(main, "!document.querySelector('#clipboard-recovery').hidden && !document.querySelector('#restore-clipboard').disabled"), 4000);
+    bool copiedWithBackup = Check("clipboardCopyWithBackup", cText && cUi);
+    string diag5c = "copy(text=" + cText + ",ui=" + cUi + ",st=" + Field("insertion-status") + ")";
     Click("restore-clipboard");
-    // Wait for both native clipboard restoration and the UI's finally{operationBusy=false} to re-enable copy-without-backup.
-    bool restoredExplicit = RichClipboardRestored()
-      && WaitFor(() => B(main, "!document.querySelector('#copy-without-backup').disabled"), 5000);
+    // Wait for native restoration plus the click handler's try/finally (status updated,
+    // backup cleared so #restore-clipboard disables, and operationBusy cleared so #copy-without-backup re-enables).
+    bool rClip = RichClipboardRestored();
+    bool rUi = WaitFor(() => Field("insertion-status") == "Previous clipboard restored."
+      && B(main, "document.querySelector('#restore-clipboard').disabled && !document.querySelector('#copy-without-backup').disabled"), 5000);
+    bool restoredExplicit = Check("clipboardRestoreExplicit", rClip && rUi);
+    diag5c += " | restore(clip=" + rClip + ",ui=" + rUi + ",st=" + Field("insertion-status") + ")";
     Click("copy-without-backup");
-    bool copiedWithoutBackup = WaitFor(() => Ui(() => Clipboard.ContainsText() && Clipboard.GetText() == InsertionTestText), 4000);
-    Check("clipboardExplicitCopyRestoreReplace", copiedWithBackup && restoredExplicit && copiedWithoutBackup);
+    bool wText = ClipboardTextEquals(InsertionTestText);
+    bool wUi = WaitFor(() => (Field("insertion-status") ?? "").StartsWith("Test text copied without a backup"), 4000);
+    bool copiedWithoutBackup = Check("clipboardCopyWithoutBackup", wText && wUi);
+    diag5c += " | replace(text=" + wText + ",ui=" + wUi + ",st=" + Field("insertion-status") + ")";
+    if (!(copiedWithBackup && restoredExplicit && copiedWithoutBackup)) Record("clipboard5cDiag", diag5c);
+    WaitAppIdle(5000);
 
     // 6. Shortcuts: conflict keeps original, rebind works end-to-end, and original restores cleanly.
-    string altShortcut = originalShortcut.Equals("Ctrl+Alt+F9", StringComparison.OrdinalIgnoreCase) ? "Ctrl+Alt+F10" : "Ctrl+Alt+F9";
-    uint altVk = originalShortcut.Equals("Ctrl+Alt+F9", StringComparison.OrdinalIgnoreCase) ? (uint)0x79 : (uint)0x78;
-    string altCode = altVk == 0x78 ? "F9" : "F10";
-    bool conflictRegistered = Ui(() => Win.RegisterHotKey(target.Handle, 9001, Win.MOD_CONTROL | Win.MOD_ALT, altVk));
+    // Pick the first free candidate shortcut so an unrelated desktop app cannot cause a false conflict failure.
+    var altCandidates = new[] {
+      Tuple.Create("Ctrl+Alt+F9", (uint)0x78, "F9"),
+      Tuple.Create("Ctrl+Alt+F10", (uint)0x79, "F10"),
+      Tuple.Create("Ctrl+Alt+F11", (uint)0x7A, "F11"),
+      Tuple.Create("Ctrl+Alt+F7", (uint)0x76, "F7"),
+    };
+    string altShortcut = "Ctrl+Alt+F9"; string altCode = "F9";
+    bool conflictRegistered = false;
+    foreach (var candidate in altCandidates) {
+      if (originalShortcut.Equals(candidate.Item1, StringComparison.OrdinalIgnoreCase)) continue;
+      if (Ui(() => Win.RegisterHotKey(target.Handle, 9001, Win.MOD_CONTROL | Win.MOD_ALT, candidate.Item2))) {
+        altShortcut = candidate.Item1; altCode = candidate.Item3; conflictRegistered = true; break;
+      }
+    }
     bool conflictRejected = false;
     bool originalStillWorksAfterConflict = false;
+    string diag6 = "";
     try {
       Click("open-settings");
       WaitFor(() => B(main, "document.querySelector('#settings-dialog')?.open === true"), 3000);
@@ -627,30 +712,38 @@ class Smoke {
       Record("shortcutConflictStatus", Field("status"));
       ClearTexts();
       Activate(target, targetBox);
-      ShortcutDown(); Thread.Sleep(300); ShortcutUp();
-      originalStillWorksAfterConflict = WaitFor(() => TargetText() == InsertionTestText, 4000);
-      // Wait for post-paste clipboard restoration so operationBusy clears before rebinding.
-      WaitFor(() => B(main, "!document.querySelector('#shortcut-record').disabled"), 5000);
+      ShortcutDown();
+      bool capturedOrig = WaitTargetCaptured(4000);
+      ShortcutUp();
+      originalStillWorksAfterConflict = capturedOrig && WaitFor(() => TargetText() == InsertionTestText, 4000);
+      diag6 = "registered=" + conflictRegistered + " alt=" + altShortcut + " rejected=" + conflictRejected
+        + " captured=" + capturedOrig + " hold=" + Field("hold-state") + " ins=" + Field("insertion-status")
+        + " target=[" + TargetText() + "] settingsOpen=" + B(main, "document.querySelector('#settings-dialog')?.open === true");
+      WaitAppIdle(5000);
     } finally {
       if (conflictRegistered) Ui(() => Win.UnregisterHotKey(target.Handle, 9001));
     }
-    Check("shortcutConflictKeepsOriginal", conflictRegistered && conflictRejected && originalStillWorksAfterConflict);
+    if (!Check("shortcutConflictKeepsOriginal", conflictRegistered && conflictRejected && originalStillWorksAfterConflict))
+      Record("shortcutConflictDiag", diag6 == "" ? "registered=" + conflictRegistered + " rejected=" + conflictRejected : diag6);
 
     RecordShortcutViaUi(altShortcut);
     bool appliedAlt = WaitFor(() => (Field("shortcut-display") ?? "").Contains(altCode), 5000);
     ParseShortcut(altShortcut);
     ClearTexts();
     Activate(target, targetBox);
-    ShortcutDown(); Thread.Sleep(300); ShortcutUp();
-    bool rebindWorked = appliedAlt && WaitFor(() => TargetText() == InsertionTestText, 4000);
+    ShortcutDown();
+    bool capturedAlt = WaitTargetCaptured(4000);
+    ShortcutUp();
+    bool rebindWorked = appliedAlt && capturedAlt && WaitFor(() => TargetText() == InsertionTestText, 4000);
     Check("shortcutRebindWorks", rebindWorked);
-    WaitFor(() => B(main, "!document.querySelector('#shortcut-record').disabled"), 5000);
+    WaitAppIdle(5000);
 
     RecordShortcutViaUi(originalShortcut);
     bool restoredOriginal = WaitFor(() => (Field("shortcut-display") ?? "").Equals(originalShortcut, StringComparison.OrdinalIgnoreCase), 5000);
     ParseShortcut(originalShortcut);
     Check("shortcutRestoredOriginal", restoredOriginal);
     S(main, "(() => { const d = document.querySelector('#settings-dialog'); if (d && d.open) d.close(); return true; })()");
+    WaitAppIdle(5000);
 
     // 7. Single-instance relaunch from tray and hidden-in-tray idle CPU check.
     SetSelect("hotkey-action", "record");
@@ -667,10 +760,11 @@ class Smoke {
     bool reopened = WaitFor(() => { var w = Win.Window(appPid, "YapYap"); return w != IntPtr.Zero && Win.IsWindowVisible(w); }, 5000);
     Check("singleInstanceReopensHiddenWindow", secondExited && secondCode == 0 && singleProc && reopened);
 
-    // Hide back to tray and sample idle CPU over 15 seconds.
+    // Hide back to tray, wait for idle, and sample idle CPU over 15 seconds.
     mainWindow = Win.Window(appPid, "YapYap");
     if (mainWindow != IntPtr.Zero && Win.IsWindowVisible(mainWindow)) Win.PostMessageW(mainWindow, Win.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
     WaitFor(() => { var w = Win.Window(appPid, "YapYap"); return w == IntPtr.Zero || !Win.IsWindowVisible(w); }, 3000);
+    WaitAppIdle(5000);
     Thread.Sleep(2000);
     var proc = Process.GetProcessById((int)appPid);
     var cpuBefore = proc.TotalProcessorTime;
@@ -690,12 +784,14 @@ class Smoke {
     int consecutiveSuccess = 0;
     bool originalAndCleanedShown = false;
     for (int run = 1; run <= 3; run++) {
+      WaitAppIdle(5000);
       SetRichClipboard();
       ClearTexts();
       if (!Activate(target, targetBox)) break;
       bool liveOk = Dictate(run == 1 ? 6500 : 5500, true, null);
       bool ins = WaitFor(() => State() == "inserted", 60000);
       bool hidden = WaitFor(() => OverlayPhase() == "hidden", 5000);
+      WaitFor(() => TargetText().Trim().Length > 0, 3000);
       var pasted = TargetText().Trim();
       var cleaned = (Field("cleaned-transcript") ?? "").Replace("\r", "").Trim();
       var orig = (Field("transcript") ?? "").Replace("\r", "").Trim();
@@ -704,7 +800,9 @@ class Smoke {
       bool rtfOk = RichClipboardRestored();
       Record("trayRun" + run + "Timings", Field("processing-timings"));
       if (liveOk && ins && hidden && exactOnce && rtfOk) consecutiveSuccess++;
-      Thread.Sleep(400);
+      else Record("trayRun" + run + "Diag", "live=" + liveOk + " ins=" + ins + " hidden=" + hidden + " exactOnce=" + exactOnce + " rtf=" + rtfOk
+        + " state=" + State() + " alert=" + S(main, "document.querySelector('#dictation-alert-text')?.textContent || ''") + " target=[" + pasted + "]");
+      WaitAppIdle(5000);
     }
     Check("combinedFlowThreeConsecutiveTrayPastes", consecutiveSuccess == 3);
     Check("trayOriginalAndCleanedShown", originalAndCleanedShown);
@@ -716,24 +814,27 @@ class Smoke {
     Check("overlaySampledVisible", overlaySamples > samplesBefore);
 
     // 9. HTTPS success: cleanup-off and live-only (full-audio off) modes.
+    WaitAppIdle(5000);
     SetCheckbox("main-cleanup-enabled", false);
     ClearTexts();
     Activate(target, targetBox);
     Dictate(4500, true, null);
-    bool cleanupOffIns = WaitFor(() => State() == "inserted", 60000);
+    bool cleanupOffIns = WaitFor(() => State() == "inserted", 60000) && WaitFor(() => TargetText().Trim().Length > 0, 3000);
     var cleanupOffTimings = Field("processing-timings") ?? "";
     Record("cleanupOffTimings", cleanupOffTimings);
     Check("httpsCleanupOffInserted", cleanupOffIns && HasSpeech(TargetText()) && cleanupOffTimings.Contains("Cleanup requestSkipped"));
+    WaitAppIdle(5000);
 
     SetCheckbox("full-audio-enabled", false);
     SetCheckbox("main-cleanup-enabled", true);
     ClearTexts();
     Activate(target, targetBox);
     Dictate(4500, true, null);
-    bool liveOnlyIns = WaitFor(() => State() == "inserted", 60000);
+    bool liveOnlyIns = WaitFor(() => State() == "inserted", 60000) && WaitFor(() => TargetText().Trim().Length > 0, 3000);
     var liveOnlyTimings = Field("processing-timings") ?? "";
     Record("liveOnlyTimings", liveOnlyTimings);
     Check("httpsLiveOnlyInserted", liveOnlyIns && HasSpeech(TargetText()) && liveOnlyTimings.Contains("Transcription requestSkipped"));
+    WaitAppIdle(5000);
 
     SetCheckbox("full-audio-enabled", true);
     SetCheckbox("main-cleanup-enabled", true);
@@ -745,32 +846,33 @@ class Smoke {
     if (!Check("refusalTargetFocused", Activate(target, targetBox))) return false;
     Check("minimizedLiveWordsBeforeRelease", Dictate(5000, true, () => Activate(decoy, decoyBox)));
     bool settled = WaitFor(() => { var s = State(); return s == "ready" || s == "failed" || s == "inserted"; }, 60000);
-    Thread.Sleep(1000);
+    WaitAppIdle(5000);
+    bool overlayRefusalShown = WaitFor(() => OverlayPhase() == "error"
+      && (S(overlay, "document.querySelector('#overlay-hint')?.textContent || ''") ?? "").Contains("Press "), 5000);
     Check("refusalNotInserted", settled && State() != "inserted" && TargetText() == "" && DecoyText() == "");
     Record("refusalAlert", S(main, "document.querySelector('#dictation-alert-text')?.textContent || ''"));
-    var overlayErrorPhase = OverlayPhase();
-    var overlayErrorHint = S(overlay, "document.querySelector('#overlay-hint')?.textContent || ''");
-    Record("overlayRefusalPhase", overlayErrorPhase);
-    Record("overlayRefusalHint", overlayErrorHint);
-    Check("overlayShowsPasteShortcutActionOnRefusal", overlayErrorPhase == "error" && overlayErrorHint.Contains("Press "));
+    Record("overlayRefusalPhase", OverlayPhase());
+    Record("overlayRefusalHint", S(overlay, "document.querySelector('#overlay-hint')?.textContent || ''"));
+    Check("overlayShowsPasteShortcutActionOnRefusal", overlayRefusalShown);
     var savedOutput = ((Field("cleaned-transcript") ?? "").Trim().Length > 0 ? Field("cleaned-transcript") : Field("transcript") ?? "").Replace("\r", "").Trim();
     if (!Check("retryTargetFocused", Activate(target, targetBox))) return false;
     var retryStarted = DateTime.UtcNow;
     ShortcutDown(); Thread.Sleep(300); ShortcutUp();
     Check("retryInsertedSavedOutput", WaitFor(() => State() == "inserted", 15000) && WaitFor(() => TargetText().Trim() == savedOutput && savedOutput.Length > 0, 3000));
     Record("retrySeconds", Math.Round((DateTime.UtcNow - retryStarted).TotalSeconds, 2));
+    WaitAppIdle(5000);
 
     // 11. Esc during finishing cancels the dictation and never reaches the target.
     ClearTexts();
     if (!Check("escapeTargetFocused", Activate(target, targetBox))) return false;
     int escapesBefore = escapeKeyDowns;
     Dictate(3500, true, null);
-    Thread.Sleep(120);
+    WaitFor(() => OverlayPhase() == "processing" || State() == "transcribing", 3000, 20);
     Escape();
     bool discarded = WaitFor(() => { var s = State(); return s == "discarded" || s == "inserted"; }, 8000) && State() == "discarded";
-    Thread.Sleep(2500);
-    if (State() == "inserted") Record("escapeCancelled", "inconclusive: dictation finished before Esc");
-    else Check("escapeCancelled", discarded && TargetText() == "");
+    WaitAppIdle(5000);
+    Thread.Sleep(1500);
+    Check("escapeCancelled", discarded && State() == "discarded" && TargetText() == "");
     Check("escapeOverlayHidden", WaitFor(() => OverlayPhase() == "hidden", 5000));
     Check("escapeNotDeliveredToTarget", escapeKeyDowns == escapesBefore);
 
